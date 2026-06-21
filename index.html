@@ -7,16 +7,23 @@
   <meta name="description" content="Добрые истории, сказки и приключения для детей и их родителей." />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; overflow-x: hidden; }
     body { background: #fdf7e6; font-family: "Nunito", "Segoe UI", Arial, sans-serif; }
 
-    /* Картинка главной страницы 1-в-1 + кликабельные зоны поверх */
+    /* Картинка главной страницы 1-в-1 во весь экран, без полей по бокам */
     .page {
       position: relative;
-      max-width: 1280px;
-      margin: 0 auto;
+      width: 100vw;
+      margin: 0;
       line-height: 0;
     }
-    .page img { width: 100%; height: auto; display: block; }
+    .page img {
+      width: 100%;
+      height: auto;
+      display: block;
+      /* максимально чёткая отрисовка картинки */
+      image-rendering: -webkit-optimize-contrast;
+    }
 
     /* Прозрачные ссылки-«горячие зоны». Координаты в % от картинки. */
     .hot {
