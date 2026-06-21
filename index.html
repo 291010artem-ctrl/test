@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Моё фото · Портфолио</title>
+  <meta name="description" content="Личное фото-портфолио. Превью-версия." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="#top">МОЁ&nbsp;ФОТО</a>
+    <nav class="nav">
+      <a href="#gallery">Галерея</a>
+      <a href="#about">Обо&nbsp;мне</a>
+      <a href="#contact">Контакты</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="hero-eyebrow">фотография · 2026</p>
+        <h1 class="hero-title">Моменты,<br />которые остаются</h1>
+        <p class="hero-sub">Личное портфолио. Это превью — пока его вижу только я.</p>
+        <a class="btn" href="#gallery">Смотреть работы</a>
+      </div>
+    </section>
+
+    <!-- Gallery -->
+    <section id="gallery" class="section">
+      <div class="section-head">
+        <h2>Галерея</h2>
+        <p>Замени плейсхолдеры на свои снимки в папке <code>images/</code>.</p>
+      </div>
+
+      <div class="grid" id="grid">
+        <!-- Карточки добавляются скриптом -->
+      </div>
+    </section>
+
+    <!-- About -->
+    <section id="about" class="section about">
+      <div class="about-text">
+        <h2>Обо мне</h2>
+        <p>
+          Привет! Я снимаю людей, города и свет. Здесь собраны работы,
+          которые мне особенно дороги. Этот текст можно поменять под себя.
+        </p>
+      </div>
+    </section>
+
+    <!-- Contact -->
+    <section id="contact" class="section contact">
+      <h2>Контакты</h2>
+      <p>Напиши мне — обсудим съёмку.</p>
+      <a class="btn" href="mailto:291010artem@gmail.com">Написать на почту</a>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>© 2026 Моё фото. Превью-версия.</p>
+  </footer>
+
+  <!-- Лайтбокс -->
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lightbox-close" id="lightboxClose" aria-label="Закрыть">×</button>
+    <img class="lightbox-img" id="lightboxImg" alt="" />
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
