@@ -5,138 +5,67 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Мир Кирпи и Гофера — добрые истории для детей</title>
   <meta name="description" content="Добрые истории, сказки и приключения для детей и их родителей." />
-  <link rel="stylesheet" href="styles.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #fdf7e6; font-family: "Nunito", "Segoe UI", Arial, sans-serif; }
+
+    /* Картинка главной страницы 1-в-1 + кликабельные зоны поверх */
+    .page {
+      position: relative;
+      max-width: 1280px;
+      margin: 0 auto;
+      line-height: 0;
+    }
+    .page img { width: 100%; height: auto; display: block; }
+
+    /* Прозрачные ссылки-«горячие зоны». Координаты в % от картинки. */
+    .hot {
+      position: absolute;
+      display: block;
+      border-radius: 12px;
+      cursor: pointer;
+      /* подсветка при наведении, чтобы было видно что кликается */
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    .hot:hover {
+      background: rgba(255, 255, 255, 0.18);
+      box-shadow: 0 0 0 2px rgba(123, 164, 40, 0.5);
+    }
+  </style>
 </head>
 <body>
-  <!-- Шапка -->
-  <header class="header">
-    <a class="logo" href="index.html">
-      <span class="logo-emoji">🦔🐹</span>
-      <span class="logo-text"><b class="green">Kirpi</b><b class="orange">Gofer</b>
-        <small>мир добрых приключений</small></span>
-    </a>
-    <nav class="nav">
-      <a class="active" href="index.html">Главная</a>
-      <a href="#">Истории</a>
-      <a href="characters.html">Персонажи</a>
-      <a href="#">Игры</a>
-      <a href="#">Раскраски</a>
-      <a href="#">Родителям</a>
-    </nav>
-    <div class="header-actions">
-      <button class="icon-btn">🔍<span>Поиск</span></button>
-      <button class="icon-btn">👤<span>Войти</span></button>
-    </div>
-  </header>
+  <div class="page">
+    <img src="assets/home.jpg" alt="Мир Кирпи и Гофера" />
 
-  <!-- Hero -->
-  <section class="hero">
-    <div class="hero-scene">
-      <div class="hero-char left">🦔</div>
-      <div class="hero-text">
-        <h1>
-          <span class="t1">Мир</span>
-          <span class="t2"><b class="green">Кирпи</b> и <b class="orange">Гофера</b></span>
-        </h1>
-        <p class="hero-sub">Добрые истории, сказки и приключения<br />для детей и их родителей</p>
-        <div class="hero-btns">
-          <a class="btn btn-green" href="#">📖 Читать истории</a>
-          <a class="btn btn-orange" href="#">🎧 Слушать сказки</a>
-        </div>
-        <p class="hero-choose">Или выберите, чем заняться:</p>
-        <div class="chevron">⌄</div>
-      </div>
-      <div class="hero-char right">🐹</div>
-    </div>
-  </section>
+    <!-- ВЕРХНЕЕ МЕНЮ -->
+    <a class="hot" href="index.html"        style="left:31.5%; top:2.2%; width:6%;  height:4%;"   title="Главная"></a>
+    <a class="hot" href="#"                  style="left:39%;   top:2.2%; width:6%;  height:4%;"   title="Истории"></a>
+    <a class="hot" href="characters.html"    style="left:46.5%; top:2.2%; width:7.5%;height:4%;"   title="Персонажи"></a>
+    <a class="hot" href="#"                  style="left:55.5%; top:2.2%; width:4.5%;height:4%;"   title="Игры"></a>
+    <a class="hot" href="#"                  style="left:61%;   top:2.2%; width:7%;  height:4%;"   title="Раскраски"></a>
+    <a class="hot" href="#"                  style="left:69.5%; top:2.2%; width:8%;  height:4%;"   title="Родителям"></a>
 
-  <!-- Карточки разделов -->
-  <section class="features">
-    <a class="feature green" href="#">
-      <div class="feature-icon">📖</div>
-      <h3>Истории</h3>
-      <p>Погружайтесь в увлекательные сказки о Кирпи и Гофере</p>
-      <span class="arrow">→</span>
-    </a>
-    <a class="feature yellow" href="#">
-      <div class="feature-icon">🎧</div>
-      <h3>Аудиосказки</h3>
-      <p>Слушайте добрые истории в исполнении профессионалов</p>
-      <span class="arrow">→</span>
-    </a>
-    <a class="feature purple" href="#">
-      <div class="feature-icon">🎮</div>
-      <h3>Игры</h3>
-      <p>Играйте, решайте задания и помогайте героям</p>
-      <span class="arrow">→</span>
-    </a>
-    <a class="feature blue" href="#">
-      <div class="feature-icon">🎨</div>
-      <h3>Раскраски</h3>
-      <p>Раскрашивайте любимых героев и развивайте творчество</p>
-      <span class="arrow">→</span>
-    </a>
-  </section>
+    <!-- ГЛАВНЫЕ КНОПКИ -->
+    <a class="hot" href="#"                  style="left:39%;   top:24.5%; width:22%; height:6%;"  title="Читать истории"></a>
+    <a class="hot" href="#"                  style="left:39%;   top:31.5%; width:22%; height:6%;"  title="Слушать сказки"></a>
 
-  <!-- Друзья + Новые приключения -->
-  <section class="bottom">
-    <div class="friends">
-      <h2>🌿 Наши друзья</h2>
-      <p class="muted">Познакомьтесь с героями нашего волшебного мира</p>
-      <div class="friends-row">
-        <a class="friend" href="characters.html">
-          <img src="assets/kirpi.svg" alt="Кирпи" />
-          <b>Кирпи</b><small>Любознательный ёжик и верный друг</small>
-        </a>
-        <a class="friend" href="characters.html">
-          <img src="assets/gofer.svg" alt="Гофер" />
-          <b>Гофер</b><small>Добрый суслик, всегда готов помочь</small>
-        </a>
-        <a class="friend" href="characters.html">
-          <img src="assets/tisa.svg" alt="Тиса" />
-          <b>Тиса</b><small>Белочка-непоседа, очень быстрая</small>
-        </a>
-        <a class="friend" href="characters.html">
-          <img src="assets/lulu.svg" alt="Лулу" />
-          <b>Лулу</b><small>Лисичка умная и находчивая</small>
-        </a>
-        <a class="friend" href="characters.html">
-          <img src="assets/sonya.svg" alt="Соня" />
-          <b>Соня</b><small>Мудрая совушка, знает всё на свете</small>
-        </a>
-        <a class="friend" href="characters.html">
-          <img src="assets/borik.svg" alt="Борик" />
-          <b>Борик</b><small>Ворчливый барсучонок, но добрый внутри</small>
-        </a>
-        <a class="friend" href="characters.html">
-          <img src="assets/bruno.svg" alt="Бруно" />
-          <b>Бруно</b><small>Сильный медвежонок с большим сердцем</small>
-        </a>
-      </div>
-      <a class="btn btn-green small center" href="characters.html">Все персонажи</a>
-    </div>
+    <!-- КАРТОЧКИ РАЗДЕЛОВ -->
+    <a class="hot" href="#"                  style="left:6%;    top:44%; width:21%; height:14%;"   title="Истории"></a>
+    <a class="hot" href="#"                  style="left:29%;   top:44%; width:21%; height:14%;"   title="Аудиосказки"></a>
+    <a class="hot" href="#"                  style="left:52%;   top:44%; width:21%; height:14%;"   title="Игры"></a>
+    <a class="hot" href="#"                  style="left:75%;   top:44%; width:21%; height:14%;"   title="Раскраски"></a>
 
-    <aside class="news">
-      <h2>🌿 Новые приключения!</h2>
-      <p class="muted">Мир Кирпи и Гофера растёт каждый день!</p>
-      <a class="news-item" href="#">
-        <span class="news-thumb">🏡</span>
-        <span><small>Скоро:</small> Путешествие на ферму</span>
-      </a>
-      <a class="news-item" href="#">
-        <span class="news-thumb">🗼</span>
-        <span><small>Скоро:</small> Тайна старого маяка</span>
-      </a>
-      <a class="news-item" href="#">
-        <span class="news-thumb">🗺️</span>
-        <span><small>Скоро:</small> Приключения на новом континенте</span>
-      </a>
-      <a class="news-all" href="#">Смотреть все истории →</a>
-    </aside>
-  </section>
+    <!-- АВАТАРЫ ДРУЗЕЙ -->
+    <a class="hot" href="characters.html"    style="left:7%;    top:70%; width:11%; height:14%;"   title="Кирпи"></a>
+    <a class="hot" href="characters.html"    style="left:18.5%; top:70%; width:11%; height:14%;"   title="Гофер"></a>
+    <a class="hot" href="characters.html"    style="left:30%;   top:70%; width:11%; height:14%;"   title="Тиса"></a>
+    <a class="hot" href="characters.html"    style="left:41.5%; top:70%; width:11%; height:14%;"   title="Лулу"></a>
+    <a class="hot" href="characters.html"    style="left:53%;   top:70%; width:11%; height:14%;"   title="Соня"></a>
+    <a class="hot" href="characters.html"    style="left:64.5%; top:70%; width:11%; height:14%;"   title="Борик"></a>
+    <a class="hot" href="characters.html"    style="left:76%;   top:70%; width:11%; height:14%;"   title="Бруно"></a>
 
-  <footer class="footer">
-    <p>© 2026 Мир Кирпи и Гофера · превью-версия 🌱</p>
-  </footer>
+    <!-- КНОПКА «ВСЕ ПЕРСОНАЖИ» -->
+    <a class="hot" href="characters.html"    style="left:35%;   top:88%; width:14%; height:4.5%;"  title="Все персонажи"></a>
+  </div>
 </body>
 </html>
