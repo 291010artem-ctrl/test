@@ -1,0 +1,3 @@
+# Extra deps only needed for scripts/get_tokens.py (technical-account login).
+pyrogram==2.0.106
+tgcrypto==1.2.5

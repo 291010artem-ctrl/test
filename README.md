@@ -35,10 +35,25 @@ python -m bot.main
 | Fragment | Нет (HTML-скрейпинг, может ломаться) | — |
 
 Токены для Tonnel/Portals/mrkt получаются через эмуляцию открытия их
-Mini App из обычного Telegram-аккаунта (например через Pyrogram
-`InvokeWebViewMethod`/`RequestWebView`) — это отдельный технический
+Mini App из обычного Telegram-аккаунта — это отдельный технический
 аккаунт, а не Bot API токен. Используйте выделенный номер, не основной
 личный аккаунт, и храните session-файл как секрет.
+
+Для автоматизации этого есть `scripts/get_tokens.py`:
+
+```bash
+pip install -r requirements-scripts.txt
+# в .env заполнить TG_API_ID / TG_API_HASH (https://my.telegram.org)
+python -m scripts.get_tokens   # первый запуск спросит телефон и код входа
+```
+
+Скрипт логинится под техническим аккаунтом, по очереди открывает Mini App
+каждой площадки (тот же вызов `RequestWebView`, что делает клиент
+Telegram), достаёт `initData`, для mrkt сразу меняет его на bearer-токен
+через `/auth`, и печатает готовые строки для `.env`. Имена ботов/приложений
+в словаре `MARKETS` — best-effort; если площадка не открывается, поправь
+их по реальной ссылке `t.me/<bot>/<app>`. Токены Portals живут 1-7 дней —
+запускай скрипт периодически (например, по cron).
 
 ## Структура
 
