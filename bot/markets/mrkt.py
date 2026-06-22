@@ -31,7 +31,9 @@ class MrktClient(MarketClient):
             return MarketResult(market=self.name, available=False, error="missing_auth")
 
         payload = {
-            "collectionNames": [model],
+            "ModelNames": [model],
+            "SymbolNames": [],
+            "BackdropNames": [],
             "ordering": "Price",
             "count": 20,
         }
