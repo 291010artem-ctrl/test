@@ -63,6 +63,7 @@ def format_report(item_label: str, results: list[MarketResult], current_ton_usd:
                 "not_supported": "не поддерживается этой площадкой",
                 "not_for_sale": "не продаётся сейчас",
                 "no_response": "площадка не ответила",
+                "not_on_chain": "подарок не выведен в TON-блокчейн",
             }.get(r.error, r.error or "ошибка")
             lines.append(f"• {r.market}: {reason}")
 

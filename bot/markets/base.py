@@ -48,6 +48,7 @@ class MarketResult:
     error: str | None = None
     url: str | None = None
     attributes: str | None = None
+    gift_address: str | None = None
 
 
 class MarketClient:
@@ -55,7 +56,7 @@ class MarketClient:
 
     name: str = "base"
 
-    async def lookup_gift(self, number: str, model: str) -> MarketResult:
+    async def lookup_gift(self, number: str, model: str, address: str | None = None) -> MarketResult:
         raise NotImplementedError
 
     async def lookup_username(self, username: str) -> MarketResult:

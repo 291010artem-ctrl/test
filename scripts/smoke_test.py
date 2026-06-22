@@ -24,7 +24,7 @@ class FakeMarket(MarketClient):
         self._price = price
         self._sales = sales
 
-    async def lookup_gift(self, number: str, model: str) -> MarketResult:
+    async def lookup_gift(self, number: str, model: str, address: str | None = None) -> MarketResult:
         if self._price is None:
             return MarketResult(market=self.name, available=False, error="not_found")
         return MarketResult(

@@ -27,7 +27,7 @@ class PortalsClient(MarketClient):
     def _headers(self) -> dict:
         return {"Authorization": f"tma {self.token}"}
 
-    async def lookup_gift(self, number: str, model: str) -> MarketResult:
+    async def lookup_gift(self, number: str, model: str, address: str | None = None) -> MarketResult:
         if not self.token:
             return MarketResult(market=self.name, available=False, error="missing_auth")
 

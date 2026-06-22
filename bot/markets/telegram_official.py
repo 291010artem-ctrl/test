@@ -55,7 +55,7 @@ class TelegramOfficialClient(MarketClient):
 
     name = "Telegram"
 
-    async def lookup_gift(self, number: str, model: str) -> MarketResult:
+    async def lookup_gift(self, number: str, model: str, address: str | None = None) -> MarketResult:
         client = await tg_session.get_client()
         if client is None:
             return MarketResult(market=self.name, available=False, error="missing_auth")
@@ -85,6 +85,8 @@ class TelegramOfficialClient(MarketClient):
         )
 
         floor_ton = await self._floor_for_combo(client, gift, model_attr, backdrop_attr, pattern_attr)
+        gift_address = getattr(gift, "gift_address", None)
+        debug(self.name, f"gift_address: {gift_address!r}")
 
         return MarketResult(
             market=self.name,
@@ -93,6 +95,7 @@ class TelegramOfficialClient(MarketClient):
             sales_history=[],
             url=f"https://t.me/nft/{slug}",
             error=None if floor_ton is not None else "not_for_sale",
+            gift_address=gift_address,
             attributes=attr_summary or None,
         )
 

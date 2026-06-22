@@ -27,7 +27,7 @@ class TonnelClient(MarketClient):
     def _headers(self) -> dict:
         return {"Content-Type": "application/json"}
 
-    async def lookup_gift(self, number: str, model: str) -> MarketResult:
+    async def lookup_gift(self, number: str, model: str, address: str | None = None) -> MarketResult:
         if not self.init_data:
             return MarketResult(market=self.name, available=False, error="missing_auth")
 

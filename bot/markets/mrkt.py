@@ -26,7 +26,7 @@ class MrktClient(MarketClient):
             "Referer": "https://cdn.tgmrkt.io/",
         }
 
-    async def lookup_gift(self, number: str, model: str) -> MarketResult:
+    async def lookup_gift(self, number: str, model: str, address: str | None = None) -> MarketResult:
         if not self.token:
             return MarketResult(market=self.name, available=False, error="missing_auth")
 

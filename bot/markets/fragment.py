@@ -33,7 +33,7 @@ class FragmentClient(MarketClient):
         except Exception:
             return None
 
-    async def lookup_gift(self, number: str, model: str) -> MarketResult:
+    async def lookup_gift(self, number: str, model: str, address: str | None = None) -> MarketResult:
         return MarketResult(market=self.name, available=False, error="not_supported")
 
     async def lookup_username(self, username: str) -> MarketResult:
