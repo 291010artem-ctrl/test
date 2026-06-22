@@ -4,15 +4,16 @@ import asyncio
 import logging
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from dotenv import load_dotenv
 
 from . import tg_session
 from .handlers import router
-
-load_dotenv()
 
 
 async def main() -> None:
