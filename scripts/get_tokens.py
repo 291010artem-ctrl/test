@@ -37,6 +37,7 @@ import aiohttp
 import qrcode
 from dotenv import load_dotenv
 from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 from telethon.tl.functions.messages import (
     RequestAppWebViewRequest,
     RequestWebViewRequest,
@@ -154,6 +155,9 @@ async def _login_with_qr(client: TelegramClient) -> None:
     except asyncio.TimeoutError:
         print("QR-код истёк (120 секунд). Перезапусти скрипт и попробуй снова.")
         sys.exit(1)
+    except SessionPasswordNeededError:
+        password = input("На аккаунте включена двухфакторная защита. Введи облачный пароль: ")
+        await client.sign_in(password=password)
 
 
 async def main() -> None:
