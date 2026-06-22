@@ -9,6 +9,7 @@ from aiogram.types import Message
 
 from ..aggregator import Aggregator
 from ..formatting import render_report
+from ..keyboards import back_kb, result_kb
 from ..utils import normalize_username
 
 log = logging.getLogger(__name__)
@@ -21,7 +22,8 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
     raw = (message.text or "").strip()
     if raw.startswith("/"):
         await message.answer(
-            "Неизвестная команда. Пришли юзернейм или используй /help."
+            "Неизвестная команда. Пришли юзернейм или используй /help.",
+            reply_markup=back_kb(),
         )
         return
 
@@ -29,8 +31,9 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
     if not username:
         await message.answer(
             "🤔 Это не похоже на корректный юзернейм.\n"
-            "Юзернейм состоит из латинских букв, цифр и '_' (до 32 символов).\n"
-            "Пример: <code>@durov</code>"
+            "Юзернейм — это латинские буквы, цифры и '_' (до 32 символов).\n"
+            "Пример: <code>@durov</code>",
+            reply_markup=back_kb(),
         )
         return
 
@@ -42,17 +45,24 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
     except Exception:  # noqa: BLE001 — never crash the handler
         log.exception("aggregation failed for %s", username)
         await status.edit_text(
-            "⚠️ Не удалось получить данные. Попробуй ещё раз чуть позже."
+            "⚠️ Не удалось получить данные. Попробуй ещё раз чуть позже.",
+            reply_markup=back_kb(),
         )
         return
 
     if report is None:
-        await status.edit_text("🤔 Не получилось разобрать юзернейм. Попробуй ещё раз.")
+        await status.edit_text(
+            "🤔 Не получилось разобрать юзернейм. Попробуй ещё раз.", reply_markup=back_kb()
+        )
         return
 
-    await status.edit_text(render_report(report), disable_web_page_preview=True)
+    await status.edit_text(
+        render_report(report), reply_markup=result_kb(report), disable_web_page_preview=True
+    )
 
 
 @router.message()
 async def on_other(message: Message) -> None:
-    await message.answer("Пришли юзернейм текстом, например <code>@durov</code>.")
+    await message.answer(
+        "Пришли юзернейм текстом, например <code>@durov</code>.", reply_markup=back_kb()
+    )

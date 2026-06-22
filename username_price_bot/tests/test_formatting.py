@@ -10,6 +10,8 @@ from bot.models import (
     UsernameReport,
 )
 
+RATES = {"USD": 5.0, "RUB": 450.0}
+
 
 def _full_report():
     return UsernameReport(
@@ -20,7 +22,7 @@ def _full_report():
         listing=Listing(status=MarketStatus.ON_SALE, price_ton=1200, source="fragment"),
         estimate=PriceEstimate(
             low_ton=900, high_ton=1300, point_ton=1100, usd_point=5500,
-            confidence="high", signals=["Активный листинг: 1200 TON"],
+            confidence="high", signals=["Сейчас продаётся за 1200 TON — можно купить"],
         ),
         sales=[
             SaleEvent(price_ton=850, timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc), kind="sale"),
@@ -32,22 +34,25 @@ def _full_report():
             OwnerPeriod(address="0:bbb", since=datetime(2024, 1, 1, tzinfo=timezone.utc),
                         is_current=True),
         ],
-        ton_usd_rate=5.0,
+        rates=RATES,
         sources_used=["tonapi", "fragment"],
         fragment_url="https://fragment.com/username/durov",
         getgems_url="https://getgems.io/collection/X/0:nft",
     )
 
 
-def test_render_contains_key_sections():
+def test_render_has_all_currencies_and_margin():
     out = render_report(_full_report())
     assert "@durov" in out
     assert "TON" in out
+    assert "USDT" in out
+    assert "₽" in out
+    assert "погрешность" in out
+    assert "достоверность" in out
     assert "История продаж" in out
     assert "Кошельки-владельцы" in out
-    assert "Fragment" in out
     assert "финансовой рекомендацией" in out
-    assert len(out) < 4096  # Telegram message limit
+    assert len(out) < 4096
 
 
 def test_render_escapes_html():
@@ -57,9 +62,19 @@ def test_render_escapes_html():
     assert "&lt;b&gt;il" in out
 
 
-def test_render_minimal_report_not_found():
-    report = UsernameReport(username="ghost", found=False,
-                            fragment_url="https://fragment.com/username/ghost")
+def test_not_found_still_shows_estimate():
+    report = UsernameReport(
+        username="ghost",
+        found=False,
+        rates=RATES,
+        estimate=PriceEstimate(
+            low_ton=70, high_ton=300, point_ton=150, usd_point=750,
+            confidence="low", signals=["Нет продаж и листинга"],
+        ),
+        fragment_url="https://fragment.com/username/ghost",
+    )
     out = render_report(report)
     assert "@ghost" in out
-    assert "не найдены" in out or "свободен" in out
+    assert "NFT" in out                # the "not an NFT" notice
+    assert "примерн" in out            # still gives an estimate
+    assert "Грубая оценка" in out      # low-confidence headline

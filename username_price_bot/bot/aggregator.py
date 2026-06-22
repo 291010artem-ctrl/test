@@ -60,13 +60,13 @@ class Aggregator:
         report.fragment_url = self.fragment.url_for(username)
 
         # First wave: independent lookups in parallel.
-        rate, nft_addr, frag_listing, market = await asyncio.gather(
-            self._safe(self.tonapi.get_ton_usd(), "tonapi.rate", report),
+        rates, nft_addr, frag_listing, market = await asyncio.gather(
+            self._safe(self.tonapi.get_rates(), "tonapi.rates", report),
             self._safe(self.tonapi.resolve_username_nft(username), "tonapi.resolve", report),
             self._safe(self.fragment.get_listing(username), "fragment", report),
             self._get_market(),
         )
-        report.ton_usd_rate = rate
+        report.rates = rates or {}
         if frag_listing:
             report.sources_used.append("fragment")
 
@@ -108,7 +108,7 @@ class Aggregator:
             username=username,
             listing=report.listing,
             sales=report.sales,
-            ton_usd=rate,
+            ton_usd=report.rates.get("USD"),
             market=market,
         )
         if market.calibrated and "getgems" not in report.sources_used:

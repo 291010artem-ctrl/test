@@ -64,7 +64,7 @@ class UsernameReport:
     estimate: PriceEstimate | None = None
     sales: list[SaleEvent] = field(default_factory=list)
     owners: list[OwnerPeriod] = field(default_factory=list)
-    ton_usd_rate: float | None = None
+    rates: dict[str, float] = field(default_factory=dict)  # per 1 TON, e.g. {"USD":5.2,"RUB":470}
     sources_used: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     fragment_url: str | None = None

@@ -81,16 +81,25 @@ class TonApi:
             return data["events"]
         return []
 
-    async def get_ton_usd(self) -> float | None:
+    async def get_rates(self, currencies: list[str] | None = None) -> dict[str, float]:
+        """TON price in the requested fiat/crypto currencies, e.g. {"USD":5.2,"RUB":470}."""
+        currencies = currencies or ["usd", "rub"]
         data = await self.http.get_json(
             f"{self.base}/v2/rates",
-            params={"tokens": "ton", "currencies": "usd"},
+            params={"tokens": "ton", "currencies": ",".join(currencies)},
             headers=self._headers,
         )
+        out: dict[str, float] = {}
         try:
-            return float(data["rates"]["TON"]["prices"]["USD"])
-        except (KeyError, TypeError, ValueError):
-            return None
+            prices = data["rates"]["TON"]["prices"]
+        except (KeyError, TypeError):
+            return out
+        for code, value in (prices or {}).items():
+            try:
+                out[code.upper()] = float(value)
+            except (TypeError, ValueError):
+                continue
+        return out
 
     # ── parsing (pure) ───────────────────────────────────────────────────────
     @staticmethod
