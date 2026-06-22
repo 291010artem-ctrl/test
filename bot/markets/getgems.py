@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 import aiohttp
 
-from .base import MarketClient, MarketResult, debug
+from .base import MarketClient, MarketResult, Sale, debug
 
 _TONAPI_BASE = "https://tonapi.io/v2"
 
@@ -54,10 +56,47 @@ class GetgemsClient(MarketClient):
             market=self.name,
             available=True,
             current_price_ton=current_price_ton,
-            sales_history=[],
+            sales_history=await self._sales_history(address),
             url=f"https://getgems.io/nft/{address}",
             error=None if current_price_ton is not None else "not_for_sale",
         )
+
+    async def _sales_history(self, address: str) -> list[Sale]:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{_TONAPI_BASE}/accounts/{address}/nfts/history",
+                    params={"limit": 30},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    raw_text = await resp.text()
+                    debug(self.name, f"history status={resp.status} body={raw_text[:1500]}")
+                    resp.raise_for_status()
+                    data = await resp.json(content_type=None)
+        except Exception as exc:
+            debug(self.name, f"history request failed: {exc!r}")
+            return []
+
+        sales = []
+        for event in data.get("events") or []:
+            for action in event.get("actions") or []:
+                nft_purchase = action.get("NftPurchase")
+                if not nft_purchase:
+                    continue
+                price = nft_purchase.get("price")
+                if price is None:
+                    continue
+                ts = event.get("timestamp")
+                if ts is None:
+                    continue
+                sales.append(
+                    Sale(
+                        market=self.name,
+                        price_ton=float(price) / 1e9,
+                        sold_at=datetime.fromtimestamp(ts),
+                    )
+                )
+        return sales
 
     async def lookup_username(self, username: str) -> MarketResult:
         return MarketResult(market=self.name, available=False, error="not_supported")

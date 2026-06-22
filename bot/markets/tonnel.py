@@ -5,7 +5,7 @@ from datetime import datetime
 
 import aiohttp
 
-from .base import MarketClient, MarketResult, Sale
+from .base import MarketClient, MarketResult, Sale, debug
 
 _BASE_URL = "https://gifts2.tonnel.network/api"
 
@@ -59,9 +59,47 @@ class TonnelClient(MarketClient):
             market=self.name,
             available=True,
             current_price_ton=match.get("price"),
-            sales_history=[],
+            sales_history=await self._sales_history(model),
             url="https://t.me/tonnel_network_bot",
         )
+
+    async def _sales_history(self, model: str) -> list[Sale]:
+        payload = {
+            "page": 1,
+            "limit": 30,
+            "type": "SALE",
+            "filter": {"gift_name": model},
+            "sort": "latest",
+            "authData": self.init_data,
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{_BASE_URL}/saleHistory",
+                    json=payload,
+                    headers=self._headers(),
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    raw_text = await resp.text()
+                    debug(self.name, f"history status={resp.status} body={raw_text[:1500]}")
+                    resp.raise_for_status()
+                    items = await resp.json(content_type=None)
+        except Exception as exc:
+            debug(self.name, f"history request failed: {exc!r}")
+            return []
+
+        sales = []
+        for item in items or []:
+            price = item.get("price")
+            ts = item.get("timestamp") or item.get("date")
+            if price is None or ts is None:
+                continue
+            try:
+                sold_at = datetime.fromtimestamp(ts / 1000) if isinstance(ts, (int, float)) else datetime.fromisoformat(ts)
+            except (ValueError, TypeError):
+                continue
+            sales.append(Sale(market=self.name, price_ton=float(price), sold_at=sold_at))
+        return sales
 
     async def lookup_username(self, username: str) -> MarketResult:
         return MarketResult(market=self.name, available=False, error="not_supported")
