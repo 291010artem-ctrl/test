@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -129,5 +130,9 @@ async def on_view(callback: CallbackQuery, state: FSMContext) -> None:
         current_rate = await ton_price.get_current_ton_usd()
         text = format_estimate(label, results, current_rate)
 
-    await callback.message.edit_text(text, reply_markup=_result_keyboard(), disable_web_page_preview=True)
+    try:
+        await callback.message.edit_text(text, reply_markup=_result_keyboard(), disable_web_page_preview=True)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc):
+            raise
     await callback.answer()
