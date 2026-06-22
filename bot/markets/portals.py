@@ -7,7 +7,7 @@ import aiohttp
 
 from .base import MarketClient, MarketResult, Sale, debug
 
-_BASE_URL = "https://portals-market.com/api"
+_BASE_URL = "https://portal-market.com/api"
 
 
 class PortalsClient(MarketClient):
@@ -17,7 +17,10 @@ class PortalsClient(MarketClient):
     Set PORTALS_AUTH_TOKEN in the environment.
 
     Endpoint shapes are based on the community wrapper `portalsmp` and may
-    need adjusting if Portals changes its backend.
+    need adjusting if Portals changes its backend. The marketplace migrated
+    its domain from portals-market.com to portal-market.com at some point
+    after that wrapper was last updated (confirmed via the Mini App's
+    Network tab); prices there are now denominated in GRAM, not TON.
     """
 
     name = "Portals"
@@ -26,7 +29,11 @@ class PortalsClient(MarketClient):
         self.token = os.getenv("PORTALS_AUTH_TOKEN", "")
 
     def _headers(self) -> dict:
-        return {"Authorization": f"tma {self.token}"}
+        return {
+            "Authorization": f"tma {self.token}",
+            "Origin": "https://portal-market.com",
+            "Referer": "https://portal-market.com/",
+        }
 
     async def lookup_gift(self, number: str, model: str, address: str | None = None) -> MarketResult:
         if not self.token:
