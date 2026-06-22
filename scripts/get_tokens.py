@@ -1,24 +1,29 @@
 """Obtain Mini App auth (initData / bearer tokens) for the marketplaces that
 need a Telegram account: Tonnel, Portals and mrkt.
 
-It logs in under a TECHNICAL Telegram account via Pyrogram, emulates opening
-each marketplace Mini App (the same RequestWebView call the official Telegram
-client makes), pulls the `tgWebAppData` (a.k.a. initData) out of the returned
-URL, and prints the values ready to paste into .env. For mrkt it goes one step
-further and exchanges the initData for a bearer token via the market's /auth.
+Login is done via QR code (no SMS/login-code needed): it prints a QR code in
+the terminal, you scan it with Telegram on your phone (Settings -> Devices ->
+Link Desktop Device), and the script logs in under that account. It then
+emulates opening each marketplace Mini App (the same RequestWebView call the
+official Telegram client makes), pulls the initData out of the result, and
+prints the values ready to paste into .env. For mrkt it goes one step further
+and exchanges the initData for a bearer token via the market's /auth.
 
 Usage:
     cp .env.example .env          # fill TG_API_ID / TG_API_HASH
-    python -m scripts.get_tokens  # first run asks for phone + login code
+    pip install -r requirements-scripts.txt
+    python -m scripts.get_tokens  # scan the printed QR code with Telegram
 
 Notes:
-  * Use a DEDICATED account/number, not your main one. Heavy automated polling
-    through a user account can get it limited or banned by Telegram.
+  * Scanning the QR with your phone links THIS script to whatever account is
+    open in your Telegram app. If you don't want your main account touched,
+    log out and log into a spare/technical account in the Telegram app first,
+    then scan with that.
   * The bot usernames / app short names below are best-effort. If a market
     fails to resolve, open it once in Telegram, check the t.me/<bot>/<app>
     link, and adjust the MARKETS entries accordingly.
   * Portals tokens rotate every 1-7 days, so re-run this script periodically
-    (e.g. from cron) to refresh them.
+    (e.g. from cron / Task Scheduler) to refresh them.
 """
 
 from __future__ import annotations
@@ -29,19 +34,23 @@ import sys
 from urllib.parse import parse_qs, unquote, urlparse
 
 import aiohttp
+import qrcode
 from dotenv import load_dotenv
-from pyrogram import Client
-from pyrogram.raw.functions.messages import RequestAppWebView, RequestWebView
-from pyrogram.raw.types import InputBotAppShortName
+from telethon import TelegramClient
+from telethon.tl.functions.messages import (
+    RequestAppWebViewRequest,
+    RequestWebViewRequest,
+)
+from telethon.tl.types import InputBotAppShortName
 
 load_dotenv()
 
 SESSION_NAME = "tech_account"
 
 # Each market: how to open its Mini App.
-#   bot       - the bot username hosting the Mini App
-#   app       - app short name for t.me/<bot>/<app> links (None -> menu button)
-#   start     - start_param to pass, if the app needs one
+#   bot   - the bot username hosting the Mini App
+#   app   - app short name for t.me/<bot>/<app> links (None -> menu button)
+#   start - start_param to pass, if the app needs one
 MARKETS = {
     "TONNEL": {"bot": "tonnel_network_bot", "app": "market", "start": ""},
     "PORTALS": {"bot": "portals", "app": "market", "start": ""},
@@ -50,6 +59,19 @@ MARKETS = {
 
 # mrkt exchanges initData for a bearer token here.
 MRKT_AUTH_URL = "https://api.tgmrkt.io/api/v1/auth"
+
+
+def _print_qr(url: str) -> None:
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(url)
+    qr.make()
+    matrix = qr.get_matrix()
+    print()
+    for row in matrix:
+        print("".join("██" if cell else "  " for cell in row))
+    print()
+    print(f"Если QR не сканируется, открой эту ссылку на телефоне: {url}")
+    print()
 
 
 def _extract_init_data(web_view_url: str) -> str | None:
@@ -65,19 +87,16 @@ def _extract_init_data(web_view_url: str) -> str | None:
     return unquote(raw)
 
 
-async def _open_mini_app(app: Client, cfg: dict) -> str | None:
+async def _open_mini_app(client: TelegramClient, cfg: dict) -> str | None:
     """Return the initData string for one marketplace Mini App, or None."""
-    bot_peer = await app.resolve_peer(cfg["bot"])
+    bot_entity = await client.get_input_entity(cfg["bot"])
 
-    # Preferred path: named app (t.me/<bot>/<app>).
     if cfg.get("app"):
         try:
-            bot_app = InputBotAppShortName(
-                bot_id=bot_peer, short_name=cfg["app"]
-            )
-            res = await app.invoke(
-                RequestAppWebView(
-                    peer=bot_peer,
+            bot_app = InputBotAppShortName(bot_id=bot_entity, short_name=cfg["app"])
+            res = await client(
+                RequestAppWebViewRequest(
+                    peer=bot_entity,
                     app=bot_app,
                     platform="android",
                     write_allowed=True,
@@ -88,12 +107,11 @@ async def _open_mini_app(app: Client, cfg: dict) -> str | None:
         except Exception as exc:  # noqa: BLE001
             print(f"  (app webview failed: {exc}; trying menu webview)")
 
-    # Fallback path: menu-button web app.
     try:
-        res = await app.invoke(
-            RequestWebView(
-                peer=bot_peer,
-                bot=bot_peer,
+        res = await client(
+            RequestWebViewRequest(
+                peer=bot_entity,
+                bot=bot_entity,
                 platform="android",
                 from_bot_menu=True,
                 start_param=cfg.get("start") or None,
@@ -116,7 +134,6 @@ async def _mrkt_bearer(init_data: str) -> str | None:
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 payload = await resp.json()
-                # Field name varies; try the common ones.
                 return (
                     payload.get("token")
                     or payload.get("accessToken")
@@ -127,6 +144,18 @@ async def _mrkt_bearer(init_data: str) -> str | None:
         return None
 
 
+async def _login_with_qr(client: TelegramClient) -> None:
+    qr_login = await client.qr_login()
+    print("Сканируй этот QR-код Telegram-ом на телефоне")
+    print("(Настройки -> Устройства -> Привязать устройство / Linked devices -> Scan QR):")
+    _print_qr(qr_login.url)
+    try:
+        await qr_login.wait(timeout=120)
+    except asyncio.TimeoutError:
+        print("QR-код истёк (120 секунд). Перезапусти скрипт и попробуй снова.")
+        sys.exit(1)
+
+
 async def main() -> None:
     api_id = os.getenv("TG_API_ID")
     api_hash = os.getenv("TG_API_HASH")
@@ -134,31 +163,37 @@ async def main() -> None:
         sys.exit("Set TG_API_ID and TG_API_HASH in .env (see https://my.telegram.org)")
 
     results: dict[str, str] = {}
-    async with Client(SESSION_NAME, api_id=int(api_id), api_hash=api_hash) as app:
-        me = await app.get_me()
-        print(f"Logged in as @{me.username or me.id}\n")
+    client = TelegramClient(SESSION_NAME, int(api_id), api_hash)
+    await client.connect()
 
-        for key, cfg in MARKETS.items():
-            print(f"Opening {key} Mini App (@{cfg['bot']})...")
-            init_data = await _open_mini_app(app, cfg)
-            if not init_data:
-                print(f"  -> failed, skipping {key}\n")
-                continue
+    if not await client.is_user_authorized():
+        await _login_with_qr(client)
 
-            if key == "MRKT":
-                bearer = await _mrkt_bearer(init_data)
-                if bearer:
-                    results["MRKT_BEARER_TOKEN"] = bearer
-                    print("  -> got mrkt bearer token\n")
-                else:
-                    print("  -> got initData but /auth gave no token\n")
-            elif key == "PORTALS":
-                # portals.py builds the header as "tma {token}", so store raw initData.
-                results["PORTALS_AUTH_TOKEN"] = init_data
-                print("  -> got Portals initData\n")
-            elif key == "TONNEL":
-                results["TONNEL_INIT_DATA"] = init_data
-                print("  -> got Tonnel initData\n")
+    me = await client.get_me()
+    print(f"Logged in as @{me.username or me.id}\n")
+
+    for key, cfg in MARKETS.items():
+        print(f"Opening {key} Mini App (@{cfg['bot']})...")
+        init_data = await _open_mini_app(client, cfg)
+        if not init_data:
+            print(f"  -> failed, skipping {key}\n")
+            continue
+
+        if key == "MRKT":
+            bearer = await _mrkt_bearer(init_data)
+            if bearer:
+                results["MRKT_BEARER_TOKEN"] = bearer
+                print("  -> got mrkt bearer token\n")
+            else:
+                print("  -> got initData but /auth gave no token\n")
+        elif key == "PORTALS":
+            results["PORTALS_AUTH_TOKEN"] = init_data
+            print("  -> got Portals initData\n")
+        elif key == "TONNEL":
+            results["TONNEL_INIT_DATA"] = init_data
+            print("  -> got Tonnel initData\n")
+
+    await client.disconnect()
 
     if not results:
         sys.exit("No tokens obtained. Check the bot usernames/app names in MARKETS.")
