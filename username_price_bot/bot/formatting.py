@@ -56,8 +56,9 @@ def render_report(report: UsernameReport) -> str:
         if est.low_ton and est.high_ton:
             rng = f" (диапазон {fmt_ton(est.low_ton)}–{fmt_ton(est.high_ton)} TON)"
         conf = _CONFIDENCE_LABEL.get(est.confidence, est.confidence)
+        title = "Грубая оценка" if est.confidence == "low" else "Оценка цены"
         lines.append(
-            f"📊 <b>Оценка цены: ~{fmt_ton(est.point_ton)} TON</b>"
+            f"📊 <b>{title}: ~{fmt_ton(est.point_ton)} TON</b>"
             f"{_usd_suffix(est.point_ton, r.ton_usd_rate)}"
         )
         if rng:

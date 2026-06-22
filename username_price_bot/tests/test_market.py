@@ -1,21 +1,43 @@
 from datetime import datetime, timedelta, timezone
 
-from bot.market import MarketModel, looks_like_word
+from bot.market import MarketModel, looks_like_word, pattern_class
 
 NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
 
-def test_appreciation_factor_grows_over_time():
+def test_appreciation_factor_grows_but_conservatively():
     m = MarketModel()
     f = m.appreciation_factor(
         datetime(2022, 1, 1, tzinfo=timezone.utc),
         datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
-    assert f > 3.0  # market grew a lot since 2022
+    assert 1.5 < f < 8.0  # grew, but deliberately conservative (not 6x)
     # same instant -> no change
     assert m.appreciation_factor(NOW, NOW) == 1.0
     # None timestamps -> neutral
     assert m.appreciation_factor(None, NOW) == 1.0
+
+
+def test_pattern_class():
+    assert pattern_class("cool") == "word"
+    assert pattern_class("1234") == "digit"
+    assert pattern_class("xkcd") == "other"
+
+
+def test_comparables_prefer_same_value_class():
+    m = MarketModel()
+    recent = NOW - timedelta(days=20)
+    words = ["abab", "ebeb", "obob", "ubub"]   # 4-letter, word-like (has vowels)
+    others = ["bcdf", "ghjk", "lmnp", "qrst"]  # 4-letter, no vowels -> "other"
+    sales = (
+        [(w, 1000.0, recent) for w in words]
+        + [(o, 300.0, recent) for o in others]
+    )
+    m.calibrate(sales, now=NOW)
+    word_val, _ = m.comparable_estimate("able", now=NOW)   # word class
+    other_val, _ = m.comparable_estimate("zxqw", now=NOW)  # other class
+    assert word_val == 1000.0
+    assert other_val == 300.0
 
 
 def test_category_typical_shorter_is_pricier():

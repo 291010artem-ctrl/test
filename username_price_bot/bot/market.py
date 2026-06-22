@@ -23,16 +23,20 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
-# Relative market index for Telegram usernames by year (TON-denominated).
-# Encodes "prices grew over time": index[2024] / index[2022] ≈ how much a 2022
-# sale should be scaled up to be comparable to 2024. EDITABLE / calibratable.
+# Relative market index for Telegram usernames by year (TON-DENOMINATED).
+# index[to] / index[from] ≈ how much a price from `from` should be scaled to be
+# comparable to `to`. Deliberately CONSERVATIVE: username prices in TON have not
+# grown monotonically (TON itself appreciated, and the 2022 hype cooled), so we
+# only assume a modest ~2x over 2022→2026. This anchor is also down-weighted in
+# pricing.py — the real signal should come from recent comparable sales.
+# EDITABLE / auto-calibratable.
 DEFAULT_MARKET_INDEX: dict[int, float] = {
     2021: 1.0,
-    2022: 1.5,
-    2023: 3.0,
-    2024: 6.0,
-    2025: 8.0,
-    2026: 9.0,
+    2022: 1.2,
+    2023: 1.6,
+    2024: 2.0,
+    2025: 2.3,
+    2026: 2.5,
 }
 
 # Current typical price (TON) by username length, reflecting today's market.
@@ -65,13 +69,29 @@ def looks_like_word(username: str) -> bool:
     return 0 < vowels < len(username)  # has both vowels and consonants
 
 
+def pattern_class(username: str) -> str:
+    """Coarse value class used to match 'similar' usernames for comparables."""
+    if username.isdigit():
+        return "digit"
+    if looks_like_word(username):
+        return "word"
+    return "other"
+
+
+_CLASS_RU = {"word": "слово", "digit": "цифры", "other": "буквы/символы"}
+
+
+def class_label(username: str) -> str:
+    return _CLASS_RU.get(pattern_class(username), "")
+
+
 @dataclass
 class MarketModel:
     index: dict[int, float] = field(default_factory=lambda: dict(DEFAULT_MARKET_INDEX))
     category: dict[int, float] = field(default_factory=lambda: dict(DEFAULT_CATEGORY_TON))
     long_ton: float = DEFAULT_LONG_TON
-    # (length_key, price_ton, timestamp) of recent collection sales, if calibrated
-    sales: list[tuple[int, float, datetime | None]] = field(default_factory=list)
+    # (length_key, pattern_class, price_ton, timestamp) of recent collection sales
+    sales: list[tuple[int, str, float, datetime | None]] = field(default_factory=list)
     calibrated: bool = False
 
     # ── time / appreciation ───────────────────────────────────────────────
@@ -95,7 +115,7 @@ class MarketModel:
         b = self._index_for(to_dt)
         if not a or not b or a <= 0:
             return 1.0
-        return max(0.25, min(b / a, 50.0))
+        return max(0.4, min(b / a, 8.0))
 
     # ── category pricing ──────────────────────────────────────────────────
     def pattern_multiplier(self, username: str) -> float:
@@ -121,19 +141,28 @@ class MarketModel:
     def comparable_estimate(
         self, username: str, now: datetime | None = None
     ) -> tuple[float | None, int]:
-        """Median recent sale price of usernames in the same length bucket."""
+        """Median recent sale price of *similar* usernames.
+
+        Prefers the same length **and** value class (word / digits / other);
+        falls back to same-length-only when that bucket is too small.
+        """
         if not self.sales:
             return None, 0
         now = now or datetime.now(timezone.utc)
         key = _length_key(username)
-        prices = [
-            price
-            for (k, price, ts) in self.sales
+        cls = pattern_class(username)
+        recent = [
+            (c, price)
+            for (k, c, price, ts) in self.sales
             if k == key and price and ts and (now - ts) <= _COMPARABLE_WINDOW
         ]
-        if len(prices) < _MIN_COMPARABLES:
-            return None, len(prices)
-        return median(prices), len(prices)
+        same_class = [p for (c, p) in recent if c == cls]
+        if len(same_class) >= _MIN_COMPARABLES:
+            return median(same_class), len(same_class)
+        all_len = [p for (_, p) in recent]
+        if len(all_len) >= _MIN_COMPARABLES:
+            return median(all_len), len(all_len)
+        return None, len(all_len)
 
     # ── calibration from live data ────────────────────────────────────────
     def calibrate(
@@ -145,12 +174,12 @@ class MarketModel:
         """
         now = now or datetime.now(timezone.utc)
         self.sales = [
-            (_length_key(name), price, ts)
+            (_length_key(name), pattern_class(name), price, ts)
             for (name, price, ts) in raw_sales
             if name and price and price > 0
         ]
         buckets: dict[int, list[float]] = {}
-        for key, price, ts in self.sales:
+        for key, _cls, price, ts in self.sales:
             if ts and (now - ts) <= _COMPARABLE_WINDOW:
                 buckets.setdefault(key, []).append(price)
         for key, prices in buckets.items():

@@ -1,25 +1,40 @@
 """Honest 'real price' estimation.
 
-The estimate is a weighted blend of *anchors*, strongest first:
+Design goals, in order: **don't mislead**, then be as accurate as the available
+data allows, and always expose *why* and *how sure*.
 
-  • active listing price (a ceiling — fair value sits a bit below);
-  • this NFT's own past sales, **re-priced to today** via the market index
-    (so an old cheap sale doesn't undervalue a now-expensive username);
-  • recent sales of **similar** usernames (same length bucket);
-  • the current typical price for the username's category (always a backstop).
+Two regimes:
 
-It never falls misleadingly below the current market floor for the category,
-ships with the signals it used and an explicit confidence level, and is NOT
-financial advice.
+A. The username is **actively listed** → the market is quoting a price right now.
+   We anchor to that quote (fixed price ≈ ceiling, auction bid ≈ floor) and only
+   sanity-check it against comparable sales. We never inflate a real buyable
+   price up to a synthetic table value.
+
+B. **Not listed** → blend real signals: recent sales of *similar* usernames
+   (best), this NFT's own past sales re-priced to today (weighted down the older
+   they are), and the category's typical price as a weak prior. A category
+   "floor" may only **lift** a stale/cheap estimate — it never drags a fresh real
+   data point down.
+
+Confidence drives the width of the range, and a low-confidence estimate is
+explicitly labelled a rough guess. Not financial advice.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from ..market import MarketModel
+from ..market import MarketModel, class_label
 from ..models import Listing, MarketStatus, PriceEstimate, SaleEvent
 
-_RECENT_OWN_SALE_DAYS = 120
+_RECENT_DAYS = 120
+_MIDTERM_DAYS = 365
+
+# (low_mult, high_mult) applied to the point estimate, by confidence.
+_SPREAD = {
+    "high": (0.85, 1.15),
+    "medium": (0.70, 1.40),
+    "low": (0.45, 2.00),
+}
 
 
 def _weighted(anchors: list[tuple[float, float]]) -> float:
@@ -41,79 +56,113 @@ def estimate_price(
     signals: list[str] = []
 
     typical = market.category_typical(username)
-    anchors: list[tuple[float, float]] = []  # (value_ton, weight)
+    comp_value, comp_n = market.comparable_estimate(username, now)
 
-    # 1) Active listing — strongest, but treated as a ceiling.
+    # This NFT's own most recent priced sale, re-priced to today.
+    last_sale = next((s for s in sales if s.price_ton), None)
+    age_days: int | None = None
+    adjusted: float | None = None
+    if last_sale and last_sale.price_ton:
+        if last_sale.timestamp:
+            age_days = (now - last_sale.timestamp).days
+        factor = market.appreciation_factor(last_sale.timestamp, now)
+        adjusted = last_sale.price_ton * factor
+    has_recent_own = age_days is not None and age_days <= _RECENT_DAYS
+
     listed = bool(
         listing
         and listing.price_ton
         and listing.status in (MarketStatus.ON_SALE, MarketStatus.ON_AUCTION)
     )
+
+    # ── Regime A: actively listed ─────────────────────────────────────────
     if listed:
         ask = listing.price_ton
-        anchors.append((ask * 0.92, 3.0))
-        signals.append(f"Активный листинг: {ask:g} TON (потолок цены)")
-
-    # 2) Comparable recent sales of similar usernames.
-    comp_value, comp_n = market.comparable_estimate(username, now)
-    if comp_value:
-        anchors.append((comp_value, 2.5))
-        signals.append(
-            f"Похожие {len(username)}-символьные продаются ~{comp_value:.0f} TON "
-            f"(по {comp_n} недавним продажам)"
-        )
-
-    # 3) This NFT's own last sale, re-priced to today.
-    last_sale = next((s for s in sales if s.price_ton), None)
-    age_days: int | None = None
-    if last_sale and last_sale.price_ton:
-        factor = market.appreciation_factor(last_sale.timestamp, now)
-        adjusted = last_sale.price_ton * factor
-        anchors.append((adjusted, 2.0))
-        if last_sale.timestamp:
-            age_days = (now - last_sale.timestamp).days
-        if factor > 1.15 and age_days is not None:
-            months = max(1, age_days // 30)
-            signals.append(
-                f"Прошлая продажа {last_sale.price_ton:g} TON (~{months} мес. назад) "
-                f"≈ {adjusted:.0f} TON сегодня с учётом роста рынка"
-            )
+        if listing.status == MarketStatus.ON_AUCTION:
+            point = ask  # current/min bid is a floor; it can be bid higher
+            lo_m, hi_m = 0.95, 1.40
+            signals.append(f"Идёт аукцион, ставка {ask:g} TON (может вырасти)")
         else:
-            signals.append(f"Последняя продажа: {last_sale.price_ton:g} TON")
-
-    # 4) Resolve a point estimate.
-    if anchors:
-        point = _weighted(anchors)
-    else:
-        point = typical
-        signals.append(
-            f"Нет данных о продажах/листинге — оценка по текущему рынку категории "
-            f"(~{typical:.0f} TON за {len(username)}-символьный)"
-        )
-
-    # Floor: never mislead with a stale-low value for a premium category.
-    floor = typical * 0.7
-    if point < floor:
-        point = floor
-        signals.append(
-            "Оценка поднята до актуального уровня рынка для этой категории "
-            "(прошлые цены устарели)"
-        )
-
-    # Range from the spread of anchors around the point.
-    candidate_vals = [v for v, _ in anchors] + [point]
-    low = min(candidate_vals) * 0.85
-    high = max(candidate_vals) * 1.15
-    low = max(low, typical * 0.5)
-
-    # Confidence.
-    has_recent_own = age_days is not None and age_days <= _RECENT_OWN_SALE_DAYS
-    if listed or has_recent_own:
+            point = ask * 0.95  # buy-now ask is essentially the price
+            lo_m, hi_m = 0.90, 1.00
+            signals.append(f"Сейчас продаётся за {ask:g} TON — можно купить")
         confidence = "high"
-    elif comp_value or last_sale:
-        confidence = "medium"
+        if comp_value:
+            if ask > comp_value * 2.5:
+                signals.append(
+                    f"⚠️ Заметно дороже похожих (~{comp_value:.0f} TON) — цена может быть завышена"
+                )
+                lo_m = min(lo_m, 0.6)
+            elif ask < comp_value * 0.5:
+                signals.append(
+                    f"Дешевле похожих (~{comp_value:.0f} TON) — возможно, выгодно"
+                )
+                hi_m = max(hi_m, 1.6)
+        low, high = point * lo_m, point * hi_m
+
+    # ── Regime B: not listed ──────────────────────────────────────────────
     else:
-        confidence = "low"
+        anchors: list[tuple[float, float]] = []
+        if comp_value:
+            anchors.append((comp_value, 3.0))
+            signals.append(
+                f"Похожие {len(username)}-симв. ({class_label(username)}) "
+                f"продаются ~{comp_value:.0f} TON (по {comp_n} продажам)"
+            )
+        if adjusted is not None and last_sale:
+            if has_recent_own:
+                weight = 3.0
+            elif age_days is not None and age_days <= _MIDTERM_DAYS:
+                weight = 2.0
+            else:
+                weight = 1.0
+            anchors.append((adjusted, weight))
+            months = max(1, age_days // 30) if age_days is not None else None
+            if adjusted > last_sale.price_ton * 1.15 and months is not None:
+                signals.append(
+                    f"Прошлая продажа {last_sale.price_ton:g} TON (~{months} мес. назад) "
+                    f"≈ {adjusted:.0f} TON сегодня с поправкой на рост рынка"
+                )
+            else:
+                when = f" (~{months} мес. назад)" if months is not None else ""
+                signals.append(f"Последняя продажа: {last_sale.price_ton:g} TON{when}")
+
+        if anchors:
+            point = _weighted(anchors)
+        else:
+            point = typical
+            signals.append(
+                f"Нет продаж и листинга — оценка по типичной цене категории "
+                f"(~{typical:.0f} TON за {len(username)}-симв.)"
+            )
+
+        # Category floor may only LIFT a stale/cheap estimate (never drag fresh
+        # real data down). Skip entirely when we have fresh signals.
+        fresh = has_recent_own or bool(comp_value)
+        if not fresh:
+            floor = typical * 0.7
+            if point < floor:
+                point = floor
+                signals.append(
+                    "Поднято до текущего уровня категории — прошлая цена устарела/занижена"
+                )
+
+        if has_recent_own:
+            confidence = "high"
+        elif comp_value or (age_days is not None and age_days <= _MIDTERM_DAYS):
+            confidence = "medium"
+        else:
+            confidence = "low"
+        lo_m, hi_m = _SPREAD[confidence]
+        low, high = point * lo_m, point * hi_m
+
+    if confidence == "low":
+        signals.append("⚠️ Мало данных — это грубый ориентир, а не точная цена")
+
+    # Guards.
+    point = max(point, 0.0)
+    high = max(high, point)
+    low = max(min(low, point), 0.0)
 
     usd_point = point * ton_usd if (point and ton_usd) else None
     return PriceEstimate(
