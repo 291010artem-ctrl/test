@@ -71,11 +71,11 @@ class PortalsClient(MarketClient):
             market=self.name,
             available=True,
             current_price_ton=float(match["price"]) if match.get("price") is not None else None,
-            sales_history=await self._sales_history(model),
+            sales_history=await self._sales_history(model, number),
             url="https://t.me/portals",
         )
 
-    async def _sales_history(self, model: str) -> list[Sale]:
+    async def _sales_history(self, model: str, number: str) -> list[Sale]:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -98,7 +98,7 @@ class PortalsClient(MarketClient):
             if action.get("type") != "purchase":
                 continue
             nft = action.get("nft") or {}
-            if nft.get("name") != model:
+            if nft.get("name") != model or str(nft.get("external_collection_number")) != str(number):
                 continue
             price = action.get("amount")
             ts = action.get("created_at")
