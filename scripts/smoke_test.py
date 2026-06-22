@@ -14,7 +14,7 @@ import asyncio
 from datetime import datetime
 
 from bot import aggregator, ton_price
-from bot.formatting import format_report
+from bot.formatting import format_current_prices, format_estimate, format_item_info, format_sales_history
 from bot.markets.base import ItemKind, MarketClient, MarketResult, Sale
 
 
@@ -80,20 +80,31 @@ async def main() -> None:
 
     results = await aggregator.lookup(ItemKind.GIFT, number="1234", model="Plush Pepe")
     current = await ton_price.get_current_ton_usd()
-    report = format_report("🎁 Plush Pepe #1234", results, current)
+    label = "🎁 Plush Pepe #1234"
+    info = format_item_info(label, results)
+    prices = format_current_prices(label, results, current)
+    history = format_sales_history(label, results)
+    estimate = format_estimate(label, results, current)
 
-    print("\n" + "=" * 60)
-    print("RENDERED REPORT (what the user receives):")
-    print("=" * 60)
-    print(report)
+    for title, text in [
+        ("ITEM INFO", info),
+        ("CURRENT PRICES", prices),
+        ("SALES HISTORY", history),
+        ("ESTIMATE", estimate),
+    ]:
+        print("\n" + "=" * 60)
+        print(title)
+        print("=" * 60)
+        print(text)
     print("=" * 60)
 
     # Basic assertions so the script fails loudly if the pipeline breaks.
-    assert "12.50 TON" in report, "current price missing"
-    assert "Getgems" in report and "Portals" in report, "markets missing"
-    assert "$" in report, "USD conversion missing"
-    assert "История продаж" in report, "sales history missing"
-    assert "mrkt" in report, "unavailable section missing"
+    assert "12.50 TON" in prices, "current price missing"
+    assert "Getgems" in prices and "Portals" in prices, "markets missing"
+    assert "$" in prices, "USD conversion missing"
+    assert "Getgems" in history and "Portals" in history, "sales history missing"
+    assert "mrkt" in prices, "unavailable section missing"
+    assert "Оценка стоимости" in estimate, "estimate missing"
     print("\nAll pipeline assertions passed ✅")
 
 
