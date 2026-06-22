@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-DEBUG = os.getenv("DEBUG_MARKETS") == "1"
+DEBUG = os.getenv("DEBUG_MARKETS", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def debug(market: str, message: str) -> None:
