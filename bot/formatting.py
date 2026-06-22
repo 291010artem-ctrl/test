@@ -11,6 +11,21 @@ def format_report(item_label: str, results: list[MarketResult], current_ton_usd:
         lines.append("Не найдено ни на одной площадке (или нет доступа к API).")
         return "\n".join(lines)
 
+    telegram_official = next((r for r in available if r.market == "Telegram" and r.attributes), None)
+    if telegram_official:
+        lines.append(f"<b>Атрибуты (по данным Telegram):</b> {telegram_official.attributes}")
+        if telegram_official.current_price_ton is not None:
+            usd = (
+                f" (~${telegram_official.current_price_ton * current_ton_usd:.2f})"
+                if current_ton_usd
+                else ""
+            )
+            lines.append(
+                f"<b>Объективный floor по этой комбинации атрибутов:</b> "
+                f"{telegram_official.current_price_ton:.2f} TON{usd}"
+            )
+        lines.append("")
+
     lines.append("<b>Актуальные цены:</b>")
     for r in available:
         if r.current_price_ton is None:

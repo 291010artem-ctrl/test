@@ -47,6 +47,7 @@ class MarketResult:
     sales_history: list[Sale] | None = None
     error: str | None = None
     url: str | None = None
+    attributes: str | None = None
 
 
 class MarketClient:

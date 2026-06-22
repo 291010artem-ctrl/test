@@ -9,6 +9,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from dotenv import load_dotenv
 
+from . import tg_session
 from .handlers import router
 
 load_dotenv()
@@ -25,8 +26,15 @@ async def main() -> None:
     dp = Dispatcher()
     dp.include_router(router)
 
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    await tg_session.get_client()
+
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot)
+    finally:
+        client = await tg_session.get_client()
+        if client is not None:
+            await client.disconnect()
 
 
 if __name__ == "__main__":

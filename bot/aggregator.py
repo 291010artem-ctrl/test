@@ -8,9 +8,11 @@ from .markets.fragment import FragmentClient
 from .markets.getgems import GetgemsClient
 from .markets.mrkt import MrktClient
 from .markets.portals import PortalsClient
+from .markets.telegram_official import TelegramOfficialClient
 from .markets.tonnel import TonnelClient
 
 ALL_CLIENTS: list[MarketClient] = [
+    TelegramOfficialClient(),
     GetgemsClient(),
     TonnelClient(),
     PortalsClient(),
