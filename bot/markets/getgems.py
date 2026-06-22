@@ -8,6 +8,19 @@ from .base import MarketClient, MarketResult, Sale, debug
 
 _GRAPHQL_URL = "https://api.getgems.io/graphql"
 
+# Getgems' API sits behind Cloudflare and blocks requests that don't look
+# like they came from a browser hitting the site (no User-Agent/Origin/etc
+# gets an instant 403 with no JSON body).
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Origin": "https://getgems.io",
+    "Referer": "https://getgems.io/",
+    "Accept": "application/json",
+}
+
 
 class GetgemsClient(MarketClient):
     """Getgems is a standalone TON NFT marketplace with a public GraphQL API
@@ -23,6 +36,7 @@ class GetgemsClient(MarketClient):
                 async with session.post(
                     _GRAPHQL_URL,
                     json={"query": query, "variables": variables},
+                    headers=_HEADERS,
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
                     raw_text = await resp.text()

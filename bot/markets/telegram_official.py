@@ -66,7 +66,7 @@ class TelegramOfficialClient(MarketClient):
             return MarketResult(market=self.name, available=False, error="not_found")
 
         gift = result.gift
-        debug(self.name, f"gift attributes: {gift.attributes!r}")
+        debug(self.name, f"gift attributes: {[a.to_dict() for a in gift.attributes]!r}")
 
         model_attr = next((a for a in gift.attributes if isinstance(a, StarGiftAttributeModel)), None)
         backdrop_attr = next((a for a in gift.attributes if isinstance(a, StarGiftAttributeBackdrop)), None)
@@ -117,7 +117,7 @@ class TelegramOfficialClient(MarketClient):
             debug(self.name, f"GetResaleStarGifts failed: {exc!r}")
             return None
 
-        debug(self.name, f"resale gifts: {resale.gifts!r}")
+        debug(self.name, f"resale gifts: {[g.to_dict() for g in resale.gifts]!r}")
 
         prices = []
         for g in resale.gifts:
