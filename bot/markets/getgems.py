@@ -4,7 +4,7 @@ from datetime import datetime
 
 import aiohttp
 
-from .base import MarketClient, MarketResult, Sale
+from .base import MarketClient, MarketResult, Sale, debug
 
 _GRAPHQL_URL = "https://api.getgems.io/graphql"
 
@@ -25,9 +25,14 @@ class GetgemsClient(MarketClient):
                     json={"query": query, "variables": variables},
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
-                    payload = await resp.json()
+                    raw_text = await resp.text()
+                    debug(self.name, f"status={resp.status} body={raw_text[:1500]}")
+                    payload = await resp.json(content_type=None)
+                    if payload.get("errors"):
+                        debug(self.name, f"graphql errors: {payload['errors']}")
                     return payload.get("data")
-        except Exception:
+        except Exception as exc:
+            debug(self.name, f"request failed: {exc!r}")
             return None
 
     async def lookup_gift(self, number: str, model: str) -> MarketResult:

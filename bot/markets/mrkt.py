@@ -4,7 +4,7 @@ import os
 
 import aiohttp
 
-from .base import MarketClient, MarketResult
+from .base import MarketClient, MarketResult, debug
 
 _BASE_URL = "https://api.tgmrkt.io/api/v1"
 
@@ -43,8 +43,12 @@ class MrktClient(MarketClient):
                     headers=self._headers(),
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
-                    data = await resp.json()
+                    raw_text = await resp.text()
+                    debug(self.name, f"status={resp.status} body={raw_text[:1500]}")
+                    resp.raise_for_status()
+                    data = await resp.json(content_type=None)
         except Exception as exc:
+            debug(self.name, f"request failed: {exc!r}")
             return MarketResult(market=self.name, available=False, error=str(exc))
 
         gifts = data.get("gifts") or []

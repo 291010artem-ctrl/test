@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+
+DEBUG = os.getenv("DEBUG_MARKETS") == "1"
+
+
+def debug(market: str, message: str) -> None:
+    if DEBUG:
+        print(f"[DEBUG {market}] {message}")
 
 
 class ItemKind(str, Enum):
