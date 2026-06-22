@@ -58,7 +58,7 @@ class TonnelClient(MarketClient):
         return MarketResult(
             market=self.name,
             available=True,
-            current_price_ton=match.get("price"),
+            current_price_ton=float(match["price"]) if match.get("price") is not None else None,
             sales_history=await self._sales_history(model),
             url="https://t.me/tonnel_network_bot",
         )

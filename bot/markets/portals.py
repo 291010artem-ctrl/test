@@ -43,7 +43,13 @@ class PortalsClient(MarketClient):
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     f"{_BASE_URL}/nfts/search",
-                    params={"name": model, "gift_num": number},
+                    params={
+                        "offset": 0,
+                        "limit": 30,
+                        "sort_by": "price asc",
+                        "filter_by_collections": model,
+                        "status": "listed",
+                    },
                     headers=self._headers(),
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
@@ -56,14 +62,14 @@ class PortalsClient(MarketClient):
             return MarketResult(market=self.name, available=False, error=str(exc))
 
         results = data.get("results") or []
-        if not results:
+        match = next((g for g in results if str(g.get("external_collection_number")) == str(number)), None)
+        if not match:
             return MarketResult(market=self.name, available=False, error="not_found")
 
-        item = results[0]
         return MarketResult(
             market=self.name,
             available=True,
-            current_price_ton=item.get("price"),
+            current_price_ton=float(match["price"]) if match.get("price") is not None else None,
             sales_history=await self._sales_history(model),
             url="https://t.me/portals",
         )
@@ -78,7 +84,7 @@ class PortalsClient(MarketClient):
                         "limit": 30,
                         "sort_by": "listed_at desc",
                         "action_types": "buy",
-                        "model": model,
+                        "filter_by_collections": model,
                     },
                     headers=self._headers(),
                     timeout=aiohttp.ClientTimeout(total=10),
