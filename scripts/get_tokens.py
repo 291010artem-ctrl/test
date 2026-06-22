@@ -156,7 +156,13 @@ async def _login_with_qr(client: TelegramClient) -> None:
         print("QR-код истёк (120 секунд). Перезапусти скрипт и попробуй снова.")
         sys.exit(1)
     except SessionPasswordNeededError:
-        password = input("На аккаунте включена двухфакторная защита. Введи облачный пароль: ")
+        password = ""
+        while not password:
+            password = input(
+                "На аккаунте включена двухфакторная защита. Введи облачный пароль: "
+            ).strip()
+            if not password:
+                print("Пароль не может быть пустым, попробуй ещё раз.")
         await client.sign_in(password=password)
 
 
