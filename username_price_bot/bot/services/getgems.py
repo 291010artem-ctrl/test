@@ -8,10 +8,14 @@ Treat the result as a *hint* (e.g. an extra current listing), never as required.
 from __future__ import annotations
 
 import logging
+import re
+from datetime import datetime, timezone
 from typing import Any
 
 from ..http_client import HttpClient
 from ..models import Listing, MarketStatus
+
+_NAME_CLEAN = re.compile(r"[^a-z0-9_]")
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +32,28 @@ query NftItem($address: String!) {
   }
 }
 """.strip()
+
+# Experimental: recent sold items of a collection, used to price "similar"
+# usernames. Schema is unofficial — failures return [] and the bot falls back
+# to the built-in category model.
+_COLLECTION_SALES_QUERY = """
+query CollectionSales($address: String!, $first: Int!) {
+  historyByCollectionAddress(address: $address, kinds: ["Sold"], first: $first) {
+    items {
+      time
+      nft { name }
+      typeData { __typename ... on HistoryTypeSold { amount } }
+    }
+  }
+}
+""".strip()
+
+
+def _clean_name(raw: str | None) -> str:
+    if not raw:
+        return ""
+    name = raw.strip().lower().lstrip("@").split(".", 1)[0]
+    return _NAME_CLEAN.sub("", name)
 
 
 class GetGemsClient:
@@ -49,6 +75,47 @@ class GetGemsClient:
             log.info("GetGems query failed: %s", exc)
             return None
         return self._parse(data)
+
+    async def get_recent_collection_sales(
+        self, collection: str, first: int = 200
+    ) -> list[tuple[str, float, datetime | None]]:
+        """Recent sold usernames in the collection: (name, price_ton, time).
+
+        Best-effort — returns [] on any error or schema mismatch.
+        """
+        try:
+            data = await self.http.post_json(
+                self.endpoint,
+                json={
+                    "query": _COLLECTION_SALES_QUERY,
+                    "variables": {"address": collection, "first": first},
+                },
+                headers=self._headers,
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort source
+            log.info("GetGems collection-sales query failed: %s", exc)
+            return []
+        return self._parse_sales(data)
+
+    @staticmethod
+    def _parse_sales(data: Any) -> list[tuple[str, float, datetime | None]]:
+        try:
+            items = data["data"]["historyByCollectionAddress"]["items"]
+        except (KeyError, TypeError):
+            return []
+        out: list[tuple[str, float, datetime | None]] = []
+        for it in items or []:
+            try:
+                name = _clean_name((it.get("nft") or {}).get("name"))
+                amount = (it.get("typeData") or {}).get("amount")
+                price = int(amount) / 1_000_000_000 if amount else None
+                ts = it.get("time")
+                dt = datetime.fromtimestamp(int(ts), tz=timezone.utc) if ts else None
+            except (TypeError, ValueError, OSError):
+                continue
+            if name and price:
+                out.append((name, price, dt))
+        return out
 
     @staticmethod
     def _parse(data: Any) -> Listing | None:

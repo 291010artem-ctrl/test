@@ -4,10 +4,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Awaitable, TypeVar
 
 from .config import Config
 from .http_client import HttpClient
+from .market import MarketModel
 from .models import Listing, MarketStatus, UsernameReport
 from .services.fragment import FragmentClient
 from .services.getgems import GetGemsClient
@@ -18,6 +20,9 @@ from .utils import normalize_username
 log = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+# Collection-wide sales change slowly; refresh the market model infrequently.
+_MARKET_TTL = 3600.0
 
 
 class Aggregator:
@@ -35,6 +40,7 @@ class Aggregator:
         self.fragment = fragment
         self.getgems = getgems
         self._cache: dict[str, tuple[float, UsernameReport]] = {}
+        self._market_cache: tuple[float, MarketModel] | None = None
 
     async def get_report(self, raw: str) -> UsernameReport | None:
         username = normalize_username(raw)
@@ -54,10 +60,11 @@ class Aggregator:
         report.fragment_url = self.fragment.url_for(username)
 
         # First wave: independent lookups in parallel.
-        rate, nft_addr, frag_listing = await asyncio.gather(
+        rate, nft_addr, frag_listing, market = await asyncio.gather(
             self._safe(self.tonapi.get_ton_usd(), "tonapi.rate", report),
             self._safe(self.tonapi.resolve_username_nft(username), "tonapi.resolve", report),
             self._safe(self.fragment.get_listing(username), "fragment", report),
+            self._get_market(),
         )
         report.ton_usd_rate = rate
         if frag_listing:
@@ -102,8 +109,28 @@ class Aggregator:
             listing=report.listing,
             sales=report.sales,
             ton_usd=rate,
+            market=market,
         )
+        if market.calibrated and "getgems" not in report.sources_used:
+            report.sources_used.append("getgems")
         return report
+
+    async def _get_market(self) -> MarketModel:
+        """Market model calibrated from recent collection sales (cached)."""
+        if self._market_cache and (time.monotonic() - self._market_cache[0]) < _MARKET_TTL:
+            return self._market_cache[1]
+        model = MarketModel()
+        try:
+            sales = await self.getgems.get_recent_collection_sales(
+                self.config.usernames_collection
+            )
+            if sales:
+                model.calibrate(sales, datetime.now(timezone.utc))
+                log.info("market calibrated from %d collection sales", len(sales))
+        except Exception as exc:  # noqa: BLE001 — fall back to default model
+            log.warning("market calibration failed: %s", exc)
+        self._market_cache = (time.monotonic(), model)
+        return model
 
     async def _safe(self, awaitable: Awaitable[T], label: str, report: UsernameReport) -> T | None:
         try:

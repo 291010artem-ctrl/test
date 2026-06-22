@@ -63,7 +63,7 @@ def render_report(report: UsernameReport) -> str:
         if rng:
             lines.append(f"   {rng.strip()}")
         lines.append(f"   достоверность: {conf}")
-        for sig in est.signals[:4]:
+        for sig in est.signals[:5]:
             lines.append(f"   • {escape(sig)}")
 
     # ── Sales history ─────────────────────────────────────────────────────

@@ -1,63 +1,30 @@
-"""Heuristic 'real price' estimation.
+"""Honest 'real price' estimation.
 
-This is deliberately transparent, not a black box: the estimate is anchored to
-hard signals when available (current listing, recent sale) and falls back to a
-rough length/pattern heuristic otherwise. Every estimate ships with the signals
-it used and an explicit confidence level. It is NOT financial advice.
+The estimate is a weighted blend of *anchors*, strongest first:
+
+  • active listing price (a ceiling — fair value sits a bit below);
+  • this NFT's own past sales, **re-priced to today** via the market index
+    (so an old cheap sale doesn't undervalue a now-expensive username);
+  • recent sales of **similar** usernames (same length bucket);
+  • the current typical price for the username's category (always a backstop).
+
+It never falls misleadingly below the current market floor for the category,
+ships with the signals it used and an explicit confidence level, and is NOT
+financial advice.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from ..market import MarketModel
 from ..models import Listing, MarketStatus, PriceEstimate, SaleEvent
 
-# Rough base value (TON) by username length when nothing else is known.
-_LENGTH_BASE = {1: 20000, 2: 8000, 3: 2500, 4: 700, 5: 200, 6: 90, 7: 45, 8: 25}
-_LONG_BASE = 12.0  # 9+ chars
-
-_COMMON_WORDS = {
-    "crypto", "money", "wallet", "bank", "game", "games", "music", "news",
-    "shop", "store", "love", "king", "queen", "boss", "gold", "vip", "pro",
-    "art", "nft", "ton", "bot", "ai", "dev", "code", "web", "app", "cat", "dog",
-}
+_RECENT_OWN_SALE_DAYS = 120
 
 
-def _quality_multiplier(username: str, signals: list[str]) -> float:
-    n = len(username)
-    m = 1.0
-    if n <= 4:
-        m *= 3.0
-        signals.append("Короткий (≤4 символов) — премиальный сегмент")
-    elif n == 5:
-        m *= 1.8
-        signals.append("5 символов — повышенный спрос")
-    elif n <= 8:
-        m *= 1.0
-    else:
-        m *= 0.6
-        signals.append("Длинный юзернейм — спрос ниже")
-
-    if username.isdigit():
-        m *= 0.8
-        signals.append("Только цифры — обычно дешевле")
-    if "_" in username:
-        m *= 0.85
-        signals.append("Содержит '_' — небольшой дисконт")
-    if username.isalpha() and (username in _COMMON_WORDS or _looks_like_word(username)):
-        m *= 1.3
-        signals.append("Похоже на осмысленное слово — выше спрос")
-    return m
-
-
-def _looks_like_word(username: str) -> bool:
-    if not username.isalpha():
-        return False
-    vowels = sum(c in "aeiou" for c in username)
-    return 0 < vowels < len(username)  # has both vowels and consonants
-
-
-def _heuristic_base(username: str) -> float:
-    return float(_LENGTH_BASE.get(len(username), _LONG_BASE))
+def _weighted(anchors: list[tuple[float, float]]) -> float:
+    total_w = sum(w for _, w in anchors)
+    return sum(v * w for v, w in anchors) / total_w if total_w else 0.0
 
 
 def estimate_price(
@@ -66,48 +33,86 @@ def estimate_price(
     listing: Listing | None,
     sales: list[SaleEvent],
     ton_usd: float | None,
+    market: MarketModel | None = None,
     now: datetime | None = None,
 ) -> PriceEstimate:
+    market = market or MarketModel()
     now = now or datetime.now(timezone.utc)
     signals: list[str] = []
-    quality = _quality_multiplier(username, signals)
 
-    last_sale = next((s for s in sales if s.price_ton), None)
-    point = low = high = None
-    confidence = "low"
+    typical = market.category_typical(username)
+    anchors: list[tuple[float, float]] = []  # (value_ton, weight)
 
-    listed = listing and listing.price_ton and listing.status in (
-        MarketStatus.ON_SALE, MarketStatus.ON_AUCTION,
+    # 1) Active listing — strongest, but treated as a ceiling.
+    listed = bool(
+        listing
+        and listing.price_ton
+        and listing.status in (MarketStatus.ON_SALE, MarketStatus.ON_AUCTION)
     )
-
     if listed:
         ask = listing.price_ton
-        signals.insert(0, f"Активный листинг: {ask:g} TON ({listing.source})")
-        # Asking price is typically a ceiling; fair value sits a bit below.
-        point = ask * 0.92
-        low, high = ask * 0.8, ask * 1.0
-        confidence = "high"
-    elif last_sale and last_sale.price_ton:
-        base = last_sale.price_ton
-        age_days = (now - last_sale.timestamp).days if last_sale.timestamp else None
-        when = f"{age_days} дн. назад" if age_days is not None else "ранее"
-        signals.insert(0, f"Последняя продажа: {base:g} TON ({when})")
-        point = base
-        low, high = base * 0.7, base * 1.3
-        if age_days is None:
-            confidence = "medium"
-        elif age_days < 90:
-            confidence = "high"
-        elif age_days < 365:
-            confidence = "medium"
+        anchors.append((ask * 0.92, 3.0))
+        signals.append(f"Активный листинг: {ask:g} TON (потолок цены)")
+
+    # 2) Comparable recent sales of similar usernames.
+    comp_value, comp_n = market.comparable_estimate(username, now)
+    if comp_value:
+        anchors.append((comp_value, 2.5))
+        signals.append(
+            f"Похожие {len(username)}-символьные продаются ~{comp_value:.0f} TON "
+            f"(по {comp_n} недавним продажам)"
+        )
+
+    # 3) This NFT's own last sale, re-priced to today.
+    last_sale = next((s for s in sales if s.price_ton), None)
+    age_days: int | None = None
+    if last_sale and last_sale.price_ton:
+        factor = market.appreciation_factor(last_sale.timestamp, now)
+        adjusted = last_sale.price_ton * factor
+        anchors.append((adjusted, 2.0))
+        if last_sale.timestamp:
+            age_days = (now - last_sale.timestamp).days
+        if factor > 1.15 and age_days is not None:
+            months = max(1, age_days // 30)
+            signals.append(
+                f"Прошлая продажа {last_sale.price_ton:g} TON (~{months} мес. назад) "
+                f"≈ {adjusted:.0f} TON сегодня с учётом роста рынка"
+            )
         else:
-            confidence = "low"
-            signals.append("Продажа давно — цена могла измениться")
+            signals.append(f"Последняя продажа: {last_sale.price_ton:g} TON")
+
+    # 4) Resolve a point estimate.
+    if anchors:
+        point = _weighted(anchors)
     else:
-        base = _heuristic_base(username) * quality
-        signals.insert(0, "Нет данных о продажах/листинге — оценка по эвристике")
-        point = base
-        low, high = base * 0.4, base * 2.0
+        point = typical
+        signals.append(
+            f"Нет данных о продажах/листинге — оценка по текущему рынку категории "
+            f"(~{typical:.0f} TON за {len(username)}-символьный)"
+        )
+
+    # Floor: never mislead with a stale-low value for a premium category.
+    floor = typical * 0.7
+    if point < floor:
+        point = floor
+        signals.append(
+            "Оценка поднята до актуального уровня рынка для этой категории "
+            "(прошлые цены устарели)"
+        )
+
+    # Range from the spread of anchors around the point.
+    candidate_vals = [v for v, _ in anchors] + [point]
+    low = min(candidate_vals) * 0.85
+    high = max(candidate_vals) * 1.15
+    low = max(low, typical * 0.5)
+
+    # Confidence.
+    has_recent_own = age_days is not None and age_days <= _RECENT_OWN_SALE_DAYS
+    if listed or has_recent_own:
+        confidence = "high"
+    elif comp_value or last_sale:
+        confidence = "medium"
+    else:
         confidence = "low"
 
     usd_point = point * ton_usd if (point and ton_usd) else None
