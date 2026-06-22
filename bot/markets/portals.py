@@ -64,14 +64,23 @@ class PortalsClient(MarketClient):
 
         results = data.get("results") or []
         match = next((g for g in results if str(g.get("external_collection_number")) == str(number)), None)
+        sales_history = await self._sales_history(model, number)
+
         if not match:
-            return MarketResult(market=self.name, available=False, error="not_found")
+            return MarketResult(
+                market=self.name,
+                available=True,
+                current_price_ton=None,
+                sales_history=sales_history,
+                error="not_for_sale",
+                url="https://t.me/portals",
+            )
 
         return MarketResult(
             market=self.name,
             available=True,
             current_price_ton=float(match["price"]) if match.get("price") is not None else None,
-            sales_history=await self._sales_history(model, number),
+            sales_history=sales_history,
             url="https://t.me/portals",
         )
 
