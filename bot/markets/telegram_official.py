@@ -18,19 +18,21 @@ from telethon.tl.types import (
 from .. import tg_session
 from .base import MarketClient, MarketResult, debug
 
-_RARITY_NAMES = {
-    "StarGiftAttributeRarityUncommon": "Uncommon",
-    "StarGiftAttributeRarityRare": "Rare",
-    "StarGiftAttributeRarityEpic": "Epic",
-    "StarGiftAttributeRarityLegendary": "Legendary",
-}
+
+def _rarity_label(attr) -> str:
+    # Attributes don't carry a named tier, just a permille (parts-per-1000)
+    # chance of that attribute occurring on the gift.
+    permille = getattr(getattr(attr, "rarity", None), "permille", None)
+    return f"{permille / 10:.1f}%" if permille is not None else "?"
 
 
-def _stars_amount_to_float(stars_amount) -> float:
-    """StarsAmount(amount, nanos) -> float. Currency (Stars vs TON) is
-    determined by the caller from context; this just does the arithmetic.
-    """
-    return stars_amount.amount + stars_amount.nanos / 1e9
+def _resell_ton_price(gift) -> float | None:
+    # resell_amount holds one entry per currency the gift is listed in
+    # (StarsAmount = Stars, StarsTonAmount = nanotons). We only want TON.
+    for amount in getattr(gift, "resell_amount", None) or []:
+        if type(amount).__name__ == "StarsTonAmount":
+            return amount.amount / 1e9
+    return None
 
 
 def _slug_for(model: str, number: str) -> str:
@@ -73,7 +75,7 @@ class TelegramOfficialClient(MarketClient):
         pattern_attr = next((a for a in gift.attributes if isinstance(a, StarGiftAttributePattern)), None)
 
         attr_summary = " | ".join(
-            f"{label}: {attr.name} ({_RARITY_NAMES.get(type(attr.rarity).__name__, '?')})"
+            f"{label}: {attr.name} ({_rarity_label(attr)})"
             for label, attr in (
                 ("Модель", model_attr),
                 ("Узор", pattern_attr),
@@ -119,10 +121,7 @@ class TelegramOfficialClient(MarketClient):
 
         debug(self.name, f"resale gifts: {[g.to_dict() for g in resale.gifts]!r}")
 
-        prices = []
-        for g in resale.gifts:
-            for amount in getattr(g, "resell_amount", None) or []:
-                prices.append(_stars_amount_to_float(amount))
+        prices = [p for p in (_resell_ton_price(g) for g in resale.gifts) if p is not None]
         return min(prices) if prices else None
 
     async def lookup_username(self, username: str) -> MarketResult:
