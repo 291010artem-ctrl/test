@@ -5,10 +5,25 @@ section (current price / sales history / estimate).
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from html import escape
 
 from .models import MarketStatus, UsernameReport
 from .utils import fmt_ton, short_addr
+
+
+def _timeleft(dt: datetime) -> str:
+    secs = (dt - datetime.now(timezone.utc)).total_seconds()
+    if secs <= 0:
+        return "завершается"
+    days, rem = divmod(int(secs), 86400)
+    hours, rem = divmod(rem, 3600)
+    mins = rem // 60
+    if days:
+        return f"{days}д {hours}ч"
+    if hours:
+        return f"{hours}ч {mins}м"
+    return f"{mins}м"
 
 _CONFIDENCE_LABEL = {"high": "высокая", "medium": "средняя", "low": "низкая"}
 _CONF_WORD = {"high": "ВЫСОКАЯ", "medium": "СРЕДНЯЯ", "low": "НИЗКАЯ"}
@@ -100,18 +115,26 @@ def price_text(r: UsernameReport) -> str:
         )
     if _on_sale(r):
         listing = r.listing
-        word = (
-            "на аукционе, текущая ставка"
-            if listing.status == MarketStatus.ON_AUCTION
-            else "продаётся за"
-        )
-        src = f"\n<i>источник: {escape(listing.source)}</i>" if listing.source else ""
+        if listing.status == MarketStatus.ON_AUCTION:
+            line = f"🔨 Идёт аукцион. Текущая ставка: <b>{_prices(listing.price_ton, r.rates)}</b>."
+            if r.auction_ends_at:
+                line += f"\n⏳ До конца: {_timeleft(r.auction_ends_at)}"
+            return head + line + "\n🛒 Сделать ставку — на Fragment (кнопка ниже)."
         return (
-            head
-            + f"💰 Сейчас {word} <b>{_prices(listing.price_ton, r.rates)}</b>.\n"
-            "🛒 Купить — по кнопке ниже." + src
+            head + f"🟢 Продаётся за <b>{_prices(listing.price_ton, r.rates)}</b>.\n"
+            "🛒 Купить — на Fragment (кнопка ниже)."
         )
-    return head + "❌ Сейчас нигде не продаётся."
+
+    # Not actively listed → show the last sale, if any.
+    priced = [s for s in r.sales if s.price_ton]
+    if priced:
+        s = priced[0]
+        when = s.timestamp.strftime("%d.%m.%Y") if s.timestamp else "—"
+        return (
+            head + "🔴 Сейчас не продаётся.\n"
+            f"Последняя продажа: <b>{_prices(s.price_ton, r.rates)}</b> ({when})."
+        )
+    return head + "⚪️ Сейчас не продаётся, продаж не найдено."
 
 
 # ── section: last sale ───────────────────────────────────────────────────────

@@ -104,16 +104,27 @@ class Aggregator:
                     history, report.current_owner
                 )
 
-        # Fragment fallback: active listing + past sale, used only to fill gaps.
+        # Fragment provides what on-chain lacks: priced Ownership History +
+        # auction status. On-chain stays authoritative for an active sale.
         frag_listing = self.fragment.active_listing(frag, username) if frag else None
-        if frag and frag.status in (MarketStatus.ON_AUCTION, MarketStatus.ON_SALE,
-                                    MarketStatus.SOLD):
-            report.found = True  # a real (minted) username
-            if "fragment" not in report.sources_used:
-                report.sources_used.append("fragment")
-        if frag and not report.sales and frag.last_sale_ton:
-            report.sales = [SaleEvent(price_ton=frag.last_sale_ton, timestamp=None,
-                                      kind="sale", source="fragment")]
+        if frag:
+            if frag.status in (MarketStatus.ON_AUCTION, MarketStatus.ON_SALE,
+                               MarketStatus.SOLD, MarketStatus.NOT_LISTED):
+                report.found = True  # a real (minted) username
+                if "fragment" not in report.sources_used:
+                    report.sources_used.append("fragment")
+            if frag.auction_ends_at:
+                report.auction_ends_at = frag.auction_ends_at
+            if frag.sales:  # Ownership History — has the prices on-chain doesn't
+                report.sales = [
+                    SaleEvent(price_ton=s.price_ton, timestamp=s.timestamp,
+                              kind="sale", buyer=s.buyer, source="fragment")
+                    for s in frag.sales
+                ]
+            elif not report.sales and frag.last_sale_ton:
+                report.sales = [SaleEvent(price_ton=frag.last_sale_ton,
+                                          timestamp=frag.last_sale_at, kind="sale",
+                                          source="fragment")]
 
         report.listing = (
             onchain_listing or frag_listing or gg_listing

@@ -78,3 +78,4 @@ class UsernameReport:
     fragment_url: str | None = None
     getgems_url: str | None = None
     tonviewer_url: str | None = None
+    auction_ends_at: datetime | None = None

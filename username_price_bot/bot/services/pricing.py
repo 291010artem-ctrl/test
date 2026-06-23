@@ -28,11 +28,6 @@ _AUCTION_COEFF = 1.10
 _FIXED_COEFF = 0.97
 
 
-def _capped_factor(f: float) -> float:
-    """Gentle time-adjustment for a real past sale (don't distort big numbers)."""
-    return max(0.8, min(f, 2.5))
-
-
 def estimate_price(
     *,
     username: str,
@@ -73,23 +68,16 @@ def estimate_price(
         src = f" ({listing.source})" if listing.source else ""
         signals.append(f"Сейчас продаётся{src}: {listing.price_ton:g} TON — можно купить")
 
-    # ── TIER 1b: past sale on record ─────────────────────────────────────
+    # ── TIER 1b: past sale on record — take the last sale price as the base ──
     elif last_sale and last_sale.price_ton:
         age_days = (now - last_sale.timestamp).days if last_sale.timestamp else None
-        factor = _capped_factor(market.appreciation_factor(last_sale.timestamp, now))
-        point = last_sale.price_ton * factor
+        point = last_sale.price_ton          # the sale price IS the basis
         basis = "last_sale"
         confidence = "high" if (age_days is not None and age_days <= _MIDTERM_DAYS) else "medium"
-        lo, hi = (0.80, 1.25) if confidence == "high" else (0.65, 1.40)
+        lo, hi = (0.80, 1.25) if confidence == "high" else (0.60, 1.45)
         months = max(1, age_days // 30) if age_days is not None else None
         when = f" (~{months} мес. назад)" if months is not None else ""
-        if factor > 1.1:
-            signals.append(
-                f"Последняя продажа {last_sale.price_ton:g} TON{when} "
-                f"≈ {point:.0f} TON сегодня с учётом рынка"
-            )
-        else:
-            signals.append(f"Последняя продажа: {last_sale.price_ton:g} TON{when}")
+        signals.append(f"Последняя продажа: {last_sale.price_ton:g} TON{when}")
         # Only an OLD (medium-confidence) cheap sale gets lifted to the current
         # category level — a fresh sale is trusted as-is.
         if confidence != "high":

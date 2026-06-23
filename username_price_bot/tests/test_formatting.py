@@ -64,12 +64,15 @@ def test_is_nft_flag():
 
 def test_price_on_sale_has_currencies():
     out = price_text(_nft_on_sale())
-    assert "продаётся" in out
+    assert "родаётся" in out          # "Продаётся за …"
     assert "USDT" in out and "₽" in out
 
 
-def test_price_not_for_sale():
-    assert "нигде не продаётся" in price_text(_nft_not_for_sale())
+def test_price_not_for_sale_shows_last_sale():
+    r = _nft_not_for_sale()           # has a past sale but is not listed now
+    out = price_text(r)
+    assert "не продаётся" in out
+    assert "Последняя продажа" in out
 
 
 def test_price_non_nft_says_not_nft():
