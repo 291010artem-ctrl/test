@@ -90,6 +90,14 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
         await status.edit_text("🤔 Не получилось разобрать юзернейм.", reply_markup=to_menu_kb())
         return
 
+    # Best-effort NFT image (the dark-blue square with the Telegram logo + name,
+    # same as on TonViewer). For non-NFT names the URL 404s and we just skip it.
+    if not report.theoretical:
+        try:
+            await message.answer_photo(f"https://nft.fragment.com/username/{username}.webp")
+        except Exception:  # noqa: BLE001 — name has no NFT image, ignore
+            pass
+
     await status.edit_text(card_text(report), reply_markup=card_kb(report),
                            disable_web_page_preview=True)
 

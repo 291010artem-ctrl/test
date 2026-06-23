@@ -74,6 +74,13 @@ def test_long_random_is_cheap_low_tier():
     assert sc.tier in ("C", "D")
 
 
+def test_compound_and_names_recognised():
+    assert analyze("cryptoking").theme == "крипто"
+    assert analyze("goldbank").semantic >= 7      # compound of two known words
+    assert analyze("hayden").semantic >= 7        # popular first name
+    assert analyze("hayden").semantic > analyze("xkqpt").semantic
+
+
 # ── bug fix: dynamic pattern label (not static "AAAA") ──
 def test_pattern_label_is_dynamic():
     assert any("(AAAAA)" in p for p in analyze("aaaaa").patterns)

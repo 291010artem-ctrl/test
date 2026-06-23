@@ -72,6 +72,22 @@ _DICTIONARY = set(_COMMON_WORDS)
 for _ru, _str, _roots in _THEMES.values():
     _DICTIONARY.update(_roots)
 
+# Popular first names + notable brands/terms — so e.g. @hayden or @cryptoking
+# read as meaningful, not random. Editable / extendable.
+_FIRST_NAMES = {
+    "alex", "max", "john", "mike", "david", "chris", "james", "robert", "daniel",
+    "paul", "mark", "anna", "maria", "kate", "sara", "sarah", "emma", "lucy",
+    "nick", "tom", "sam", "ben", "leo", "adam", "ivan", "oleg", "igor", "pavel",
+    "hayden", "jessie", "jesse", "walter", "tony", "bruce", "peter", "jack",
+    "harry", "george", "henry", "oscar", "victor", "andrew", "kevin", "ryan",
+}
+_NOTABLE = {
+    "google", "apple", "tesla", "amazon", "netflix", "binance", "telegram",
+    "durov", "musk", "bitcoin", "ethereum", "openai", "nvidia", "disney",
+}
+_DICTIONARY.update(_FIRST_NAMES)
+_DICTIONARY.update(_NOTABLE)
+
 # Top, instantly recognizable words get the highest semantic score.
 _VERY_COMMON = {
     "money", "bank", "cash", "gold", "love", "news", "game", "crypto", "coin",
@@ -201,6 +217,14 @@ def _has_repeating_unit(s: str) -> bool:
 
 
 # ── sub-scores ───────────────────────────────────────────────────────────────
+def _is_compound(s: str) -> bool:
+    """Two meaningful parts joined, e.g. cryptoking, goldbank, newsbot."""
+    for i in range(3, len(s) - 2):
+        if s[:i] in _DICTIONARY and s[i:] in _DICTIONARY:
+            return True
+    return False
+
+
 def _semantic_score(s: str) -> float:
     if s.isdigit():
         return 1.0
@@ -208,6 +232,8 @@ def _semantic_score(s: str) -> float:
         return 10.0
     if s in _DICTIONARY:
         return 8.0
+    if _is_compound(s):
+        return 7.5
     return 2.0 + _pronounceability(s) * 4.0  # 2..6 for non-dictionary
 
 
