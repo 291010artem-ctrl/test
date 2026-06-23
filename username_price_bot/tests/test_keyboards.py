@@ -1,5 +1,15 @@
-from bot.keyboards import NAV_HELP, NAV_START, back_kb, help_kb, result_kb, start_kb
-from bot.models import UsernameReport
+from bot.keyboards import (
+    CB_HELP,
+    CB_MAIN,
+    CB_SOON,
+    CB_VALUATION,
+    card_kb,
+    est_kb,
+    main_menu_kb,
+    price_kb,
+    sales_kb,
+)
+from bot.models import Listing, MarketStatus, UsernameReport
 
 
 def _callbacks(kb):
@@ -10,27 +20,47 @@ def _urls(kb):
     return [b.url for row in kb.inline_keyboard for b in row if b.url]
 
 
-def test_start_kb_opens_help():
-    assert _callbacks(start_kb()) == [NAV_HELP]
-
-
-def test_help_and_back_go_to_start():
-    assert _callbacks(help_kb()) == [NAV_START]
-    assert _callbacks(back_kb()) == [NAV_START]
-
-
-def test_result_kb_has_links_and_back():
-    report = UsernameReport(
+def _report(on_sale=False, tonviewer=True):
+    status = MarketStatus.ON_SALE if on_sale else MarketStatus.NOT_LISTED
+    price = 1000 if on_sale else None
+    return UsernameReport(
         username="durov",
+        found=True,
+        listing=Listing(status=status, price_ton=price),
         fragment_url="https://fragment.com/username/durov",
-        getgems_url="https://getgems.io/x",
+        tonviewer_url="https://tonviewer.com/0:nft" if tonviewer else None,
     )
-    kb = result_kb(report)
-    assert len(_urls(kb)) == 2
-    assert NAV_START in _callbacks(kb)
 
 
-def test_result_kb_without_links():
-    kb = result_kb(UsernameReport(username="durov"))
+def test_main_menu_has_functions():
+    cbs = _callbacks(main_menu_kb())
+    assert CB_VALUATION in cbs
+    assert CB_SOON in cbs
+    assert CB_HELP in cbs
+
+
+def test_card_kb_has_sections_and_tonviewer():
+    kb = card_kb(_report(tonviewer=True))
+    cbs = _callbacks(kb)
+    assert "price:durov" in cbs
+    assert "sales:durov" in cbs
+    assert "est:durov" in cbs
+    assert CB_MAIN in cbs
+    assert "https://tonviewer.com/0:nft" in _urls(kb)
+
+
+def test_card_kb_without_tonviewer():
+    kb = card_kb(_report(tonviewer=False))
     assert _urls(kb) == []
-    assert _callbacks(kb) == [NAV_START]
+
+
+def test_price_kb_buy_button_only_when_on_sale():
+    assert _urls(price_kb(_report(on_sale=True)))      # has Fragment buy link
+    assert _urls(price_kb(_report(on_sale=False))) == []
+    assert "card:durov" in _callbacks(price_kb(_report(on_sale=True)))
+
+
+def test_sales_and_est_back_to_card():
+    assert "card:durov" in _callbacks(sales_kb(_report()))
+    assert "card:durov" in _callbacks(est_kb(_report()))
+    assert "https://tonviewer.com/0:nft" in _urls(sales_kb(_report()))

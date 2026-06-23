@@ -10,7 +10,7 @@ from aiogram.enums import ParseMode
 
 from .aggregator import Aggregator
 from .config import load_config
-from .handlers import commands, lookup
+from .handlers import commands, lookup, menu
 from .http_client import HttpClient
 from .services.fragment import FragmentClient
 from .services.getgems import GetGemsClient
@@ -42,6 +42,7 @@ async def main() -> None:
     dp = Dispatcher()
     dp["aggregator"] = aggregator
     dp.include_router(commands.router)
+    dp.include_router(menu.router)
     dp.include_router(lookup.router)
 
     log.info("Bot starting (long polling)…")

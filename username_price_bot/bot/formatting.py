@@ -1,4 +1,8 @@
-"""Render a UsernameReport into a Telegram HTML message."""
+"""Render UsernameReport sections into Telegram HTML messages.
+
+The bot is menu-driven: a short "card" with buttons, and one message per
+section (current price / sales history / estimate).
+"""
 from __future__ import annotations
 
 from html import escape
@@ -6,21 +10,13 @@ from html import escape
 from .models import MarketStatus, UsernameReport
 from .utils import fmt_ton, short_addr
 
-_STATUS_LABEL = {
-    MarketStatus.ON_SALE: "🟢 Продаётся (фикс. цена)",
-    MarketStatus.ON_AUCTION: "🔨 На аукционе",
-    MarketStatus.SOLD: "🔴 Недавно продан",
-    MarketStatus.NOT_LISTED: "⚪️ Не выставлен на продажу",
-    MarketStatus.AVAILABLE: "✨ Свободен (можно занять)",
-    MarketStatus.UNKNOWN: "❔ Статус неизвестен",
-}
-
 _CONFIDENCE_LABEL = {"high": "высокая", "medium": "средняя", "low": "низкая"}
 
-_MAX_SALES = 6
-_MAX_OWNERS = 6
+_MAX_SALES = 15
+_DISCLAIMER = "<i>⚠️ Оценка приблизительная и не является финансовой рекомендацией.</i>"
 
 
+# ── helpers ──────────────────────────────────────────────────────────────────
 def _grp(value: float) -> str:
     if value >= 100:
         return f"{value:,.0f}".replace(",", " ")
@@ -34,12 +30,10 @@ def _prices(ton: float | None, rates: dict[str, float]) -> str:
     if ton is None:
         return "—"
     parts = [f"{fmt_ton(ton)} TON"]
-    usd = rates.get("USD")
-    if usd:
-        parts.append(f"{_grp(ton * usd)} USDT")
-    rub = rates.get("RUB")
-    if rub:
-        parts.append(f"{_grp(ton * rub)} ₽")
+    if rates.get("USD"):
+        parts.append(f"{_grp(ton * rates['USD'])} USDT")
+    if rates.get("RUB"):
+        parts.append(f"{_grp(ton * rates['RUB'])} ₽")
     return " ≈ ".join(parts)
 
 
@@ -50,7 +44,7 @@ def _margin_pct(point: float, low: float | None, high: float | None) -> int | No
     return round(dev * 100)
 
 
-def _is_nft(r: UsernameReport) -> bool:
+def is_nft(r: UsernameReport) -> bool:
     listed = bool(
         r.listing
         and r.listing.price_ton
@@ -59,83 +53,103 @@ def _is_nft(r: UsernameReport) -> bool:
     return r.found or listed
 
 
-def render_report(report: UsernameReport) -> str:
-    r = report
+def _on_sale(r: UsernameReport) -> bool:
+    return bool(
+        r.listing
+        and r.listing.price_ton
+        and r.listing.status in (MarketStatus.ON_SALE, MarketStatus.ON_AUCTION)
+    )
+
+
+# ── card (the button menu) ───────────────────────────────────────────────────
+def card_text(r: UsernameReport) -> str:
     name = escape(r.username)
-    is_nft = _is_nft(r)
-    lines: list[str] = [f"🔎 <b>@{name}</b>"]
+    if is_nft(r):
+        status = "💎 Это NFT-юзернейм."
+    else:
+        status = "❗️ Не является NFT (свободен или не выпущен как NFT)."
+    return f"🔎 <b>@{name}</b>\n{status}\n\nЧто показать? 👇"
 
-    # ── Not an NFT / not found notice (estimate still follows) ──────────────
-    if not is_nft:
-        lines += [
-            "",
-            "❗️ Не нашёл этот юзернейм как NFT в TON.",
-            "Возможно, он не выпущен как NFT, свободен или пока не существует.",
-            "📊 Ниже — <b>примерная</b> оценка, как если бы он был NFT:",
-        ]
 
-    # ── Status & current market price ──────────────────────────────────────
-    listing = r.listing
-    if is_nft and listing:
-        lines.append("")
-        lines.append(_STATUS_LABEL.get(listing.status, _STATUS_LABEL[MarketStatus.UNKNOWN]))
-        if listing.price_ton and listing.status in (MarketStatus.ON_SALE, MarketStatus.ON_AUCTION):
-            src = f" · {escape(listing.source)}" if listing.source else ""
-            lines.append(f"💰 Цена: <b>{_prices(listing.price_ton, r.rates)}</b>{src}")
+# ── section: current price ───────────────────────────────────────────────────
+def price_text(r: UsernameReport) -> str:
+    name = escape(r.username)
+    head = f"🔎 <b>@{name}</b>\n\n"
+    if not is_nft(r):
+        return (
+            head
+            + "❗️ Это не NFT — в продаже быть не может.\n"
+            "Нажми «📊 Примерная стоимость», чтобы увидеть оценку по виду юзернейма."
+        )
+    if _on_sale(r):
+        listing = r.listing
+        word = (
+            "на аукционе, текущая ставка"
+            if listing.status == MarketStatus.ON_AUCTION
+            else "продаётся за"
+        )
+        src = f"\n<i>источник: {escape(listing.source)}</i>" if listing.source else ""
+        return (
+            head
+            + f"💰 Сейчас {word} <b>{_prices(listing.price_ton, r.rates)}</b>.\n"
+            "🛒 Купить — по кнопке ниже." + src
+        )
+    return head + "❌ Сейчас нигде не продаётся."
 
-    # ── Estimate (always shown) ────────────────────────────────────────────
-    est = r.estimate
-    if est and est.point_ton:
-        lines.append("")
-        title = "Грубая оценка" if est.confidence == "low" else "Оценка цены"
-        lines.append(f"📊 <b>{title}: ~{_prices(est.point_ton, r.rates)}</b>")
-        margin = _margin_pct(est.point_ton, est.low_ton, est.high_ton)
-        conf = _CONFIDENCE_LABEL.get(est.confidence, est.confidence)
-        meta = f"   достоверность: {conf}"
-        if margin is not None:
-            meta = f"   погрешность: ± ~{margin}%  ·  достоверность: {conf}"
-        lines.append(meta)
-        if est.low_ton and est.high_ton:
-            lines.append(f"   диапазон: {fmt_ton(est.low_ton)}–{fmt_ton(est.high_ton)} TON")
-        for sig in est.signals[:5]:
-            lines.append(f"   • {escape(sig)}")
 
-    # ── Sales history (TON only — historical fiat would mislead) ────────────
-    priced_sales = [s for s in r.sales if s.price_ton]
-    if priced_sales:
-        lines.append("")
-        lines.append("📜 <b>История продаж:</b>")
-        for s in priced_sales[:_MAX_SALES]:
+# ── section: sales history ───────────────────────────────────────────────────
+def sales_text(r: UsernameReport) -> str:
+    name = escape(r.username)
+    head = f"🔎 <b>@{name}</b>\n\n"
+    if not is_nft(r):
+        return head + "❗️ Это не NFT — истории продаж нет."
+
+    priced = [s for s in r.sales if s.price_ton]
+    lines = [head.rstrip("\n"), "", "📜 <b>История продаж:</b>"]
+    if priced:
+        for s in priced[:_MAX_SALES]:
             when = s.timestamp.strftime("%Y-%m-%d") if s.timestamp else "—"
             lines.append(f"   • {when} — {fmt_ton(s.price_ton)} TON")
-        if len(priced_sales) > _MAX_SALES:
-            lines.append(f"   …ещё {len(priced_sales) - _MAX_SALES}")
-    elif r.found:
-        lines.append("")
-        lines.append("📜 История продаж: продаж не найдено")
+        if len(priced) > _MAX_SALES:
+            lines.append(f"   …ещё {len(priced) - _MAX_SALES}")
+    else:
+        lines.append("   Продаж не было (с момента выпуска как NFT).")
 
-    # ── Owner / wallet history ─────────────────────────────────────────────
-    if r.owners:
-        lines.append("")
-        lines.append("👛 <b>Кошельки-владельцы:</b>")
-        for o in list(reversed(r.owners))[:_MAX_OWNERS]:  # newest first
-            tag = " — текущий" if o.is_current else ""
-            period = ""
-            if o.since or o.until:
-                a = o.since.strftime("%Y-%m") if o.since else "?"
-                b = o.until.strftime("%Y-%m") if o.until else "наст. время"
-                period = f" ({a} → {b})"
-            lines.append(f"   • <code>{escape(short_addr(o.address))}</code>{tag}{period}")
-        if len(r.owners) > _MAX_OWNERS:
-            lines.append(f"   …всего владельцев: {len(r.owners)}")
-    elif r.current_owner:
-        lines.append("")
-        lines.append(f"👛 Текущий владелец: <code>{escape(short_addr(r.current_owner))}</code>")
+    if r.current_owner:
+        lines += ["", f"👛 Текущий владелец: <code>{escape(short_addr(r.current_owner))}</code>"]
+    if r.tonviewer_url:
+        lines += ["", "👛 Полная история передач по кошелькам — на TonViewer (кнопка ниже)."]
+    return "\n".join(lines)
 
-    # ── Footer ─────────────────────────────────────────────────────────────
-    if r.sources_used:
-        lines.append("")
-        lines.append(f"<i>Источники: {escape(', '.join(sorted(set(r.sources_used))))}</i>")
-    lines.append("<i>⚠️ Оценка приблизительная и не является финансовой рекомендацией.</i>")
 
+# ── section: estimate ────────────────────────────────────────────────────────
+def estimate_text(r: UsernameReport) -> str:
+    name = escape(r.username)
+    lines = [f"🔎 <b>@{name}</b>", ""]
+    if not is_nft(r):
+        lines += [
+            "❗️ Это не NFT (свободен/не выпущен).",
+            "Оценка — <b>по виду</b> юзернейма (длина, паттерн), без истории продаж:",
+            "",
+        ]
+
+    est = r.estimate
+    if not est or not est.point_ton:
+        lines.append("Недостаточно данных для оценки.")
+        lines.append(_DISCLAIMER)
+        return "\n".join(lines)
+
+    title = "Грубая оценка" if est.confidence == "low" else "Оценка цены"
+    lines.append(f"📊 <b>{title}: ~{_prices(est.point_ton, r.rates)}</b>")
+    margin = _margin_pct(est.point_ton, est.low_ton, est.high_ton)
+    conf = _CONFIDENCE_LABEL.get(est.confidence, est.confidence)
+    if margin is not None:
+        lines.append(f"погрешность: ± ~{margin}%  ·  достоверность: {conf}")
+    else:
+        lines.append(f"достоверность: {conf}")
+    if est.low_ton and est.high_ton:
+        lines.append(f"диапазон: {fmt_ton(est.low_ton)}–{fmt_ton(est.high_ton)} TON")
+    for sig in est.signals[:5]:
+        lines.append(f"• {escape(sig)}")
+    lines.append(_DISCLAIMER)
     return "\n".join(lines)

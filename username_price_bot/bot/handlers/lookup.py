@@ -1,39 +1,57 @@
-"""Main handler: treat any text message as a username to look up."""
+"""Username lookup: receive a username, show a card, navigate sections."""
 from __future__ import annotations
 
 import logging
 from html import escape
 
 from aiogram import F, Router
-from aiogram.types import Message
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import CallbackQuery, Message
 
 from ..aggregator import Aggregator
-from ..formatting import render_report
-from ..keyboards import back_kb, result_kb
+from ..formatting import card_text, estimate_text, price_text, sales_text
+from ..keyboards import card_kb, est_kb, price_kb, sales_kb, to_menu_kb
 from ..utils import normalize_username
 
 log = logging.getLogger(__name__)
 
 router = Router(name="lookup")
 
+# Telegram usernames shorter than 4 chars don't exist / can't be created, so
+# valuing them is meaningless.
+MIN_LEN = 4
+
+
+async def _edit(cb: CallbackQuery, text: str, kb) -> None:
+    try:
+        await cb.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+    except TelegramBadRequest:
+        pass
+    await cb.answer()
+
 
 @router.message(F.text)
 async def on_text(message: Message, aggregator: Aggregator) -> None:
     raw = (message.text or "").strip()
     if raw.startswith("/"):
-        await message.answer(
-            "Неизвестная команда. Пришли юзернейм или используй /help.",
-            reply_markup=back_kb(),
-        )
+        await message.answer("Неизвестная команда. Используй /start.", reply_markup=to_menu_kb())
         return
 
     username = normalize_username(raw)
     if not username:
         await message.answer(
-            "🤔 Это не похоже на корректный юзернейм.\n"
-            "Юзернейм — это латинские буквы, цифры и '_' (до 32 символов).\n"
-            "Пример: <code>@durov</code>",
-            reply_markup=back_kb(),
+            "🤔 Это не похоже на юзернейм.\n"
+            "Это латинские буквы, цифры и '_'. Пример: <code>@durov</code>",
+            reply_markup=to_menu_kb(),
+        )
+        return
+
+    if len(username) < MIN_LEN:
+        await message.answer(
+            f"🔎 <b>@{escape(username)}</b>\n\n"
+            "Юзернеймы короче 4 символов в Telegram не существуют (обычные — от 5, "
+            "премиальные 4-буквенные продавались на Fragment). Оценивать нечего.",
+            reply_markup=to_menu_kb(),
         )
         return
 
@@ -42,27 +60,59 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
     )
     try:
         report = await aggregator.get_report(username)
-    except Exception:  # noqa: BLE001 — never crash the handler
+    except Exception:  # noqa: BLE001
         log.exception("aggregation failed for %s", username)
-        await status.edit_text(
-            "⚠️ Не удалось получить данные. Попробуй ещё раз чуть позже.",
-            reply_markup=back_kb(),
-        )
+        await status.edit_text("⚠️ Не удалось получить данные. Попробуй позже.",
+                               reply_markup=to_menu_kb())
         return
 
     if report is None:
-        await status.edit_text(
-            "🤔 Не получилось разобрать юзернейм. Попробуй ещё раз.", reply_markup=back_kb()
-        )
+        await status.edit_text("🤔 Не получилось разобрать юзернейм.", reply_markup=to_menu_kb())
         return
 
-    await status.edit_text(
-        render_report(report), reply_markup=result_kb(report), disable_web_page_preview=True
-    )
+    await status.edit_text(card_text(report), reply_markup=card_kb(report),
+                           disable_web_page_preview=True)
+
+
+async def _report_for(cb: CallbackQuery, aggregator: Aggregator) -> object | None:
+    username = cb.data.split(":", 1)[1]
+    try:
+        return await aggregator.get_report(username)
+    except Exception:  # noqa: BLE001
+        log.exception("aggregation failed for %s", username)
+        await cb.answer("⚠️ Ошибка. Попробуй позже.", show_alert=True)
+        return None
+
+
+@router.callback_query(F.data.startswith("card:"))
+async def cb_card(cb: CallbackQuery, aggregator: Aggregator) -> None:
+    report = await _report_for(cb, aggregator)
+    if report:
+        await _edit(cb, card_text(report), card_kb(report))
+
+
+@router.callback_query(F.data.startswith("price:"))
+async def cb_price(cb: CallbackQuery, aggregator: Aggregator) -> None:
+    report = await _report_for(cb, aggregator)
+    if report:
+        await _edit(cb, price_text(report), price_kb(report))
+
+
+@router.callback_query(F.data.startswith("sales:"))
+async def cb_sales(cb: CallbackQuery, aggregator: Aggregator) -> None:
+    report = await _report_for(cb, aggregator)
+    if report:
+        await _edit(cb, sales_text(report), sales_kb(report))
+
+
+@router.callback_query(F.data.startswith("est:"))
+async def cb_est(cb: CallbackQuery, aggregator: Aggregator) -> None:
+    report = await _report_for(cb, aggregator)
+    if report:
+        await _edit(cb, estimate_text(report), est_kb(report))
 
 
 @router.message()
 async def on_other(message: Message) -> None:
-    await message.answer(
-        "Пришли юзернейм текстом, например <code>@durov</code>.", reply_markup=back_kb()
-    )
+    await message.answer("Пришли юзернейм текстом, например <code>@durov</code>.",
+                         reply_markup=to_menu_kb())

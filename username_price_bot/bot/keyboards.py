@@ -1,40 +1,79 @@
-"""Inline keyboards for navigation so the user never gets stuck."""
+"""Inline keyboards — menu-driven navigation so the user never gets stuck."""
 from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from .formatting import _on_sale, is_nft
 from .models import UsernameReport
 
-NAV_START = "nav:start"
-NAV_HELP = "nav:help"
+# Callback data (usernames contain only [a-z0-9_], so ':' is a safe separator).
+CB_MAIN = "menu:main"
+CB_VALUATION = "menu:valuation"
+CB_SOON = "menu:soon"
+CB_HELP = "menu:help"
 
 
-def start_kb() -> InlineKeyboardMarkup:
+def card_cb(u: str) -> str: return f"card:{u}"
+def price_cb(u: str) -> str: return f"price:{u}"
+def sales_cb(u: str) -> str: return f"sales:{u}"
+def est_cb(u: str) -> str: return f"est:{u}"
+
+
+def main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="ℹ️ Как пользоваться", callback_data=NAV_HELP)],
+        [InlineKeyboardButton(text="💎 Оценка юзернеймов", callback_data=CB_VALUATION)],
+        [InlineKeyboardButton(text="🔜 Другие функции (скоро)", callback_data=CB_SOON)],
+        [InlineKeyboardButton(text="ℹ️ Помощь", callback_data=CB_HELP)],
     ])
 
 
-def help_kb() -> InlineKeyboardMarkup:
+def valuation_prompt_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data=NAV_START)],
+        [InlineKeyboardButton(text="⬅️ В меню", callback_data=CB_MAIN)],
     ])
 
 
-def back_kb() -> InlineKeyboardMarkup:
+def to_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ В начало", callback_data=NAV_START)],
+        [InlineKeyboardButton(text="⬅️ В меню", callback_data=CB_MAIN)],
     ])
 
 
-def result_kb(report: UsernameReport) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    links: list[InlineKeyboardButton] = []
-    if report.fragment_url:
-        links.append(InlineKeyboardButton(text="🔗 Fragment", url=report.fragment_url))
-    if report.getgems_url:
-        links.append(InlineKeyboardButton(text="🔗 GetGems", url=report.getgems_url))
-    if links:
-        rows.append(links)
-    rows.append([InlineKeyboardButton(text="🔄 Проверить другой", callback_data=NAV_START)])
+def card_kb(r: UsernameReport) -> InlineKeyboardMarkup:
+    u = r.username
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="💰 Актуальная цена", callback_data=price_cb(u))],
+        [InlineKeyboardButton(text="📜 История продаж", callback_data=sales_cb(u))],
+        [InlineKeyboardButton(text="📊 Примерная стоимость", callback_data=est_cb(u))],
+    ]
+    if r.tonviewer_url:
+        rows.append([InlineKeyboardButton(text="👛 Кошельки (TonViewer)", url=r.tonviewer_url)])
+    rows.append([
+        InlineKeyboardButton(text="🔄 Другой", callback_data=CB_VALUATION),
+        InlineKeyboardButton(text="⬅️ Меню", callback_data=CB_MAIN),
+    ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _back_to_card(u: str) -> InlineKeyboardButton:
+    return InlineKeyboardButton(text="⬅️ Назад", callback_data=card_cb(u))
+
+
+def price_kb(r: UsernameReport) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if _on_sale(r) and r.fragment_url:
+        rows.append([InlineKeyboardButton(text="🛒 Купить на Fragment", url=r.fragment_url)])
+    rows.append([_back_to_card(r.username)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def sales_kb(r: UsernameReport) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if r.tonviewer_url:
+        rows.append([InlineKeyboardButton(text="👛 История на TonViewer", url=r.tonviewer_url)])
+    rows.append([_back_to_card(r.username)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def est_kb(r: UsernameReport) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[_back_to_card(r.username)]])

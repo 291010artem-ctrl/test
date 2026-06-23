@@ -47,6 +47,6 @@ def load_config() -> Config:
         fragment_base=_get("FRAGMENT_BASE", "https://fragment.com"),
         usernames_collection=_get("USERNAMES_COLLECTION", DEFAULT_USERNAMES_COLLECTION),
         request_timeout=float(_get("REQUEST_TIMEOUT", "15")),
-        cache_ttl=float(_get("CACHE_TTL", "120")),
+        cache_ttl=float(_get("CACHE_TTL", "300")),
         log_level=_get("LOG_LEVEL", "INFO"),
     )

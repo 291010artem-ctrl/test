@@ -69,3 +69,4 @@ class UsernameReport:
     errors: list[str] = field(default_factory=list)
     fragment_url: str | None = None
     getgems_url: str | None = None
+    tonviewer_url: str | None = None

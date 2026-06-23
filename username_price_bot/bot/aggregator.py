@@ -60,17 +60,18 @@ class Aggregator:
         report.fragment_url = self.fragment.url_for(username)
 
         # First wave: independent lookups in parallel.
-        rates, nft_addr, frag_listing, market = await asyncio.gather(
+        rates, nft_addr, market = await asyncio.gather(
             self._safe(self.tonapi.get_rates(), "tonapi.rates", report),
             self._safe(self.tonapi.resolve_username_nft(username), "tonapi.resolve", report),
-            self._safe(self.fragment.get_listing(username), "fragment", report),
             self._get_market(),
         )
         report.rates = rates or {}
-        if frag_listing:
-            report.sources_used.append("fragment")
 
-        ton_listing = None
+        # Whether it is *currently* for sale is taken from the on-chain sale
+        # contract (TonAPI), NOT from scraping Fragment — that is the only
+        # reliable signal and avoids reporting long-ended auctions as active.
+        listing = None
+        nft = None
         gg_listing = None
         if nft_addr:
             report.found = True
@@ -79,6 +80,7 @@ class Aggregator:
             report.getgems_url = (
                 f"https://getgems.io/collection/{self.config.usernames_collection}/{nft_addr}"
             )
+            report.tonviewer_url = f"https://tonviewer.com/{nft_addr}"
             # Second wave: details for the resolved NFT.
             nft, history, gg_listing = await asyncio.gather(
                 self._safe(self.tonapi.get_nft(nft_addr), "tonapi.nft", report),
@@ -87,21 +89,16 @@ class Aggregator:
             )
             if nft:
                 report.current_owner = (nft.get("owner") or {}).get("address")
-                ton_listing = TonApi.parse_listing(nft)
+                listing = TonApi.parse_listing(nft)  # authoritative; None => not for sale
+            elif gg_listing:
+                listing = gg_listing  # fallback only when the on-chain fetch failed
             if history:
                 report.sales, report.owners = TonApi.parse_history(
                     history, report.current_owner
                 )
-            if gg_listing:
-                report.sources_used.append("getgems")
 
-        # Pick the most authoritative listing: Fragment (live marketplace) first,
-        # then on-chain sale, then GetGems.
-        report.listing = (
-            frag_listing
-            or ton_listing
-            or gg_listing
-            or Listing(status=MarketStatus.NOT_LISTED if report.found else MarketStatus.UNKNOWN)
+        report.listing = listing or Listing(
+            status=MarketStatus.NOT_LISTED if report.found else MarketStatus.UNKNOWN
         )
 
         report.estimate = estimate_price(
