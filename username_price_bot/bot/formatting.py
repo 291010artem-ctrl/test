@@ -185,6 +185,18 @@ def estimate_text(r: UsernameReport) -> str:
         ]
 
     est = r.estimate
+    # An NFT always has at least its first-auction price, so a pure-formula
+    # result for a confirmed NFT means the market data didn't load (a glitch),
+    # NOT that there is no market price.
+    nft_no_data = is_nft(r) and est is not None and est.basis == "heuristic"
+    if nft_no_data:
+        lines += [
+            "⚠️ Это NFT — у него точно есть цена первого аукциона, но получить "
+            "рыночные данные сейчас не удалось (похоже на сбой источника — проверь /diag).",
+            "Ниже — только ориентировочный расчёт по виду имени:",
+            "",
+        ]
+
     if not est or not est.point_ton:
         lines.append("Недостаточно данных для оценки.")
         lines.append(_DISCLAIMER)
@@ -192,6 +204,8 @@ def estimate_text(r: UsernameReport) -> str:
 
     if r.theoretical:
         title = "Теоретическая оценка паттерна"
+    elif nft_no_data:
+        title = "Ориентировочно (данные не загрузились)"
     elif est.confidence == "low":
         title = "Грубая оценка"
     else:
