@@ -56,9 +56,10 @@ def test_card_kb_without_tonviewer():
     assert _urls(kb) == []
 
 
-def test_price_kb_buy_button_only_when_on_sale():
-    assert _urls(price_kb(_report(on_sale=True)))      # has Fragment buy link
-    assert _urls(price_kb(_report(on_sale=False))) == []
+def test_price_kb_has_fragment_link_and_back():
+    # Fragment link is always offered (buy when on sale, "see price" otherwise).
+    assert _urls(price_kb(_report(on_sale=True)))
+    assert _urls(price_kb(_report(on_sale=False)))
     assert "card:durov" in _callbacks(price_kb(_report(on_sale=True)))
 
 

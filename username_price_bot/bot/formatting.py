@@ -122,7 +122,12 @@ def last_sale_text(r: UsernameReport) -> str:
         return head + "❗️ Это не NFT — продаж не было."
     priced = [s for s in r.sales if s.price_ton]
     if not priced:
-        return head + "🧾 Этот юзернейм ещё ни разу не продавался как NFT."
+        return (
+            head
+            + "🧾 Цену последней продажи не удалось получить из он-чейна.\n"
+            "Первичный аукцион Fragment не пишет цену в блокчейн — "
+            "смотри её на Fragment (кнопка ниже)."
+        )
     s = priced[0]
     when = s.timestamp.strftime("%Y-%m-%d") if s.timestamp else "—"
     lines = [
@@ -157,7 +162,9 @@ def sales_text(r: UsernameReport) -> str:
         if len(priced) > _MAX_SALES:
             lines.append(f"   …ещё {len(priced) - _MAX_SALES}")
     else:
-        lines.append("   Продаж не было (с момента выпуска как NFT).")
+        lines.append("   Цен продаж в он-чейне (TonAPI) не найдено.")
+        lines.append("   Первичный аукцион Fragment цену в блокчейне не пишет —")
+        lines.append("   полная история с ценами есть на Fragment 👇")
 
     if r.current_owner:
         lines += ["", f"👛 Текущий владелец: <code>{escape(short_addr(r.current_owner))}</code>"]

@@ -111,7 +111,8 @@ def test_last_sale_section():
 def test_last_sale_none():
     r = _nft_not_for_sale()
     r.sales = []
-    assert "ни разу не продавался" in last_sale_text(r)
+    out = last_sale_text(r)
+    assert "Fragment" in out  # points the user to where the price lives
 
 
 def test_quality_section():

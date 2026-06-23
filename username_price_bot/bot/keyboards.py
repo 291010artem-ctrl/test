@@ -65,16 +65,19 @@ def _back_to_card(u: str) -> InlineKeyboardButton:
 
 def price_kb(r: UsernameReport) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    if _on_sale(r) and r.fragment_url:
-        rows.append([InlineKeyboardButton(text="🛒 Купить на Fragment", url=r.fragment_url)])
+    if r.fragment_url:
+        text = "🛒 Купить на Fragment" if _on_sale(r) else "🔎 Цена на Fragment"
+        rows.append([InlineKeyboardButton(text=text, url=r.fragment_url)])
     rows.append([_back_to_card(r.username)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def sales_kb(r: UsernameReport) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
+    if r.fragment_url:
+        rows.append([InlineKeyboardButton(text="📜 История с ценами (Fragment)", url=r.fragment_url)])
     if r.tonviewer_url:
-        rows.append([InlineKeyboardButton(text="👛 История на TonViewer", url=r.tonviewer_url)])
+        rows.append([InlineKeyboardButton(text="👛 Кошельки на TonViewer", url=r.tonviewer_url)])
     rows.append([_back_to_card(r.username)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
