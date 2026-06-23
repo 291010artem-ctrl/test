@@ -10,7 +10,7 @@ from typing import Awaitable, TypeVar
 from .config import Config
 from .http_client import HttpClient
 from .market import MarketModel
-from .models import Listing, MarketStatus, UsernameReport
+from .models import Listing, MarketStatus, SaleEvent, UsernameReport
 from .scoring import analyze
 from .services.fragment import FragmentClient
 from .services.getgems import GetGemsClient
@@ -62,18 +62,19 @@ class Aggregator:
         report.theoretical = not is_valid_telegram_username(username)
         report.score = analyze(username)
 
-        # First wave: independent lookups in parallel.
-        rates, nft_addr, market = await asyncio.gather(
+        # First wave (parallel): rates, on-chain resolve, market, Fragment page.
+        rates, nft_addr, market, frag = await asyncio.gather(
             self._safe(self.tonapi.get_rates(), "tonapi.rates", report),
             self._safe(self.tonapi.resolve_username_nft(username), "tonapi.resolve", report),
             self._get_market(),
+            self._safe(self.fragment.get_info(username), "fragment", report),
         )
         report.rates = rates or {}
 
-        # Whether it is *currently* for sale is taken from the on-chain sale
-        # contract (TonAPI), NOT from scraping Fragment — that is the only
-        # reliable signal and avoids reporting long-ended auctions as active.
-        listing = None
+        # On-chain (TonAPI) is the authoritative source for the current sale and
+        # for past sales. Fragment is a best-effort fallback (auction/sold) when
+        # on-chain data is unavailable.
+        onchain_listing = None
         nft = None
         gg_listing = None
         if nft_addr:
@@ -84,7 +85,6 @@ class Aggregator:
                 f"https://getgems.io/collection/{self.config.usernames_collection}/{nft_addr}"
             )
             report.tonviewer_url = f"https://tonviewer.com/{nft_addr}"
-            # Second wave: details for the resolved NFT.
             nft, history, gg_listing = await asyncio.gather(
                 self._safe(self.tonapi.get_nft(nft_addr), "tonapi.nft", report),
                 self._safe(self.tonapi.get_history(nft_addr), "tonapi.history", report),
@@ -92,16 +92,26 @@ class Aggregator:
             )
             if nft:
                 report.current_owner = (nft.get("owner") or {}).get("address")
-                listing = TonApi.parse_listing(nft)  # authoritative; None => not for sale
-            elif gg_listing:
-                listing = gg_listing  # fallback only when the on-chain fetch failed
+                onchain_listing = TonApi.parse_listing(nft)
             if history:
                 report.sales, report.owners = TonApi.parse_history(
                     history, report.current_owner
                 )
 
-        report.listing = listing or Listing(
-            status=MarketStatus.NOT_LISTED if report.found else MarketStatus.UNKNOWN
+        # Fragment fallback: active listing + past sale, used only to fill gaps.
+        frag_listing = self.fragment.active_listing(frag, username) if frag else None
+        if frag and frag.status in (MarketStatus.ON_AUCTION, MarketStatus.ON_SALE,
+                                    MarketStatus.SOLD):
+            report.found = True  # a real (minted) username
+            if "fragment" not in report.sources_used:
+                report.sources_used.append("fragment")
+        if frag and not report.sales and frag.last_sale_ton:
+            report.sales = [SaleEvent(price_ton=frag.last_sale_ton, timestamp=None,
+                                      kind="sale", source="fragment")]
+
+        report.listing = (
+            onchain_listing or frag_listing or gg_listing
+            or Listing(status=MarketStatus.NOT_LISTED if report.found else MarketStatus.UNKNOWN)
         )
 
         report.estimate = estimate_price(

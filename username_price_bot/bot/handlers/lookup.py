@@ -19,11 +19,14 @@ from ..formatting import (
     sales_text,
 )
 from ..keyboards import card_kb, est_kb, price_kb, rate_kb, sales_kb, to_menu_kb
+from ..middlewares import ThrottlingMiddleware
 from ..utils import normalize_username
 
 log = logging.getLogger(__name__)
 
 router = Router(name="lookup")
+# Flood control: max 3 username lookups per minute per user.
+router.message.middleware(ThrottlingMiddleware(limit=3, window=60.0))
 
 # Telegram usernames shorter than 4 chars don't exist / can't be created, so
 # valuing them is meaningless.

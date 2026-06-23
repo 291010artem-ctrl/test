@@ -95,7 +95,8 @@ class Score:
     within_quality: float    # 0..10 within its length bucket
     tier: str                # S/A/B/C/D
     percentile: int          # 0..100 within length
-    theme: str | None        # RU label
+    rating100: int = 1       # overall value rating 1..100 (@bank≈100, junk≈1)
+    theme: str | None = None        # RU label
     patterns: list[str] = field(default_factory=list)
     breakdown: list[tuple[str, float]] = field(default_factory=list)  # (label, +/- fraction)
     ratings: dict[str, int] = field(default_factory=dict)            # RU rating -> 1..10
@@ -150,7 +151,7 @@ def detect_patterns(s: str) -> tuple[list[str], float]:
     uniq = len(set(s))
 
     if uniq == 1:
-        labels.append("Все символы одинаковые (AAAA)")
+        labels.append(f"Все символы одинаковые ({s.upper()})")
         rarity = max(rarity, 10.0)
     if n >= 3 and s == s[::-1]:
         labels.append("Палиндром")
@@ -282,6 +283,7 @@ def analyze(username: str) -> Score:
     length_q = _LENGTH_Q.get(n, 2 if n >= 9 else 9)
     overall = 0.6 * within + 0.4 * length_q
     percentile = int(_clamp(round(100 * (within / 10) ** 0.85), 1, 99))
+    rating100 = int(_clamp(round(overall * 12 - 12), 1, 100))  # @bank≈95, junk≈1
 
     memorability = _clamp(brand - max(0, n - 6) * 0.6 + (2 if patterns else 0), 1, 10)
     ratings = {
@@ -303,6 +305,7 @@ def analyze(username: str) -> Score:
         within_quality=within,
         tier=_tier(overall),
         percentile=percentile,
+        rating100=rating100,
         theme=theme_label,
         patterns=patterns,
         breakdown=sorted(contribs.items(), key=lambda kv: kv[1], reverse=True),

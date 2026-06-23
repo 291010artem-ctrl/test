@@ -55,6 +55,8 @@ class PriceEstimate:
     point_ton: float | None
     usd_point: float | None
     confidence: str            # "low" | "medium" | "high"
+    # what the estimate is based on: active_auction|listing|last_sale|comparables|heuristic
+    basis: str = "heuristic"
     signals: list[str] = field(default_factory=list)
 
 

@@ -72,3 +72,19 @@ def test_breakdown_present():
 def test_long_random_is_cheap_low_tier():
     sc = analyze("averagelongname")
     assert sc.tier in ("C", "D")
+
+
+# ── bug fix: dynamic pattern label (not static "AAAA") ──
+def test_pattern_label_is_dynamic():
+    assert any("(AAAAA)" in p for p in analyze("aaaaa").patterns)
+    assert any("(AAAAAA)" in p for p in analyze("aaaaaa").patterns)
+    assert any("(BBBB)" in p for p in analyze("bbbb").patterns)
+    # the old static "(AAAA)" must NOT appear for a 5-letter name
+    assert not any(p.endswith("(AAAA)") for p in analyze("aaaaa").patterns)
+
+
+# ── 1..100 value rating ──
+def test_rating_100_scale():
+    assert analyze("bank").rating100 > 80
+    assert analyze("xzkqv").rating100 < analyze("bank").rating100
+    assert 1 <= analyze("xzkqv").rating100 <= 100

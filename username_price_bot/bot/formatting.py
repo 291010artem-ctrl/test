@@ -11,6 +11,20 @@ from .models import MarketStatus, UsernameReport
 from .utils import fmt_ton, short_addr
 
 _CONFIDENCE_LABEL = {"high": "высокая", "medium": "средняя", "low": "низкая"}
+_CONF_WORD = {"high": "ВЫСОКАЯ", "medium": "СРЕДНЯЯ", "low": "НИЗКАЯ"}
+_BASIS_DESC = {
+    "active_auction": "активные торги",
+    "listing": "активная продажа",
+    "last_sale": "история продаж",
+    "comparables": "похожие продажи",
+    "heuristic": "расчётная формула",
+}
+
+
+def _conf_line(est) -> str:
+    word = _CONF_WORD.get(est.confidence, est.confidence)
+    desc = _BASIS_DESC.get(est.basis, "")
+    return f"{word} (на основе: {desc})" if desc else word
 
 _MAX_SALES = 15
 _DISCLAIMER = "<i>⚠️ Оценка приблизительная и не является финансовой рекомендацией.</i>"
@@ -184,11 +198,9 @@ def estimate_text(r: UsernameReport) -> str:
         title = "Оценка цены"
     lines.append(f"📊 <b>{title}: ~{_prices(est.point_ton, r.rates)}</b>")
     margin = _margin_pct(est.point_ton, est.low_ton, est.high_ton)
-    conf = _CONFIDENCE_LABEL.get(est.confidence, est.confidence)
+    lines.append(f"достоверность: {_conf_line(est)}")
     if margin is not None:
-        lines.append(f"погрешность: ± ~{margin}%  ·  достоверность: {conf}")
-    else:
-        lines.append(f"достоверность: {conf}")
+        lines.append(f"погрешность: ± ~{margin}%")
     if est.low_ton and est.high_ton:
         lines.append(f"диапазон: {fmt_ton(est.low_ton)}–{fmt_ton(est.high_ton)} TON")
 
@@ -222,8 +234,9 @@ def quality_text(r: UsernameReport) -> str:
         lines.append("Нет данных для рейтинга.")
         return "\n".join(lines)
 
+    lines.append(f"💯 <b>Рейтинг ценности: {sc.rating100}/100</b>")
     lines.append(
-        f"🏆 <b>Тир: {sc.tier}</b>  ·  лучше ~{sc.percentile}% "
+        f"🏆 Тир: <b>{sc.tier}</b>  ·  лучше ~{sc.percentile}% "
         f"{len(r.username)}-символьных"
     )
     if r.theoretical:
