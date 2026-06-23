@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from html import escape
 
 from aiogram import F, Router
@@ -9,8 +10,8 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 
 from ..aggregator import Aggregator
-from ..formatting import card_text, estimate_text, price_text, sales_text
-from ..keyboards import card_kb, est_kb, price_kb, sales_kb, to_menu_kb
+from ..formatting import card_text, estimate_text, price_text, quality_text, sales_text
+from ..keyboards import card_kb, est_kb, price_kb, rate_kb, sales_kb, to_menu_kb
 from ..utils import normalize_username
 
 log = logging.getLogger(__name__)
@@ -35,6 +36,15 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
     raw = (message.text or "").strip()
     if raw.startswith("/"):
         await message.answer("Неизвестная команда. Используй /start.", reply_markup=to_menu_kb())
+        return
+
+    # Several usernames at once → ask for one (don't fail with "invalid").
+    tokens = [t for t in re.split(r"[\s,]+", raw) if t]
+    if len(tokens) > 1 and sum(bool(normalize_username(t)) for t in tokens) > 1:
+        await message.answer(
+            "✋ Можно проверять только <b>один</b> юзернейм за раз. Пришли один.",
+            reply_markup=to_menu_kb(),
+        )
         return
 
     username = normalize_username(raw)
@@ -110,6 +120,13 @@ async def cb_est(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
         await _edit(cb, estimate_text(report), est_kb(report))
+
+
+@router.callback_query(F.data.startswith("rate:"))
+async def cb_rate(cb: CallbackQuery, aggregator: Aggregator) -> None:
+    report = await _report_for(cb, aggregator)
+    if report:
+        await _edit(cb, quality_text(report), rate_kb(report))
 
 
 @router.message()

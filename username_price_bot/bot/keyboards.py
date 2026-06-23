@@ -17,6 +17,7 @@ def card_cb(u: str) -> str: return f"card:{u}"
 def price_cb(u: str) -> str: return f"price:{u}"
 def sales_cb(u: str) -> str: return f"sales:{u}"
 def est_cb(u: str) -> str: return f"est:{u}"
+def rate_cb(u: str) -> str: return f"rate:{u}"
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
@@ -45,6 +46,7 @@ def card_kb(r: UsernameReport) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="💰 Актуальная цена", callback_data=price_cb(u))],
         [InlineKeyboardButton(text="📜 История продаж", callback_data=sales_cb(u))],
         [InlineKeyboardButton(text="📊 Примерная стоимость", callback_data=est_cb(u))],
+        [InlineKeyboardButton(text="🏆 Рейтинг и разбор", callback_data=rate_cb(u))],
     ]
     if r.tonviewer_url:
         rows.append([InlineKeyboardButton(text="👛 Кошельки (TonViewer)", url=r.tonviewer_url)])
@@ -76,4 +78,8 @@ def sales_kb(r: UsernameReport) -> InlineKeyboardMarkup:
 
 
 def est_kb(r: UsernameReport) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[_back_to_card(r.username)]])
+
+
+def rate_kb(r: UsernameReport) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[_back_to_card(r.username)]])

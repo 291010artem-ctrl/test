@@ -64,11 +64,14 @@ def _on_sale(r: UsernameReport) -> bool:
 # ── card (the button menu) ───────────────────────────────────────────────────
 def card_text(r: UsernameReport) -> str:
     name = escape(r.username)
-    if is_nft(r):
+    if r.theoretical:
+        status = "❗️ Невозможный юзернейм (теоретическая оценка по виду)."
+    elif is_nft(r):
         status = "💎 Это NFT-юзернейм."
     else:
         status = "❗️ Не является NFT (свободен или не выпущен как NFT)."
-    return f"🔎 <b>@{name}</b>\n{status}\n\nЧто показать? 👇"
+    tier = f" · тир {r.score.tier}" if r.score else ""
+    return f"🔎 <b>@{name}</b>{tier}\n{status}\n\nЧто показать? 👇"
 
 
 # ── section: current price ───────────────────────────────────────────────────
@@ -126,7 +129,14 @@ def sales_text(r: UsernameReport) -> str:
 def estimate_text(r: UsernameReport) -> str:
     name = escape(r.username)
     lines = [f"🔎 <b>@{name}</b>", ""]
-    if not is_nft(r):
+    if r.theoretical:
+        lines += [
+            "❗️ Такой юзернейм невозможен в Telegram (начинается с цифры или "
+            "состоит только из цифр).",
+            "Это лишь <b>теоретическая</b> оценка его вида:",
+            "",
+        ]
+    elif not is_nft(r):
         lines += [
             "❗️ Это не NFT (свободен/не выпущен).",
             "Оценка — <b>по виду</b> юзернейма (длина, паттерн), без истории продаж:",
@@ -139,7 +149,12 @@ def estimate_text(r: UsernameReport) -> str:
         lines.append(_DISCLAIMER)
         return "\n".join(lines)
 
-    title = "Грубая оценка" if est.confidence == "low" else "Оценка цены"
+    if r.theoretical:
+        title = "Теоретическая оценка паттерна"
+    elif est.confidence == "low":
+        title = "Грубая оценка"
+    else:
+        title = "Оценка цены"
     lines.append(f"📊 <b>{title}: ~{_prices(est.point_ton, r.rates)}</b>")
     margin = _margin_pct(est.point_ton, est.low_ton, est.high_ton)
     conf = _CONFIDENCE_LABEL.get(est.confidence, est.confidence)
@@ -149,7 +164,61 @@ def estimate_text(r: UsernameReport) -> str:
         lines.append(f"достоверность: {conf}")
     if est.low_ton and est.high_ton:
         lines.append(f"диапазон: {fmt_ton(est.low_ton)}–{fmt_ton(est.high_ton)} TON")
+
+    sc = r.score
+    if sc and (sc.theme or sc.patterns):
+        bits = []
+        if sc.theme:
+            bits.append(f"тема: {escape(sc.theme)}")
+        if sc.patterns:
+            bits.append("паттерн: " + escape(", ".join(sc.patterns[:2])))
+        lines.append("🏷 " + " · ".join(bits))
+
     for sig in est.signals[:5]:
         lines.append(f"• {escape(sig)}")
+    lines.append("👉 Подробный разбор и рейтинг — кнопка «🏆 Рейтинг».")
+    lines.append(_DISCLAIMER)
+    return "\n".join(lines)
+
+
+# ── section: quality / breakdown ─────────────────────────────────────────────
+def _bar(value: int) -> str:
+    full = max(0, min(10, value))
+    return "▰" * full + "▱" * (10 - full)
+
+
+def quality_text(r: UsernameReport) -> str:
+    name = escape(r.username)
+    sc = r.score
+    lines = [f"🔎 <b>@{name}</b>", ""]
+    if not sc:
+        lines.append("Нет данных для рейтинга.")
+        return "\n".join(lines)
+
+    lines.append(
+        f"🏆 <b>Тир: {sc.tier}</b>  ·  лучше ~{sc.percentile}% "
+        f"{len(r.username)}-символьных"
+    )
+    if r.theoretical:
+        lines.append("<i>(теоретически — такой юзернейм нельзя создать)</i>")
+
+    lines.append("")
+    lines.append("<b>Рейтинг качества (1–10):</b>")
+    for label, val in sc.ratings.items():
+        lines.append(f"{label:<20} <code>{_bar(val)}</code> {val}")
+
+    if sc.theme:
+        lines += ["", f"🏷 Тема: <b>{escape(sc.theme)}</b>"]
+    if sc.patterns:
+        lines.append("🧩 Паттерны: " + escape(", ".join(sc.patterns)))
+
+    lines += ["", "<b>Из чего складывается цена</b> (множитель к базе по длине):"]
+    for label, frac in sc.breakdown:
+        if abs(frac) < 0.005:
+            continue
+        sign = "+" if frac >= 0 else "−"
+        lines.append(f"   {escape(label)}: {sign}{abs(frac) * 100:.0f}%")
+    lines.append(f"   = итоговый множитель ×{sc.multiplier:.2f}")
+
     lines.append(_DISCLAIMER)
     return "\n".join(lines)

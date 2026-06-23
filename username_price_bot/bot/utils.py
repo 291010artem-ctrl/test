@@ -4,6 +4,14 @@ from __future__ import annotations
 import re
 
 _USERNAME_RE = re.compile(r"^[a-z0-9_]{1,32}$")
+# A username that can actually exist on Telegram: starts with a letter, then
+# letters/digits/underscore. (All-digit or digit-leading names are impossible.)
+_VALID_TG_RE = re.compile(r"^[a-z][a-z0-9_]{3,31}$")
+
+
+def is_valid_telegram_username(username: str) -> bool:
+    """True if such a username can really exist on Telegram (4+ chars here)."""
+    return bool(_VALID_TG_RE.match(username)) and not username.endswith("_")
 
 
 def normalize_username(raw: str | None) -> str | None:

@@ -5,8 +5,10 @@ from bot.formatting import (
     estimate_text,
     is_nft,
     price_text,
+    quality_text,
     sales_text,
 )
+from bot.scoring import analyze
 from bot.models import (
     Listing,
     MarketStatus,
@@ -96,6 +98,25 @@ def test_estimate_non_nft_by_appearance():
     out = estimate_text(_not_nft())
     assert "по виду" in out
     assert "Грубая оценка" in out  # low confidence headline
+
+
+def test_quality_section():
+    r = _nft_on_sale()
+    r.score = analyze("durov")
+    out = quality_text(r)
+    assert "Тир" in out
+    assert "Редкость" in out and "Брендовость" in out
+    assert "множитель" in out
+
+
+def test_theoretical_estimate_labelled():
+    r = _not_nft()
+    r.username = "8888"
+    r.theoretical = True
+    r.score = analyze("8888")
+    out = estimate_text(r)
+    assert "Теоретическая" in out
+    assert "невозможен" in out
 
 
 def test_card_and_escaping():

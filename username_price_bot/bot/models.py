@@ -4,6 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .scoring import Score
 
 
 class MarketStatus(str, Enum):
@@ -62,6 +66,8 @@ class UsernameReport:
     current_owner: str | None = None
     listing: Listing | None = None
     estimate: PriceEstimate | None = None
+    score: "Score | None" = None
+    theoretical: bool = False  # username can't really exist on Telegram (e.g. @8888)
     sales: list[SaleEvent] = field(default_factory=list)
     owners: list[OwnerPeriod] = field(default_factory=list)
     rates: dict[str, float] = field(default_factory=dict)  # per 1 TON, e.g. {"USD":5.2,"RUB":470}

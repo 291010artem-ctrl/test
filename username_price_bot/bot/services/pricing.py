@@ -22,9 +22,13 @@ explicitly labelled a rough guess. Not financial advice.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from ..market import MarketModel, class_label
 from ..models import Listing, MarketStatus, PriceEstimate, SaleEvent
+
+if TYPE_CHECKING:
+    from ..scoring import Score
 
 _RECENT_DAYS = 120
 _MIDTERM_DAYS = 365
@@ -34,6 +38,9 @@ _SPREAD = {
     "high": (0.85, 1.15),
     "medium": (0.70, 1.40),
     "low": (0.45, 2.00),
+    # heuristic-only but with a strong deterministic signal (dictionary word /
+    # clear theme / strong pattern) — narrower than a pure random guess.
+    "low_strong": (0.55, 1.60),
 }
 
 
@@ -49,13 +56,19 @@ def estimate_price(
     sales: list[SaleEvent],
     ton_usd: float | None,
     market: MarketModel | None = None,
+    score: "Score | None" = None,
     now: datetime | None = None,
 ) -> PriceEstimate:
     market = market or MarketModel()
     now = now or datetime.now(timezone.utc)
     signals: list[str] = []
 
-    typical = market.category_typical(username)
+    # Heuristic "typical" price = length base × quality multiplier, so two
+    # same-length names differ by quality (semantics/brand/theme/pattern).
+    if score is not None:
+        typical = market.category_base(username) * score.multiplier
+    else:
+        typical = market.category_typical(username)
     comp_value, comp_n = market.comparable_estimate(username, now)
 
     # This NFT's own most recent priced sale, re-priced to today.
@@ -132,8 +145,8 @@ def estimate_price(
         else:
             point = typical
             signals.append(
-                f"Нет продаж и листинга — оценка по типичной цене категории "
-                f"(~{typical:.0f} TON за {len(username)}-симв.)"
+                f"Нет продаж и листинга — оценка по виду имени "
+                f"(длина + качество): ~{typical:.0f} TON"
             )
 
         # Category floor may only LIFT a stale/cheap estimate (never drag fresh
@@ -147,13 +160,17 @@ def estimate_price(
                     "Поднято до текущего уровня категории — прошлая цена устарела/занижена"
                 )
 
+        strong_signal = bool(
+            score and (score.semantic >= 8 or score.thematic >= 8 or score.rarity >= 7)
+        )
         if has_recent_own:
             confidence = "high"
         elif comp_value or (age_days is not None and age_days <= _MIDTERM_DAYS):
             confidence = "medium"
         else:
             confidence = "low"
-        lo_m, hi_m = _SPREAD[confidence]
+        spread_key = "low_strong" if (confidence == "low" and strong_signal) else confidence
+        lo_m, hi_m = _SPREAD[spread_key]
         low, high = point * lo_m, point * hi_m
 
     if confidence == "low":

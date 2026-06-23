@@ -11,11 +11,12 @@ from .config import Config
 from .http_client import HttpClient
 from .market import MarketModel
 from .models import Listing, MarketStatus, UsernameReport
+from .scoring import analyze
 from .services.fragment import FragmentClient
 from .services.getgems import GetGemsClient
 from .services.pricing import estimate_price
 from .services.tonapi import TonApi
-from .utils import normalize_username
+from .utils import is_valid_telegram_username, normalize_username
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +59,8 @@ class Aggregator:
     async def _build(self, username: str) -> UsernameReport:
         report = UsernameReport(username=username)
         report.fragment_url = self.fragment.url_for(username)
+        report.theoretical = not is_valid_telegram_username(username)
+        report.score = analyze(username)
 
         # First wave: independent lookups in parallel.
         rates, nft_addr, market = await asyncio.gather(
@@ -107,6 +110,7 @@ class Aggregator:
             sales=report.sales,
             ton_usd=report.rates.get("USD"),
             market=market,
+            score=report.score,
         )
         if market.calibrated and "getgems" not in report.sources_used:
             report.sources_used.append("getgems")
