@@ -91,7 +91,13 @@ class Aggregator:
                 self._safe(self.getgems.get_listing(nft_addr), "getgems", report),
             )
             if nft:
-                report.current_owner = (nft.get("owner") or {}).get("address")
+                # When on sale, nft.owner is the sale contract — the real owner
+                # is under sale.owner.
+                sale = nft.get("sale")
+                if isinstance(sale, dict) and (sale.get("owner") or {}).get("address"):
+                    report.current_owner = sale["owner"]["address"]
+                else:
+                    report.current_owner = (nft.get("owner") or {}).get("address")
                 onchain_listing = TonApi.parse_listing(nft)
             if history:
                 report.sales, report.owners = TonApi.parse_history(
@@ -127,30 +133,44 @@ class Aggregator:
         return report
 
     async def diagnose(self) -> dict[str, str]:
-        """Live health-check of each data source (used by /diag)."""
+        """Live health-check of the whole pipeline on a real NFT (used by /diag)."""
         out: dict[str, str] = {}
         try:
             rates = await self.tonapi.get_rates()
             out["TonAPI курсы"] = (
-                f"✅ TON=${rates.get('USD', '?')}" if rates else "⚠️ пусто"
+                f"✅ TON=${rates.get('USD', 0):.2f}" if rates else "⚠️ пусто"
             )
         except Exception as exc:  # noqa: BLE001
             out["TonAPI курсы"] = f"❌ {type(exc).__name__}"
         try:
-            addr = await self.tonapi.resolve_username_nft("durov")
-            out["TonAPI резолв @durov"] = f"✅ {addr[:10]}…" if addr else "⚠️ не найден"
+            addr = await self.tonapi.resolve_username_nft("bank")  # a real NFT
+            if not addr:
+                out["TonAPI резолв @bank"] = "❌ не найден (резолв сломан!)"
+            else:
+                out["TonAPI резолв @bank"] = f"✅ {addr[:12]}…"
+                nft = await self.tonapi.get_nft(addr)
+                history = await self.tonapi.get_history(addr)
+                sale = TonApi.parse_listing(nft) if nft else None
+                out["@bank продажа сейчас"] = (
+                    f"✅ {sale.price_ton:g} TON" if (sale and sale.price_ton)
+                    else "— не продаётся"
+                )
+                sales, _ = TonApi.parse_history(history or [], None)
+                priced = [s for s in sales if s.price_ton]
+                out["@bank продаж в истории"] = (
+                    f"✅ {len(priced)}" if priced else "⚠️ 0 (проверь parse_history)"
+                )
         except Exception as exc:  # noqa: BLE001
-            out["TonAPI резолв @durov"] = f"❌ {type(exc).__name__}"
+            out["TonAPI пайплайн"] = f"❌ {type(exc).__name__}: {exc}"
         try:
             sales = await self.getgems.get_recent_collection_sales(
                 self.config.usernames_collection, first=20
             )
-            out["GetGems продажи коллекции"] = (
-                f"✅ получено {len(sales)}" if sales
-                else "⚠️ 0 (схема не совпала или нет данных)"
+            out["GetGems (похожие)"] = (
+                f"✅ {len(sales)}" if sales else "⚠️ 0 — не критично, оценка идёт от TonAPI"
             )
         except Exception as exc:  # noqa: BLE001
-            out["GetGems продажи коллекции"] = f"❌ {type(exc).__name__}"
+            out["GetGems (похожие)"] = f"⚠️ {type(exc).__name__} — не критично"
         return out
 
     async def _get_market(self) -> MarketModel:
