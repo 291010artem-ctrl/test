@@ -15,6 +15,7 @@ CB_HELP = "menu:help"
 
 def card_cb(u: str) -> str: return f"card:{u}"
 def price_cb(u: str) -> str: return f"price:{u}"
+def lastsale_cb(u: str) -> str: return f"last:{u}"
 def sales_cb(u: str) -> str: return f"sales:{u}"
 def est_cb(u: str) -> str: return f"est:{u}"
 def rate_cb(u: str) -> str: return f"rate:{u}"
@@ -44,6 +45,7 @@ def card_kb(r: UsernameReport) -> InlineKeyboardMarkup:
     u = r.username
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text="💰 Актуальная цена", callback_data=price_cb(u))],
+        [InlineKeyboardButton(text="🧾 Последняя продажа", callback_data=lastsale_cb(u))],
         [InlineKeyboardButton(text="📜 История продаж", callback_data=sales_cb(u))],
         [InlineKeyboardButton(text="📊 Примерная стоимость", callback_data=est_cb(u))],
         [InlineKeyboardButton(text="🏆 Рейтинг и разбор", callback_data=rate_cb(u))],

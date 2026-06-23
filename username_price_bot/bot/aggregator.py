@@ -116,6 +116,33 @@ class Aggregator:
             report.sources_used.append("getgems")
         return report
 
+    async def diagnose(self) -> dict[str, str]:
+        """Live health-check of each data source (used by /diag)."""
+        out: dict[str, str] = {}
+        try:
+            rates = await self.tonapi.get_rates()
+            out["TonAPI курсы"] = (
+                f"✅ TON=${rates.get('USD', '?')}" if rates else "⚠️ пусто"
+            )
+        except Exception as exc:  # noqa: BLE001
+            out["TonAPI курсы"] = f"❌ {type(exc).__name__}"
+        try:
+            addr = await self.tonapi.resolve_username_nft("durov")
+            out["TonAPI резолв @durov"] = f"✅ {addr[:10]}…" if addr else "⚠️ не найден"
+        except Exception as exc:  # noqa: BLE001
+            out["TonAPI резолв @durov"] = f"❌ {type(exc).__name__}"
+        try:
+            sales = await self.getgems.get_recent_collection_sales(
+                self.config.usernames_collection, first=20
+            )
+            out["GetGems продажи коллекции"] = (
+                f"✅ получено {len(sales)}" if sales
+                else "⚠️ 0 (схема не совпала или нет данных)"
+            )
+        except Exception as exc:  # noqa: BLE001
+            out["GetGems продажи коллекции"] = f"❌ {type(exc).__name__}"
+        return out
+
     async def _get_market(self) -> MarketModel:
         """Market model calibrated from recent collection sales (cached)."""
         if self._market_cache and (time.monotonic() - self._market_cache[0]) < _MARKET_TTL:

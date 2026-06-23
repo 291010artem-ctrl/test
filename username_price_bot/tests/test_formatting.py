@@ -4,6 +4,7 @@ from bot.formatting import (
     card_text,
     estimate_text,
     is_nft,
+    last_sale_text,
     price_text,
     quality_text,
     sales_text,
@@ -98,6 +99,19 @@ def test_estimate_non_nft_by_appearance():
     out = estimate_text(_not_nft())
     assert "по виду" in out
     assert "Грубая оценка" in out  # low confidence headline
+
+
+def test_last_sale_section():
+    out = last_sale_text(_nft_on_sale())
+    assert "Последняя продажа" in out
+    assert "2024-01-01" in out
+    assert "USDT" in out
+
+
+def test_last_sale_none():
+    r = _nft_not_for_sale()
+    r.sales = []
+    assert "ни разу не продавался" in last_sale_text(r)
 
 
 def test_quality_section():

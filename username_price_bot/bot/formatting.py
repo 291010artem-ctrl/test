@@ -100,6 +100,33 @@ def price_text(r: UsernameReport) -> str:
     return head + "❌ Сейчас нигде не продаётся."
 
 
+# ── section: last sale ───────────────────────────────────────────────────────
+def last_sale_text(r: UsernameReport) -> str:
+    name = escape(r.username)
+    head = f"🔎 <b>@{name}</b>\n\n"
+    if not is_nft(r):
+        return head + "❗️ Это не NFT — продаж не было."
+    priced = [s for s in r.sales if s.price_ton]
+    if not priced:
+        return head + "🧾 Этот юзернейм ещё ни разу не продавался как NFT."
+    s = priced[0]
+    when = s.timestamp.strftime("%Y-%m-%d") if s.timestamp else "—"
+    lines = [
+        head.rstrip("\n"), "",
+        "🧾 <b>Последняя продажа:</b>",
+        f"   {when} — <b>{_prices(s.price_ton, r.rates)}</b>",
+    ]
+    if s.seller:
+        lines.append(f"   продавец: <code>{escape(short_addr(s.seller))}</code>")
+    if s.buyer:
+        lines.append(f"   покупатель: <code>{escape(short_addr(s.buyer))}</code>")
+    if len(priced) > 1:
+        lines.append(f"\nВсего продаж: {len(priced)} — см. «📜 История продаж».")
+    if r.tonviewer_url:
+        lines.append("\n👛 Детали сделки — на TonViewer (кнопка ниже).")
+    return "\n".join(lines)
+
+
 # ── section: sales history ───────────────────────────────────────────────────
 def sales_text(r: UsernameReport) -> str:
     name = escape(r.username)

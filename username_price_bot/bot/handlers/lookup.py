@@ -10,7 +10,14 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 
 from ..aggregator import Aggregator
-from ..formatting import card_text, estimate_text, price_text, quality_text, sales_text
+from ..formatting import (
+    card_text,
+    estimate_text,
+    last_sale_text,
+    price_text,
+    quality_text,
+    sales_text,
+)
 from ..keyboards import card_kb, est_kb, price_kb, rate_kb, sales_kb, to_menu_kb
 from ..utils import normalize_username
 
@@ -106,6 +113,13 @@ async def cb_price(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
         await _edit(cb, price_text(report), price_kb(report))
+
+
+@router.callback_query(F.data.startswith("last:"))
+async def cb_last_sale(cb: CallbackQuery, aggregator: Aggregator) -> None:
+    report = await _report_for(cb, aggregator)
+    if report:
+        await _edit(cb, last_sale_text(report), sales_kb(report))
 
 
 @router.callback_query(F.data.startswith("sales:"))

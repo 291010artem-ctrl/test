@@ -43,8 +43,10 @@ def test_card_kb_has_sections_and_tonviewer():
     kb = card_kb(_report(tonviewer=True))
     cbs = _callbacks(kb)
     assert "price:durov" in cbs
+    assert "last:durov" in cbs
     assert "sales:durov" in cbs
     assert "est:durov" in cbs
+    assert "rate:durov" in cbs
     assert CB_MAIN in cbs
     assert "https://tonviewer.com/0:nft" in _urls(kb)
 
