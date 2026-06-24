@@ -108,9 +108,11 @@ class Aggregator:
         # auction status. On-chain stays authoritative for an active sale.
         frag_listing = self.fragment.active_listing(frag, username) if frag else None
         if frag:
+            # Only auction / sale / sold prove a *collectible* NFT. "Unavailable"
+            # / "Taken" (NOT_LISTED) is a regular taken username — NOT an NFT.
             if frag.status in (MarketStatus.ON_AUCTION, MarketStatus.ON_SALE,
-                               MarketStatus.SOLD, MarketStatus.NOT_LISTED):
-                report.found = True  # a real (minted) username
+                               MarketStatus.SOLD):
+                report.found = True
                 if "fragment" not in report.sources_used:
                     report.sources_used.append("fragment")
             if frag.auction_ends_at:

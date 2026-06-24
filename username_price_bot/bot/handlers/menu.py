@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 
 from ..keyboards import (
@@ -15,31 +14,25 @@ from ..keyboards import (
     valuation_prompt_kb,
 )
 from ..texts import HELP, MAIN_MENU, VALUATION_PROMPT
+from .common import edit_or_replace
 
 router = Router(name="menu")
 
 
-async def _edit(cb: CallbackQuery, text: str, kb) -> None:
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
-    except TelegramBadRequest:
-        pass
-    await cb.answer()
-
-
 @router.callback_query(F.data == CB_MAIN)
 async def open_main(cb: CallbackQuery) -> None:
-    await _edit(cb, MAIN_MENU, main_menu_kb())
+    # Leaving the username context → replace the photo card with a text menu.
+    await edit_or_replace(cb, MAIN_MENU, main_menu_kb(), photo_ok=False)
 
 
 @router.callback_query(F.data == CB_VALUATION)
 async def open_valuation(cb: CallbackQuery) -> None:
-    await _edit(cb, VALUATION_PROMPT, valuation_prompt_kb())
+    await edit_or_replace(cb, VALUATION_PROMPT, valuation_prompt_kb(), photo_ok=False)
 
 
 @router.callback_query(F.data == CB_HELP)
 async def open_help(cb: CallbackQuery) -> None:
-    await _edit(cb, HELP, to_menu_kb())
+    await edit_or_replace(cb, HELP, to_menu_kb(), photo_ok=False)
 
 
 @router.callback_query(F.data == CB_SOON)

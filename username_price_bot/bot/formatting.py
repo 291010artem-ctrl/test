@@ -41,7 +41,7 @@ def _conf_line(est) -> str:
     desc = _BASIS_DESC.get(est.basis, "")
     return f"{word} (на основе: {desc})" if desc else word
 
-_MAX_SALES = 15
+_MAX_SALES = 8
 _DISCLAIMER = "<i>⚠️ Оценка приблизительная и не является финансовой рекомендацией.</i>"
 
 

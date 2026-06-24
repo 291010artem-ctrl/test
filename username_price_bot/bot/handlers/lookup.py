@@ -6,13 +6,13 @@ import re
 from html import escape
 
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 
 from ..aggregator import Aggregator
 from ..formatting import (
     card_text,
     estimate_text,
+    is_nft,
     last_sale_text,
     price_text,
     quality_text,
@@ -21,6 +21,7 @@ from ..formatting import (
 from ..keyboards import card_kb, est_kb, price_kb, rate_kb, sales_kb, to_menu_kb
 from ..middlewares import ThrottlingMiddleware
 from ..utils import normalize_username
+from .common import edit_or_replace
 
 log = logging.getLogger(__name__)
 
@@ -31,14 +32,7 @@ router.message.middleware(ThrottlingMiddleware(limit=3, window=60.0))
 # Telegram usernames shorter than 4 chars don't exist / can't be created, so
 # valuing them is meaningless.
 MIN_LEN = 4
-
-
-async def _edit(cb: CallbackQuery, text: str, kb) -> None:
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
-    except TelegramBadRequest:
-        pass
-    await cb.answer()
+_NFT_IMAGE = "https://nft.fragment.com/username/{}.webp"
 
 
 @router.message(F.text)
@@ -90,16 +84,20 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
         await status.edit_text("🤔 Не получилось разобрать юзернейм.", reply_markup=to_menu_kb())
         return
 
-    # Best-effort NFT image (the dark-blue square with the Telegram logo + name,
-    # same as on TonViewer). For non-NFT names the URL 404s and we just skip it.
-    if not report.theoretical:
+    text, kb = card_text(report), card_kb(report)
+    # Attach the NFT image straight to the card (caption) only for real NFTs.
+    sent = False
+    if is_nft(report):
         try:
-            await message.answer_photo(f"https://nft.fragment.com/username/{username}.webp")
-        except Exception:  # noqa: BLE001 — name has no NFT image, ignore
+            await message.answer_photo(
+                _NFT_IMAGE.format(username), caption=text, reply_markup=kb
+            )
+            await status.delete()
+            sent = True
+        except Exception:  # noqa: BLE001 — no NFT image, use text card
             pass
-
-    await status.edit_text(card_text(report), reply_markup=card_kb(report),
-                           disable_web_page_preview=True)
+    if not sent:
+        await status.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
 
 
 async def _report_for(cb: CallbackQuery, aggregator: Aggregator) -> object | None:
@@ -116,42 +114,42 @@ async def _report_for(cb: CallbackQuery, aggregator: Aggregator) -> object | Non
 async def cb_card(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
-        await _edit(cb, card_text(report), card_kb(report))
+        await edit_or_replace(cb, card_text(report), card_kb(report))
 
 
 @router.callback_query(F.data.startswith("price:"))
 async def cb_price(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
-        await _edit(cb, price_text(report), price_kb(report))
+        await edit_or_replace(cb, price_text(report), price_kb(report))
 
 
 @router.callback_query(F.data.startswith("last:"))
 async def cb_last_sale(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
-        await _edit(cb, last_sale_text(report), sales_kb(report))
+        await edit_or_replace(cb, last_sale_text(report), sales_kb(report))
 
 
 @router.callback_query(F.data.startswith("sales:"))
 async def cb_sales(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
-        await _edit(cb, sales_text(report), sales_kb(report))
+        await edit_or_replace(cb, sales_text(report), sales_kb(report))
 
 
 @router.callback_query(F.data.startswith("est:"))
 async def cb_est(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
-        await _edit(cb, estimate_text(report), est_kb(report))
+        await edit_or_replace(cb, estimate_text(report), est_kb(report))
 
 
 @router.callback_query(F.data.startswith("rate:"))
 async def cb_rate(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
-        await _edit(cb, quality_text(report), rate_kb(report))
+        await edit_or_replace(cb, quality_text(report), rate_kb(report))
 
 
 @router.message()
