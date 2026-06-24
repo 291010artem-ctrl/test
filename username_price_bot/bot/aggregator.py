@@ -7,16 +7,17 @@ import time
 from datetime import datetime, timezone
 from typing import Awaitable, TypeVar
 
+from .assets import AssetKind, detect, display
 from .config import Config
 from .http_client import HttpClient
 from .market import MarketModel
 from .models import Listing, MarketStatus, SaleEvent, UsernameReport
-from .scoring import analyze
+from .scoring import analyze, analyze_number
 from .services.fragment import FragmentClient
 from .services.getgems import GetGemsClient
 from .services.pricing import estimate_price
 from .services.tonapi import TonApi
-from .utils import is_valid_telegram_username, normalize_username
+from .utils import is_valid_telegram_username
 
 log = logging.getLogger(__name__)
 
@@ -44,30 +45,38 @@ class Aggregator:
         self._market_cache: tuple[float, MarketModel] | None = None
 
     async def get_report(self, raw: str) -> UsernameReport | None:
-        username = normalize_username(raw)
-        if not username:
+        detected = detect(raw)
+        if not detected:
             return None
+        kind, asset_id = detected
 
-        cached = self._cache.get(username)
+        cache_key = f"{kind.key}:{asset_id}"
+        cached = self._cache.get(cache_key)
         if cached and (time.monotonic() - cached[0]) < self.config.cache_ttl:
             return cached[1]
 
-        report = await self._build(username)
-        self._cache[username] = (time.monotonic(), report)
+        report = await self._build(kind, asset_id)
+        self._cache[cache_key] = (time.monotonic(), report)
         return report
 
-    async def _build(self, username: str) -> UsernameReport:
-        report = UsernameReport(username=username)
-        report.fragment_url = self.fragment.url_for(username)
-        report.theoretical = not is_valid_telegram_username(username)
-        report.score = analyze(username)
+    async def _build(self, kind: AssetKind, asset_id: str) -> UsernameReport:
+        report = UsernameReport(username=asset_id, kind=kind.key,
+                                display=display(kind, asset_id))
+        report.fragment_url = self.fragment.url_for(asset_id, kind.fragment_path)
+        report.image_url = kind.image_url(asset_id)
+        report.theoretical = (
+            kind.key == "username" and not is_valid_telegram_username(asset_id)
+        )
+        report.score = (
+            analyze_number(asset_id) if kind.key == "number" else analyze(asset_id)
+        )
 
         # First wave (parallel): rates, on-chain resolve, market, Fragment page.
         rates, nft_addr, market, frag = await asyncio.gather(
             self._safe(self.tonapi.get_rates(), "tonapi.rates", report),
-            self._safe(self.tonapi.resolve_username_nft(username), "tonapi.resolve", report),
+            self._safe(self.tonapi.resolve_nft(kind.dns_domain(asset_id)), "tonapi.resolve", report),
             self._get_market(),
-            self._safe(self.fragment.get_info(username), "fragment", report),
+            self._safe(self.fragment.get_info(asset_id, kind.fragment_path), "fragment", report),
         )
         report.rates = rates or {}
 
@@ -81,9 +90,10 @@ class Aggregator:
             report.found = True
             report.nft_address = nft_addr
             report.sources_used.append("tonapi")
-            report.getgems_url = (
-                f"https://getgems.io/collection/{self.config.usernames_collection}/{nft_addr}"
-            )
+            if kind.collection:
+                report.getgems_url = (
+                    f"https://getgems.io/collection/{kind.collection}/{nft_addr}"
+                )
             report.tonviewer_url = f"https://tonviewer.com/{nft_addr}"
             nft, history, gg_listing = await asyncio.gather(
                 self._safe(self.tonapi.get_nft(nft_addr), "tonapi.nft", report),
@@ -106,7 +116,10 @@ class Aggregator:
 
         # Fragment provides what on-chain lacks: priced Ownership History +
         # auction status. On-chain stays authoritative for an active sale.
-        frag_listing = self.fragment.active_listing(frag, username) if frag else None
+        frag_listing = (
+            self.fragment.active_listing(frag, asset_id, kind.fragment_path)
+            if frag else None
+        )
         if frag:
             # Only auction / sale / sold prove a *collectible* NFT. "Unavailable"
             # / "Taken" (NOT_LISTED) is a regular taken username — NOT an NFT.
@@ -134,7 +147,7 @@ class Aggregator:
         )
 
         report.estimate = estimate_price(
-            username=username,
+            username=asset_id,
             listing=report.listing,
             sales=report.sales,
             ton_usd=report.rates.get("USD"),
@@ -156,7 +169,7 @@ class Aggregator:
         except Exception as exc:  # noqa: BLE001
             out["TonAPI курсы"] = f"❌ {type(exc).__name__}"
         try:
-            addr = await self.tonapi.resolve_username_nft("bank")  # a real NFT
+            addr = await self.tonapi.resolve_nft("bank.t.me")  # a real NFT
             if not addr:
                 out["TonAPI резолв @bank"] = "❌ не найден (резолв сломан!)"
             else:

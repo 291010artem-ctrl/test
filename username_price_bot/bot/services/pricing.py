@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from ..market import MarketModel, class_label
 from ..models import Listing, MarketStatus, PriceEstimate, SaleEvent
+from ..scoring import NUMBER_BASE_TON
 
 if TYPE_CHECKING:
     from ..scoring import Score
@@ -42,10 +43,11 @@ def estimate_price(
     now = now or datetime.now(timezone.utc)
     signals: list[str] = []
 
-    heuristic = (
-        market.category_base(username) * score.multiplier if score
-        else market.category_typical(username)
-    )
+    if score:
+        base = NUMBER_BASE_TON if username.isdigit() else market.category_base(username)
+        heuristic = base * score.multiplier
+    else:
+        heuristic = market.category_typical(username)
     last_sale = next((s for s in sales if s.price_ton), None)
     comp_value, comp_n = market.comparable_estimate(username, now)
     listed = bool(

@@ -83,6 +83,18 @@ def _margin_pct(point: float, low: float | None, high: float | None) -> int | No
     return round(dev * 100)
 
 
+_NOUN = {"username": "юзернейм", "number": "номер"}
+
+
+def _title(r: UsernameReport) -> str:
+    """Pretty, escaped header id: @name or +888 8856 4001."""
+    return escape(r.display) if r.display else escape("@" + r.username)
+
+
+def _noun(r: UsernameReport) -> str:
+    return _NOUN.get(r.kind, "актив")
+
+
 def is_nft(r: UsernameReport) -> bool:
     listed = bool(
         r.listing
@@ -102,26 +114,26 @@ def _on_sale(r: UsernameReport) -> bool:
 
 # ── card (the button menu) ───────────────────────────────────────────────────
 def card_text(r: UsernameReport) -> str:
-    name = escape(r.username)
+    name = _title(r)
     if r.theoretical:
         status = "❗️ Невозможный юзернейм (теоретическая оценка по виду)."
     elif is_nft(r):
-        status = "💎 Это NFT-юзернейм."
+        status = f"💎 Это коллекционный {_noun(r)} (NFT)."
     else:
-        status = "❗️ Не является NFT (свободен или не выпущен как NFT)."
+        status = f"❗️ Обычный {_noun(r)}, не NFT (не выпущен на Fragment)."
     tier = f" · тир {r.score.tier}" if r.score else ""
-    return f"🔎 <b>@{name}</b>{tier}\n{status}\n\nЧто показать? 👇"
+    return f"🔎 <b>{name}</b>{tier}\n{status}\n\nЧто показать? 👇"
 
 
 # ── section: current price ───────────────────────────────────────────────────
 def price_text(r: UsernameReport) -> str:
-    name = escape(r.username)
-    head = f"🔎 <b>@{name}</b>\n\n"
+    name = _title(r)
+    head = f"🔎 <b>{name}</b>\n\n"
     if not is_nft(r):
         return (
             head
             + "❗️ Это не NFT — в продаже быть не может.\n"
-            "Нажми «📊 Примерная стоимость», чтобы увидеть оценку по виду юзернейма."
+            "Нажми «📊 Примерная стоимость», чтобы увидеть оценку по внешнему виду."
         )
     if _on_sale(r):
         listing = r.listing
@@ -149,8 +161,8 @@ def price_text(r: UsernameReport) -> str:
 
 # ── section: last sale ───────────────────────────────────────────────────────
 def last_sale_text(r: UsernameReport) -> str:
-    name = escape(r.username)
-    head = f"🔎 <b>@{name}</b>\n\n"
+    name = _title(r)
+    head = f"🔎 <b>{name}</b>\n\n"
     if not is_nft(r):
         return head + "❗️ Это не NFT — продаж не было."
     priced = [s for s in r.sales if s.price_ton]
@@ -186,8 +198,8 @@ def last_sale_text(r: UsernameReport) -> str:
 
 # ── section: sales history ───────────────────────────────────────────────────
 def sales_text(r: UsernameReport) -> str:
-    name = escape(r.username)
-    head = f"🔎 <b>@{name}</b>\n\n"
+    name = _title(r)
+    head = f"🔎 <b>{name}</b>\n\n"
     if not is_nft(r):
         return head + "❗️ Это не NFT — истории продаж нет."
 
@@ -216,8 +228,8 @@ def sales_text(r: UsernameReport) -> str:
 
 # ── section: estimate ────────────────────────────────────────────────────────
 def estimate_text(r: UsernameReport) -> str:
-    name = escape(r.username)
-    lines = [f"🔎 <b>@{name}</b>", ""]
+    name = _title(r)
+    lines = [f"🔎 <b>{name}</b>", ""]
     if r.theoretical:
         lines += [
             "❗️ Такой юзернейм невозможен в Telegram (начинается с цифры или "
@@ -228,7 +240,7 @@ def estimate_text(r: UsernameReport) -> str:
     elif not is_nft(r):
         lines += [
             "❗️ Это не NFT (свободен/не выпущен).",
-            "Оценка — <b>по виду</b> юзернейма (длина, паттерн), без истории продаж:",
+            "Оценка — <b>по внешнему виду</b> (длина/паттерн), без истории продаж:",
             "",
         ]
 
@@ -289,9 +301,9 @@ def _bar(value: int) -> str:
 
 
 def quality_text(r: UsernameReport) -> str:
-    name = escape(r.username)
+    name = _title(r)
     sc = r.score
-    lines = [f"🔎 <b>@{name}</b>", ""]
+    lines = [f"🔎 <b>{name}</b>", ""]
     if not sc:
         lines.append("Нет данных для рейтинга.")
         return "\n".join(lines)

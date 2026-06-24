@@ -337,3 +337,52 @@ def analyze(username: str) -> Score:
         breakdown=sorted(contribs.items(), key=lambda kv: kv[1], reverse=True),
         ratings=ratings,
     )
+
+
+# ── numbers (+888) ───────────────────────────────────────────────────────────
+NUMBER_BASE_TON = 25.0  # typical anonymous number when nothing else is known
+
+
+def analyze_number(number: str) -> Score:
+    """Quality of an anonymous +888 number from its digit patterns."""
+    suffix = number[3:] if (number.startswith("888") and len(number) == 11) else number
+    n = max(1, len(suffix))
+    patterns, rarity = detect_patterns(suffix)
+    patterns = [p for p in patterns if "цифры" not in p.lower()]  # noise for numbers
+
+    uniq = len(set(suffix))
+    repetition = (n - uniq) / n * 10
+    trailing0 = n - len(suffix.rstrip("0"))
+    roundness = _clamp(trailing0 * 2.0, 0.0, 10.0)
+    memorability = _clamp(10 - (uniq - 1) * 1.3 + (2 if rarity >= 6 else 0), 1.0, 10.0)
+    luck = _clamp(suffix.count("8") * 0.8, 0.0, 6.0)
+    liquidity = _clamp(0.5 * rarity + 0.3 * memorability + 0.2 * roundness, 0.0, 10.0)
+
+    contribs = {
+        "Паттерн/повторы": rarity / 10 * 1.1,
+        "Запоминаемость": (memorability - 5) / 5 * 0.5,
+        "Круглость (нули)": roundness / 10 * 0.4,
+        "Счастливые 8": luck / 10 * 0.3,
+    }
+    multiplier = _clamp(1.0 + sum(contribs.values()), 0.3, 6.0)
+
+    within = _clamp(0.35 * rarity + 0.30 * memorability + 0.20 * liquidity
+                    + 0.15 * roundness, 0.0, 10.0)
+    ratings = {
+        "Редкость": _r(rarity),
+        "Повторы": _r(repetition),
+        "Запоминаемость": _r(memorability),
+        "Круглость": _r(roundness),
+        "Ликвидность": _r(liquidity),
+    }
+    return Score(
+        semantic=memorability, thematic=luck, brandability=memorability,
+        rarity=rarity, liquidity=liquidity, multiplier=multiplier,
+        quality=within, within_quality=within, tier=_tier(within),
+        percentile=int(_clamp(round(100 * (within / 10) ** 0.85), 1, 99)),
+        rating100=int(_clamp(round(within * 12 - 12), 1, 100)),
+        theme=("счастливые 8" if luck >= 3 else None),
+        patterns=patterns,
+        breakdown=sorted(contribs.items(), key=lambda kv: kv[1], reverse=True),
+        ratings=ratings,
+    )

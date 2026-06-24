@@ -18,21 +18,18 @@ from ..formatting import (
     quality_text,
     sales_text,
 )
+from ..assets import detect, display
 from ..keyboards import card_kb, est_kb, price_kb, rate_kb, sales_kb, to_menu_kb
 from ..middlewares import ThrottlingMiddleware
-from ..utils import normalize_username
 from .common import edit_or_replace
 
 log = logging.getLogger(__name__)
 
 router = Router(name="lookup")
-# Flood control: max 3 username lookups per minute per user.
+# Flood control: max 3 lookups per minute per user.
 router.message.middleware(ThrottlingMiddleware(limit=3, window=60.0))
 
-# Telegram usernames shorter than 4 chars don't exist / can't be created, so
-# valuing them is meaningless.
-MIN_LEN = 4
-_NFT_IMAGE = "https://nft.fragment.com/username/{}.webp"
+MIN_LEN = 4  # usernames shorter than 4 chars don't exist
 
 
 @router.message(F.text)
@@ -42,56 +39,56 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
         await message.answer("Неизвестная команда. Используй /start.", reply_markup=to_menu_kb())
         return
 
-    # Several usernames at once → ask for one (don't fail with "invalid").
+    # Several at once → ask for one (don't fail with "invalid").
     tokens = [t for t in re.split(r"[\s,]+", raw) if t]
-    if len(tokens) > 1 and sum(bool(normalize_username(t)) for t in tokens) > 1:
+    if len(tokens) > 1 and sum(bool(detect(t)) for t in tokens) > 1:
         await message.answer(
-            "✋ Можно проверять только <b>один</b> юзернейм за раз. Пришли один.",
+            "✋ Можно проверять только <b>один</b> актив за раз — пришли один "
+            "юзернейм или номер.",
             reply_markup=to_menu_kb(),
         )
         return
 
-    username = normalize_username(raw)
-    if not username:
+    detected = detect(raw)
+    if not detected:
         await message.answer(
-            "🤔 Это не похоже на юзернейм.\n"
-            "Это латинские буквы, цифры и '_'. Пример: <code>@durov</code>",
+            "🤔 Это не похоже на юзернейм или номер.\n"
+            "Юзернейм: <code>@durov</code> · Номер: <code>+888 8856 4001</code>",
+            reply_markup=to_menu_kb(),
+        )
+        return
+    kind, asset_id = detected
+
+    if kind.key == "username" and len(asset_id) < MIN_LEN:
+        await message.answer(
+            f"🔎 <b>@{escape(asset_id)}</b>\n\n"
+            "Юзернеймы короче 4 символов не существуют. Оценивать нечего.",
             reply_markup=to_menu_kb(),
         )
         return
 
-    if len(username) < MIN_LEN:
-        await message.answer(
-            f"🔎 <b>@{escape(username)}</b>\n\n"
-            "Юзернеймы короче 4 символов в Telegram не существуют (обычные — от 5, "
-            "премиальные 4-буквенные продавались на Fragment). Оценивать нечего.",
-            reply_markup=to_menu_kb(),
-        )
-        return
-
+    pretty = display(kind, asset_id)
     status = await message.answer(
-        f"🔎 Собираю данные по <b>@{escape(username)}</b>…", disable_web_page_preview=True
+        f"🔎 Собираю данные по <b>{escape(pretty)}</b>…", disable_web_page_preview=True
     )
     try:
-        report = await aggregator.get_report(username)
+        report = await aggregator.get_report(raw)
     except Exception:  # noqa: BLE001
-        log.exception("aggregation failed for %s", username)
+        log.exception("aggregation failed for %s", asset_id)
         await status.edit_text("⚠️ Не удалось получить данные. Попробуй позже.",
                                reply_markup=to_menu_kb())
         return
 
     if report is None:
-        await status.edit_text("🤔 Не получилось разобрать юзернейм.", reply_markup=to_menu_kb())
+        await status.edit_text("🤔 Не получилось разобрать.", reply_markup=to_menu_kb())
         return
 
     text, kb = card_text(report), card_kb(report)
-    # Attach the NFT image straight to the card (caption) only for real NFTs.
+    # Attach the NFT image to the card (caption) only for real NFTs.
     sent = False
-    if is_nft(report):
+    if is_nft(report) and report.image_url:
         try:
-            await message.answer_photo(
-                _NFT_IMAGE.format(username), caption=text, reply_markup=kb
-            )
+            await message.answer_photo(report.image_url, caption=text, reply_markup=kb)
             await status.delete()
             sent = True
         except Exception:  # noqa: BLE001 — no NFT image, use text card
@@ -114,14 +111,13 @@ async def _render_card(cb: CallbackQuery, report) -> None:
     text, kb = card_text(report), card_kb(report)
     msg = cb.message
     # Restore the photo card when returning from a text section (e.g. history).
-    if is_nft(report) and not msg.photo:
+    if is_nft(report) and report.image_url and not msg.photo:
         try:
             await msg.delete()
         except Exception:  # noqa: BLE001
             pass
         try:
-            await msg.answer_photo(_NFT_IMAGE.format(report.username),
-                                   caption=text, reply_markup=kb)
+            await msg.answer_photo(report.image_url, caption=text, reply_markup=kb)
         except Exception:  # noqa: BLE001
             await msg.answer(text, reply_markup=kb, disable_web_page_preview=True)
         await cb.answer()

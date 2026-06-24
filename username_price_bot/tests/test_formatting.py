@@ -101,7 +101,7 @@ def test_estimate_has_margin_and_currencies():
 
 def test_estimate_non_nft_by_appearance():
     out = estimate_text(_not_nft())
-    assert "по виду" in out
+    assert "внешнему виду" in out
     assert "Грубая оценка" in out  # low confidence headline
 
 

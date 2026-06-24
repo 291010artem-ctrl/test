@@ -9,6 +9,7 @@ from .models import UsernameReport
 # Callback data (usernames contain only [a-z0-9_], so ':' is a safe separator).
 CB_MAIN = "menu:main"
 CB_VALUATION = "menu:valuation"
+CB_NUMBERS = "menu:numbers"
 CB_SOON = "menu:soon"
 CB_HELP = "menu:help"
 
@@ -24,6 +25,7 @@ def rate_cb(u: str) -> str: return f"rate:{u}"
 def main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💎 Оценка юзернеймов", callback_data=CB_VALUATION)],
+        [InlineKeyboardButton(text="📱 Оценка номеров +888", callback_data=CB_NUMBERS)],
         [InlineKeyboardButton(text="🔜 Другие функции (скоро)", callback_data=CB_SOON)],
         [InlineKeyboardButton(text="ℹ️ Помощь", callback_data=CB_HELP)],
     ])

@@ -74,12 +74,12 @@ class FragmentClient:
         self.http = http
         self.base = base.rstrip("/")
 
-    def url_for(self, username: str) -> str:
-        return f"{self.base}/username/{username}"
+    def url_for(self, asset_id: str, path: str = "username") -> str:
+        return f"{self.base}/{path}/{asset_id}"
 
-    async def get_info(self, username: str) -> FragmentInfo | None:
+    async def get_info(self, asset_id: str, path: str = "username") -> FragmentInfo | None:
         html = await self.http.get_text(
-            self.url_for(username),
+            self.url_for(asset_id, path),
             headers={"User-Agent": _UA, "Accept": "text/html",
                      "Accept-Language": "en-US,en;q=0.9"},
         )
@@ -88,7 +88,7 @@ class FragmentClient:
         try:
             return self._parse(html)
         except Exception as exc:  # noqa: BLE001 — best-effort
-            log.info("Fragment parse failed for %s: %s", username, exc)
+            log.info("Fragment parse failed for %s: %s", asset_id, exc)
             return None
 
     @staticmethod
@@ -152,12 +152,14 @@ class FragmentClient:
             break
         return out
 
-    def active_listing(self, info: FragmentInfo, username: str) -> Listing | None:
+    def active_listing(
+        self, info: FragmentInfo, asset_id: str, path: str = "username"
+    ) -> Listing | None:
         if info.active_price_ton and info.status in (
             MarketStatus.ON_SALE, MarketStatus.ON_AUCTION
         ):
             return Listing(status=info.status, price_ton=info.active_price_ton,
-                           source="fragment", url=self.url_for(username))
+                           source="fragment", url=self.url_for(asset_id, path))
         return None
 
 

@@ -7,13 +7,14 @@ from aiogram.types import CallbackQuery
 from ..keyboards import (
     CB_HELP,
     CB_MAIN,
+    CB_NUMBERS,
     CB_SOON,
     CB_VALUATION,
     main_menu_kb,
     to_menu_kb,
     valuation_prompt_kb,
 )
-from ..texts import HELP, MAIN_MENU, VALUATION_PROMPT
+from ..texts import HELP, MAIN_MENU, VALUATION_NUMBERS, VALUATION_PROMPT
 from .common import edit_or_replace
 
 router = Router(name="menu")
@@ -21,13 +22,18 @@ router = Router(name="menu")
 
 @router.callback_query(F.data == CB_MAIN)
 async def open_main(cb: CallbackQuery) -> None:
-    # Leaving the username context → replace the photo card with a text menu.
+    # Leaving the asset context → replace the photo card with a text menu.
     await edit_or_replace(cb, MAIN_MENU, main_menu_kb(), photo_ok=False)
 
 
 @router.callback_query(F.data == CB_VALUATION)
 async def open_valuation(cb: CallbackQuery) -> None:
     await edit_or_replace(cb, VALUATION_PROMPT, valuation_prompt_kb(), photo_ok=False)
+
+
+@router.callback_query(F.data == CB_NUMBERS)
+async def open_numbers(cb: CallbackQuery) -> None:
+    await edit_or_replace(cb, VALUATION_NUMBERS, valuation_prompt_kb(), photo_ok=False)
 
 
 @router.callback_query(F.data == CB_HELP)

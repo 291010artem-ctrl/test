@@ -51,9 +51,8 @@ class TonApi:
         self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     # ── network ──────────────────────────────────────────────────────────────
-    async def resolve_username_nft(self, username: str) -> str | None:
-        """Resolve a Telegram username to its NFT item address via TON DNS."""
-        domain = f"{username}.t.me"
+    async def resolve_nft(self, domain: str) -> str | None:
+        """Resolve a TON DNS domain (e.g. bank.t.me) to its NFT item address."""
         data = await self.http.get_json(
             f"{self.base}/v2/dns/{domain}", headers=self._headers
         )

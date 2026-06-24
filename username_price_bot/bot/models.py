@@ -62,7 +62,10 @@ class PriceEstimate:
 
 @dataclass
 class UsernameReport:
-    username: str
+    username: str               # the asset id (username text or 888… digits)
+    kind: str = "username"      # "username" | "number"
+    display: str = ""           # pretty id: @name or +888 8856 4001
+    image_url: str | None = None
     nft_address: str | None = None
     found: bool = False
     current_owner: str | None = None
