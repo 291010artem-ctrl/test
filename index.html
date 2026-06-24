@@ -8,41 +8,19 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; height: 100%; overflow: hidden; }
-    body {
-      font-family: "Nunito", "Segoe UI", Arial, sans-serif;
-      min-height: 100vh;
-      min-height: 100dvh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    /* Размытая копия картинки на весь экран — заполняет зазоры по краям,
-       чтобы не было пустых полос при любом размере окна. */
-    body::before {
-      content: "";
+    body { font-family: "Nunito", "Segoe UI", Arial, sans-serif; }
+
+    /* Картинка на ВЕСЬ экран, край в край — без полос. */
+    .page {
       position: fixed;
       inset: 0;
-      background: url("assets/home.jpg") center / cover no-repeat;
-      filter: blur(34px) brightness(1.03);
-      transform: scale(1.12);
-      z-index: 0;
-    }
-
-    /* Картинка вписывается в окно ЦЕЛИКОМ: масштабируется и по ширине, и по
-       высоте, поэтому помещается в любой экран без прокрутки. */
-    .page {
-      position: relative;
-      z-index: 1;
-      aspect-ratio: 3344 / 1882;
-      width: min(100vw, calc(100dvh * 3344 / 1882));
       line-height: 0;
-      box-shadow: 0 0 60px rgba(0, 0, 0, 0.18);
     }
     .page img {
       width: 100%;
       height: 100%;
       display: block;
-      object-fit: contain;
+      object-fit: fill;
       image-rendering: -webkit-optimize-contrast;
     }
 
