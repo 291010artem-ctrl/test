@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from html import escape
 
+from .historical import ton_rub_at, ton_usd_at
 from .models import MarketStatus, UsernameReport
 from .utils import fmt_ton, short_addr
 
@@ -41,7 +42,7 @@ def _conf_line(est) -> str:
     desc = _BASIS_DESC.get(est.basis, "")
     return f"{word} (на основе: {desc})" if desc else word
 
-_MAX_SALES = 8
+_MAX_SALES = 40
 _DISCLAIMER = "<i>⚠️ Оценка приблизительная и не является финансовой рекомендацией.</i>"
 
 
@@ -64,6 +65,15 @@ def _prices(ton: float | None, rates: dict[str, float]) -> str:
     if rates.get("RUB"):
         parts.append(f"{_grp(ton * rates['RUB'])} ₽")
     return " ≈ ".join(parts)
+
+
+def _hist_suffix(amount: float, dt: datetime | None) -> str:
+    """'(TON тогда ≈ $1.8 · ≈ 93 000 000 ₽)' — value at the time of the sale."""
+    if not dt:
+        return ""
+    tu = ton_usd_at(dt)
+    rub = amount * ton_rub_at(dt)
+    return f" (TON тогда ≈ ${tu:g} · ≈ {_grp(rub)} ₽)"
 
 
 def _margin_pct(point: float, low: float | None, high: float | None) -> int | None:
@@ -152,12 +162,17 @@ def last_sale_text(r: UsernameReport) -> str:
             "смотри её на Fragment (кнопка ниже)."
         )
     s = priced[0]
-    when = s.timestamp.strftime("%Y-%m-%d") if s.timestamp else "—"
+    when = s.timestamp.strftime("%d.%m.%Y") if s.timestamp else "—"
     lines = [
         head.rstrip("\n"), "",
         "🧾 <b>Последняя продажа:</b>",
-        f"   {when} — <b>{_prices(s.price_ton, r.rates)}</b>",
+        f"   {when} — <b>{fmt_ton(s.price_ton)} TON</b>",
     ]
+    if s.timestamp:
+        tu = ton_usd_at(s.timestamp)
+        rub = s.price_ton * ton_rub_at(s.timestamp)
+        lines.append(f"   на тот момент: TON ≈ ${tu:g} · ≈ {_grp(rub)} ₽")
+    lines.append(f"   сейчас ≈ {_prices(s.price_ton, r.rates)}")
     if s.seller:
         lines.append(f"   продавец: <code>{escape(short_addr(s.seller))}</code>")
     if s.buyer:
@@ -180,8 +195,11 @@ def sales_text(r: UsernameReport) -> str:
     lines = [head.rstrip("\n"), "", "📜 <b>История продаж:</b>"]
     if priced:
         for s in priced[:_MAX_SALES]:
-            when = s.timestamp.strftime("%Y-%m-%d") if s.timestamp else "—"
-            lines.append(f"   • {when} — {fmt_ton(s.price_ton)} TON")
+            when = s.timestamp.strftime("%d.%m.%Y") if s.timestamp else "—"
+            lines.append(
+                f"   • {when} — {fmt_ton(s.price_ton)} TON"
+                f"{_hist_suffix(s.price_ton, s.timestamp)}"
+            )
         if len(priced) > _MAX_SALES:
             lines.append(f"   …ещё {len(priced) - _MAX_SALES}")
     else:

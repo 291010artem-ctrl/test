@@ -110,11 +110,30 @@ async def _report_for(cb: CallbackQuery, aggregator: Aggregator) -> object | Non
         return None
 
 
+async def _render_card(cb: CallbackQuery, report) -> None:
+    text, kb = card_text(report), card_kb(report)
+    msg = cb.message
+    # Restore the photo card when returning from a text section (e.g. history).
+    if is_nft(report) and not msg.photo:
+        try:
+            await msg.delete()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            await msg.answer_photo(_NFT_IMAGE.format(report.username),
+                                   caption=text, reply_markup=kb)
+        except Exception:  # noqa: BLE001
+            await msg.answer(text, reply_markup=kb, disable_web_page_preview=True)
+        await cb.answer()
+    else:
+        await edit_or_replace(cb, text, kb)
+
+
 @router.callback_query(F.data.startswith("card:"))
 async def cb_card(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
-        await edit_or_replace(cb, card_text(report), card_kb(report))
+        await _render_card(cb, report)
 
 
 @router.callback_query(F.data.startswith("price:"))
@@ -135,7 +154,8 @@ async def cb_last_sale(cb: CallbackQuery, aggregator: Aggregator) -> None:
 async def cb_sales(cb: CallbackQuery, aggregator: Aggregator) -> None:
     report = await _report_for(cb, aggregator)
     if report:
-        await edit_or_replace(cb, sales_text(report), sales_kb(report))
+        # Full history can be long → show as a text message (no 1024 caption cap).
+        await edit_or_replace(cb, sales_text(report), sales_kb(report), photo_ok=False)
 
 
 @router.callback_query(F.data.startswith("est:"))

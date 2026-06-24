@@ -80,10 +80,11 @@ def test_price_non_nft_says_not_nft():
     assert "не NFT" in out or "не является NFT" in out.lower() or "это не nft" in out.lower()
 
 
-def test_sales_lists_history():
+def test_sales_lists_history_with_historical_value():
     out = sales_text(_nft_on_sale())
     assert "История продаж" in out
-    assert "2024-01-01" in out
+    assert "01.01.2024" in out
+    assert "TON тогда" in out and "₽" in out   # historical price + rubles per sale
     assert "TonViewer" in out
 
 
@@ -107,8 +108,9 @@ def test_estimate_non_nft_by_appearance():
 def test_last_sale_section():
     out = last_sale_text(_nft_on_sale())
     assert "Последняя продажа" in out
-    assert "2024-01-01" in out
+    assert "01.01.2024" in out
     assert "USDT" in out
+    assert "на тот момент" in out   # historical value
 
 
 def test_last_sale_none():
