@@ -28,15 +28,18 @@
     .hot {
       position: absolute;
       display: block;
-      border-radius: 12px;
+      border-radius: 999px;
       cursor: pointer;
-      /* подсветка при наведении, чтобы было видно что кликается */
       transition: background 0.15s, box-shadow 0.15s;
     }
     .hot:hover {
-      background: rgba(255, 255, 255, 0.18);
-      box-shadow: 0 0 0 2px rgba(123, 164, 40, 0.5);
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 0 0 3px rgba(123, 164, 40, 0.7);
     }
+    /* прямоугольные зоны (карточки) — со скруглением поменьше */
+    .hot.card { border-radius: 18px; }
+    /* круглые зоны (аватары героев) */
+    .hot.round { border-radius: 50%; }
   </style>
 </head>
 <body>
@@ -44,34 +47,34 @@
     <img src="assets/home.jpg" alt="Мир Кирпи и Гофера" />
 
     <!-- ВЕРХНЕЕ МЕНЮ -->
-    <a class="hot" href="index.html"        style="left:31%;   top:3%;  width:6%;  height:5%;"   title="Главная"></a>
-    <a class="hot" href="#"                  style="left:38%;   top:3%;  width:6%;  height:5%;"   title="Истории"></a>
-    <a class="hot" href="characters.html"    style="left:45%;   top:3%;  width:7.5%;height:5%;"   title="Персонажи"></a>
-    <a class="hot" href="#"                  style="left:53.5%; top:3%;  width:4.5%;height:5%;"   title="Игры"></a>
-    <a class="hot" href="#"                  style="left:59%;   top:3%;  width:7%;  height:5%;"   title="Раскраски"></a>
-    <a class="hot" href="#"                  style="left:67%;   top:3%;  width:8%;  height:5%;"   title="Родителям"></a>
+    <a class="hot" href="index.html"        style="left:31.6%; top:5.7%; width:6.4%; height:4%;"  title="Главная"></a>
+    <a class="hot" href="#"                  style="left:38.2%; top:5.7%; width:4.6%; height:4%;"  title="Истории"></a>
+    <a class="hot" href="characters.html"    style="left:44.2%; top:5.7%; width:5.8%; height:4%;"  title="Персонажи"></a>
+    <a class="hot" href="#"                  style="left:51.3%; top:5.7%; width:3.8%; height:4%;"  title="Игры"></a>
+    <a class="hot" href="#"                  style="left:57.2%; top:5.7%; width:5.2%; height:4%;"  title="Раскраски"></a>
+    <a class="hot" href="#"                  style="left:63.8%; top:5.7%; width:5.4%; height:4%;"  title="Родителям"></a>
 
     <!-- ГЛАВНЫЕ КНОПКИ -->
-    <a class="hot" href="#"                  style="left:40%;   top:33%; width:19%; height:8%;"   title="Читать истории"></a>
-    <a class="hot" href="#"                  style="left:40%;   top:43%; width:19%; height:8%;"   title="Слушать сказки"></a>
+    <a class="hot" href="#"                  style="left:39.2%; top:32.8%; width:22%; height:7.6%;" title="Читать истории"></a>
+    <a class="hot" href="#"                  style="left:39.2%; top:43.1%; width:22%; height:7.5%;" title="Слушать сказки"></a>
 
     <!-- КАРТОЧКИ РАЗДЕЛОВ -->
-    <a class="hot" href="#"                  style="left:5%;    top:57%; width:22%; height:14%;"  title="Истории"></a>
-    <a class="hot" href="#"                  style="left:28%;   top:57%; width:22%; height:14%;"  title="Аудиосказки"></a>
-    <a class="hot" href="#"                  style="left:51%;   top:57%; width:22%; height:14%;"  title="Игры"></a>
-    <a class="hot" href="#"                  style="left:74%;   top:57%; width:21%; height:14%;"  title="Раскраски"></a>
+    <a class="hot card" href="#"             style="left:5%;    top:57%; width:22%; height:14%;"  title="Истории"></a>
+    <a class="hot card" href="#"             style="left:28%;   top:57%; width:22%; height:14%;"  title="Аудиосказки"></a>
+    <a class="hot card" href="#"             style="left:51%;   top:57%; width:22%; height:14%;"  title="Игры"></a>
+    <a class="hot card" href="#"             style="left:74%;   top:57%; width:21%; height:14%;"  title="Раскраски"></a>
 
-    <!-- АВАТАРЫ ДРУЗЕЙ -->
-    <a class="hot" href="characters.html"    style="left:6%;    top:79%; width:10%; height:15%;"  title="Кирпи"></a>
-    <a class="hot" href="characters.html"    style="left:17%;   top:79%; width:10%; height:15%;"  title="Гофер"></a>
-    <a class="hot" href="characters.html"    style="left:28%;   top:79%; width:10%; height:15%;"  title="Тиса"></a>
-    <a class="hot" href="characters.html"    style="left:39%;   top:79%; width:10%; height:15%;"  title="Лулу"></a>
-    <a class="hot" href="characters.html"    style="left:50%;   top:79%; width:10%; height:15%;"  title="Соня"></a>
-    <a class="hot" href="characters.html"    style="left:61%;   top:79%; width:10%; height:15%;"  title="Борик"></a>
-    <a class="hot" href="characters.html"    style="left:72%;   top:79%; width:10%; height:15%;"  title="Бруно"></a>
+    <!-- АВАТАРЫ ДРУЗЕЙ (круглые зоны) -->
+    <a class="hot round" href="characters.html" style="left:5.6%;  top:75.5%; width:8%; height:14.5%;" title="Кирпи"></a>
+    <a class="hot round" href="characters.html" style="left:16.6%; top:75.5%; width:8%; height:14.5%;" title="Гофер"></a>
+    <a class="hot round" href="characters.html" style="left:27.6%; top:75.5%; width:8%; height:14.5%;" title="Тиса"></a>
+    <a class="hot round" href="characters.html" style="left:38.6%; top:75.5%; width:8%; height:14.5%;" title="Лулу"></a>
+    <a class="hot round" href="characters.html" style="left:49.6%; top:75.5%; width:8%; height:14.5%;" title="Соня"></a>
+    <a class="hot round" href="characters.html" style="left:60.6%; top:75.5%; width:8%; height:14.5%;" title="Борик"></a>
+    <a class="hot round" href="characters.html" style="left:71.6%; top:75.5%; width:8%; height:14.5%;" title="Бруно"></a>
 
     <!-- КНОПКА «ВСЕ ПЕРСОНАЖИ» -->
-    <a class="hot" href="characters.html"    style="left:33%;   top:95%; width:14%; height:4.5%;" title="Все персонажи"></a>
+    <a class="hot" href="characters.html"    style="left:33.5%; top:95.3%; width:13%; height:4%;" title="Все персонажи"></a>
   </div>
 </body>
 </html>
