@@ -39,18 +39,18 @@ async def on_text(message: Message, aggregator: Aggregator) -> None:
         await message.answer("Неизвестная команда. Используй /start.", reply_markup=to_menu_kb())
         return
 
-    # Several at once → ask for one (don't fail with "invalid").
-    tokens = [t for t in re.split(r"[\s,]+", raw) if t]
-    if len(tokens) > 1 and sum(bool(detect(t)) for t in tokens) > 1:
-        await message.answer(
-            "✋ Можно проверять только <b>один</b> актив за раз — пришли один "
-            "юзернейм или номер.",
-            reply_markup=to_menu_kb(),
-        )
-        return
-
+    # Try the WHOLE input as one asset first — this ignores spaces/+ in numbers
+    # like "+888 8856 4001". Only if that fails do we treat it as several / junk.
     detected = detect(raw)
     if not detected:
+        tokens = [t for t in re.split(r"[\s,]+", raw) if t]
+        if len(tokens) > 1 and sum(bool(detect(t)) for t in tokens) > 1:
+            await message.answer(
+                "✋ Можно проверять только <b>один</b> актив за раз — пришли один "
+                "юзернейм или номер.",
+                reply_markup=to_menu_kb(),
+            )
+            return
         await message.answer(
             "🤔 Это не похоже на юзернейм или номер.\n"
             "Юзернейм: <code>@durov</code> · Номер: <code>+888 8856 4001</code>",
