@@ -34,8 +34,9 @@ class AssetKind:
 USERNAME = AssetKind("username", "юзернейм", "username", DEFAULT_USERNAMES_COLLECTION)
 NUMBER = AssetKind("number", "номер", "number", DEFAULT_NUMBERS_COLLECTION)
 
-# An anonymous number is 888 + 8 digits (11 digits total).
-_NUMBER_RE = re.compile(r"^888\d{8}$")
+# An anonymous number starts with 888; the rest varies (premium short numbers
+# exist), so allow 888 + 3..9 digits (6..12 total).
+_NUMBER_RE = re.compile(r"^888\d{3,9}$")
 
 
 def _strip_url(raw: str) -> str:
@@ -59,7 +60,9 @@ def detect(raw: str) -> tuple[AssetKind, str] | None:
 
 
 def display(kind: AssetKind, asset_id: str) -> str:
-    """Pretty id for messages: @name or +888 8856 4001."""
-    if kind.key == "number" and len(asset_id) == 11:
-        return f"+{asset_id[:3]} {asset_id[3:7]} {asset_id[7:]}"
+    """Pretty id: @name or +888 8856 4001 (groups of 4, any length)."""
+    if kind.key == "number" and asset_id.startswith("888"):
+        rest = asset_id[3:]
+        groups = [rest[i:i + 4] for i in range(0, len(rest), 4)]
+        return "+888 " + " ".join(groups) if rest else "+888"
     return f"@{asset_id}"

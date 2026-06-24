@@ -14,6 +14,12 @@ def test_detect_number():
     assert detect("fragment.com/number/88812345678")[0] is NUMBER
 
 
+def test_detect_short_number():
+    kind, num = detect("+8888777")     # premium short number (888 + 8777)
+    assert kind is NUMBER and num == "8888777"
+    assert display(NUMBER, "8888777") == "+888 8777"
+
+
 def test_detect_junk():
     assert detect("привет мир!") is None
     assert detect("") is None

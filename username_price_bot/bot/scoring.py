@@ -345,7 +345,7 @@ NUMBER_BASE_TON = 25.0  # typical anonymous number when nothing else is known
 
 def analyze_number(number: str) -> Score:
     """Quality of an anonymous +888 number from its digit patterns."""
-    suffix = number[3:] if (number.startswith("888") and len(number) == 11) else number
+    suffix = number[3:] if number.startswith("888") else number
     n = max(1, len(suffix))
     patterns, rarity = detect_patterns(suffix)
     patterns = [p for p in patterns if "цифры" not in p.lower()]  # noise for numbers
