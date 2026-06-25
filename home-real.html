@@ -40,7 +40,8 @@
     .hero-chevron{font-size:1.8vw;line-height:.2;color:#4a3f2e}
 
     /* ---- Карточки разделов ---- */
-    .features{max-width:1180px;margin:-3vw auto 0;padding:0 24px;position:relative;z-index:5;
+    /* отрицательный отступ поднимает карточки на пустую кремовую часть фона */
+    .features{max-width:1180px;margin:-19vw auto 0;padding:0 24px;position:relative;z-index:5;
       display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
     .feature{background:#fff;border-radius:22px;padding:22px 20px 40px;box-shadow:var(--shadow);position:relative;transition:transform .18s}
     .feature:hover{transform:translateY(-4px)}
@@ -81,18 +82,18 @@
       .frow{grid-template-columns:repeat(4,1fr)}
     }
     @media(max-width:640px){
-      /* на телефоне кнопки уходят из-под надписи вниз, во всю ширину */
-      .hero-cta{position:static;transform:none;width:auto;padding:18px 20px 4px;gap:12px}
-      .btn{padding:15px 20px;font-size:1.1rem}
-      .hero-choose{font-size:.95rem;margin-top:4px}.hero-chevron{font-size:1.6rem}
-      .features{grid-template-columns:1fr;margin-top:18px}
+      /* кнопки ВСЕГДА остаются по центру на фоне (не пропадают),
+         просто увеличиваем их, чтобы было удобно нажимать */
+      .btn{font-size:3.2vw;padding:1vw 3vw}
+      .hero-choose{font-size:2.4vw}.hero-chevron{font-size:4vw}
+      .features{grid-template-columns:1fr;margin-top:-14vw}
       .frow{grid-template-columns:repeat(3,1fr)}
     }
   </style>
 </head>
 <body>
   <div style="position:fixed;top:8px;right:8px;z-index:999;background:#e8932e;color:#fff;
-    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v11</div>
+    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v12</div>
 
   <!-- HERO: твой фон с надписью + настоящие кнопки -->
   <section class="hero">
@@ -150,6 +151,6 @@
     </aside>
   </section>
 
-  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v11</footer>
+  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v12</footer>
 </body>
 </html>
