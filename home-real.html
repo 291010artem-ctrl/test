@@ -43,16 +43,16 @@
     /* небольшой нахлёст карточек на нижний край фона (без хрупких больших отступов) */
     .features{max-width:1180px;margin:-2.5vw auto 0;padding:0 24px;position:relative;z-index:5;
       display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
-    .feature{background:#fff;border-radius:22px;padding:22px 20px 40px;box-shadow:var(--shadow);position:relative;transition:transform .18s}
+    /* карточки горизонтальные: значок слева, текст справа — ниже и шире */
+    .feature{display:flex;align-items:center;gap:14px;background:#fff;border-radius:18px;
+      padding:14px 16px 14px 14px;box-shadow:var(--shadow);position:relative;transition:transform .18s;min-height:98px}
     .feature:hover{transform:translateY(-4px)}
-    .feature .ic{width:58px;height:58px;border-radius:16px;display:grid;place-items:center;font-size:1.8rem;margin-bottom:14px}
-    .feature h3{font-size:1.25rem;margin-bottom:6px}
-    .feature p{color:var(--muted);font-weight:600;font-size:.92rem}
-    .feature .arrow{position:absolute;bottom:16px;left:20px;font-size:1.4rem;font-weight:900;color:var(--ink)}
-    .f1{background:#f1f7e4}.f1 .ic{background:#dcebbf}
-    .f2{background:#fdf3da}.f2 .ic{background:#f7e3a8}
-    .f3{background:#f1ecfa}.f3 .ic{background:#ddd0f2}
-    .f4{background:#e6f4fb}.f4 .ic{background:#c4e6f4}
+    .feature .ic{width:64px;height:64px;flex-shrink:0;border-radius:14px;display:block;object-fit:cover}
+    .feature .txt{padding-right:16px}
+    .feature h3{font-size:1.1rem;margin-bottom:3px}
+    .feature p{color:var(--muted);font-weight:600;font-size:.82rem;line-height:1.25}
+    .feature .arrow{position:absolute;right:12px;bottom:8px;font-size:1.2rem;font-weight:900;color:var(--ink)}
+    .f1{background:#f1f7e4}.f2{background:#fdf3da}.f3{background:#f1ecfa}.f4{background:#e6f4fb}
 
     /* ---- Друзья + Новости ---- */
     .bottom{max-width:1180px;margin:54px auto 0;padding:0 24px 50px;display:grid;grid-template-columns:2.5fr 1fr;gap:24px;align-items:start}
@@ -93,7 +93,7 @@
 </head>
 <body>
   <div style="position:fixed;top:8px;right:8px;z-index:999;background:#e8932e;color:#fff;
-    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v14</div>
+    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v15</div>
 
   <!-- HERO: твой фон с надписью + настоящие кнопки -->
   <section class="hero">
@@ -118,10 +118,10 @@
 
   <!-- Карточки разделов -->
   <section class="features">
-    <a class="feature f1" href="#"><div class="ic">📖</div><h3>Истории</h3><p>Погружайтесь в увлекательные сказки о Кирпи и Гофере</p><span class="arrow">→</span></a>
-    <a class="feature f2" href="#"><div class="ic">🎧</div><h3>Аудиосказки</h3><p>Слушайте добрые истории в исполнении профессионалов</p><span class="arrow">→</span></a>
-    <a class="feature f3" href="#"><div class="ic">🎮</div><h3>Игры</h3><p>Играйте, решайте задания и помогайте героям</p><span class="arrow">→</span></a>
-    <a class="feature f4" href="#"><div class="ic">🎨</div><h3>Раскраски</h3><p>Раскрашивайте любимых героев и развивайте творчество</p><span class="arrow">→</span></a>
+    <a class="feature f1" href="#"><img class="ic" src="assets/parts/ic_book.jpg" alt=""><div class="txt"><h3>Истории</h3><p>Погружайтесь в увлекательные сказки о Кирпи и Гофере</p></div><span class="arrow">→</span></a>
+    <a class="feature f2" href="#"><img class="ic" src="assets/parts/ic_audio.jpg" alt=""><div class="txt"><h3>Аудиосказки</h3><p>Слушайте добрые истории в исполнении профессионалов</p></div><span class="arrow">→</span></a>
+    <a class="feature f3" href="#"><img class="ic" src="assets/parts/ic_game.jpg" alt=""><div class="txt"><h3>Игры</h3><p>Играйте, решайте задания и помогайте героям</p></div><span class="arrow">→</span></a>
+    <a class="feature f4" href="#"><img class="ic" src="assets/parts/ic_paint.jpg" alt=""><div class="txt"><h3>Раскраски</h3><p>Раскрашивайте любимых героев и развивайте творчество</p></div><span class="arrow">→</span></a>
   </section>
 
   <!-- Друзья + Новости -->
@@ -151,6 +151,6 @@
     </aside>
   </section>
 
-  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v14</footer>
+  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v15</footer>
 </body>
 </html>
