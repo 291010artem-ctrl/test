@@ -17,7 +17,9 @@
     img{display:block}
 
     /* ---- HERO: твой фон + настоящие кнопки поверх ---- */
-    .hero{position:relative;width:100%}
+    /* container-type делает размеры детей (cqi) кратными ШИРИНЕ картинки,
+       поэтому кнопки масштабируются строго вместе с фоном. */
+    .hero{position:relative;width:100%;container-type:inline-size}
     .hero > img{width:100%;height:auto}
 
     /* кликабельное меню поверх нарисованного (невидимое) */
@@ -27,16 +29,16 @@
     /* настоящие кнопки, наложенные на фон.
        Все размеры в vw — кнопки масштабируются ВМЕСТЕ с картинкой. */
     .hero-cta{position:absolute;left:50%;top:34%;transform:translateX(-50%);
-      display:flex;flex-direction:column;align-items:center;gap:1vw;z-index:3}
+      display:flex;flex-direction:column;align-items:center;gap:1cqi;z-index:3}
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;
-      padding:.7vw 2vw;border-radius:999px;color:#fff;font-weight:800;
-      font-size:1.3vw;line-height:1.1;box-shadow:var(--shadow);
+      padding:.7cqi 2cqi;border-radius:999px;color:#fff;font-weight:800;
+      font-size:1.3cqi;line-height:1.1;box-shadow:var(--shadow);
       transition:transform .15s,filter .2s;white-space:nowrap}
     .btn:hover{transform:translateY(-2px);filter:brightness(1.06)}
     .btn-green{background:linear-gradient(180deg,var(--green),var(--green-d))}
     .btn-orange{background:linear-gradient(180deg,var(--orange),var(--orange-d))}
-    .hero-choose{margin-top:.5vw;font-weight:800;color:#4a3f2e;font-size:1.05vw}
-    .hero-chevron{font-size:1.8vw;line-height:.2;color:#4a3f2e}
+    .hero-choose{margin-top:.5cqi;font-weight:800;color:#4a3f2e;font-size:1.05cqi}
+    .hero-chevron{font-size:1.8cqi;line-height:.2;color:#4a3f2e}
 
     /* ---- Карточки разделов ---- */
     .features{max-width:1180px;margin:-3vw auto 0;padding:0 24px;position:relative;z-index:5;
