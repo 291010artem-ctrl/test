@@ -27,7 +27,7 @@
 
     /* настоящие кнопки, наложенные на фон.
        Все размеры в vw — кнопки масштабируются ВМЕСТЕ с картинкой. */
-    .hero-cta{position:absolute;left:50%;top:34%;transform:translateX(-50%);
+    .hero-cta{position:absolute;left:50%;top:42%;transform:translateX(-50%);
       display:flex;flex-direction:column;align-items:center;gap:1vw;z-index:3}
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;
       padding:.7vw 2vw;border-radius:999px;color:#fff;font-weight:800;
@@ -40,8 +40,8 @@
     .hero-chevron{font-size:1.8vw;line-height:.2;color:#4a3f2e}
 
     /* ---- Карточки разделов ---- */
-    /* отрицательный отступ поднимает карточки на пустую кремовую часть фона */
-    .features{max-width:1180px;margin:-19vw auto 0;padding:0 24px;position:relative;z-index:5;
+    /* небольшой нахлёст карточек на нижний край фона (без хрупких больших отступов) */
+    .features{max-width:1180px;margin:-2.5vw auto 0;padding:0 24px;position:relative;z-index:5;
       display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
     .feature{background:#fff;border-radius:22px;padding:22px 20px 40px;box-shadow:var(--shadow);position:relative;transition:transform .18s}
     .feature:hover{transform:translateY(-4px)}
@@ -86,14 +86,14 @@
          просто увеличиваем их, чтобы было удобно нажимать */
       .btn{font-size:3.2vw;padding:1vw 3vw}
       .hero-choose{font-size:2.4vw}.hero-chevron{font-size:4vw}
-      .features{grid-template-columns:1fr;margin-top:-14vw}
+      .features{grid-template-columns:1fr;margin-top:-2vw}
       .frow{grid-template-columns:repeat(3,1fr)}
     }
   </style>
 </head>
 <body>
   <div style="position:fixed;top:8px;right:8px;z-index:999;background:#e8932e;color:#fff;
-    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v13</div>
+    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v14</div>
 
   <!-- HERO: твой фон с надписью + настоящие кнопки -->
   <section class="hero">
@@ -151,6 +151,6 @@
     </aside>
   </section>
 
-  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v13</footer>
+  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v14</footer>
 </body>
 </html>
