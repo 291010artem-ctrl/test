@@ -38,6 +38,8 @@
     /* ---- HERO: фон + настоящие кнопки ---- */
     .hero{position:relative;width:100%}
     .hero > img{width:100vw;height:auto}
+    .hero-sub{position:absolute;left:50%;top:40%;transform:translateX(-50%);z-index:3;
+      text-align:center;color:#4a3a26;font-weight:700;font-size:1.15vw;line-height:1.4;white-space:nowrap}
     .hero-cta{position:absolute;left:50%;top:60%;transform:translateX(-50%);
       display:flex;flex-direction:column;align-items:center;gap:1vw;z-index:3}
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;
@@ -125,6 +127,7 @@
   <!-- HERO: фон с надписью + настоящие кнопки -->
   <section class="hero">
     <img src="assets/bg_clean.jpg" alt="Мир Кирпи и Гофера" />
+    <p class="hero-sub">Добрые истории, сказки и приключения<br>для детей и их родителей</p>
     <div class="hero-cta">
       <a class="btn btn-green" href="#">📖 Читать истории</a>
       <a class="btn btn-orange" href="#">🎧 Слушать сказки</a>
