@@ -3,15 +3,75 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Друзья Кирпи и Гофера — Персонажи</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Персонажи — Мир Кирпи и Гофера</title>
+  <style>
+    :root{
+      --green:#6e9d2f; --green-d:#5a8423; --orange:#e8932e; --orange-d:#d97e16;
+      --ink:#5a4a34; --muted:#9a8a72; --shadow:0 10px 30px rgba(120,100,60,.16);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:"Nunito","Segoe UI",Arial,sans-serif;color:var(--ink);background:#fdf4ea;overflow-x:hidden}
+    a{text-decoration:none;color:inherit}
+    img{display:block}
+
+    /* Шапка */
+    .header{display:flex;align-items:center;gap:24px;padding:10px 30px;background:#fffdf6;
+      border-bottom:2px solid #f1e8d0;position:sticky;top:0;z-index:30}
+    .logo{display:flex;align-items:center;gap:9px}
+    .logo-imgs{display:flex;flex-shrink:0}
+    .logo-imgs img{width:40px;height:40px;border-radius:50%;border:2px solid #fff;object-fit:cover;box-shadow:0 2px 6px rgba(90,74,52,.25)}
+    .logo-imgs img:nth-child(2){margin-left:-14px}
+    .logo-text{display:flex;flex-direction:column;line-height:1.02}
+    .logo-text b{font-size:1.45rem;font-weight:900;letter-spacing:.3px}
+    .logo-text .g{color:var(--green)}.logo-text .o{color:var(--orange)}
+    .logo-text small{font-size:.62rem;font-weight:800;color:#5a4a34;letter-spacing:.3px}
+    .nav{display:flex;gap:6px;margin:0 auto;flex-wrap:wrap;justify-content:center}
+    .nav a{padding:8px 16px;border-radius:999px;font-weight:800;font-size:1rem;color:var(--ink)}
+    .nav a:hover{background:#f3ecd6}
+    .nav a.active{background:#f6e3a8;color:var(--green-d)}
+    .actions{display:flex;gap:14px}
+    .actions a{display:flex;flex-direction:column;align-items:center;font-size:1.3rem;color:var(--ink)}
+    .actions small{font-size:.62rem;font-weight:800;color:var(--muted)}
+
+    /* Заголовок раздела */
+    .page-title{text-align:center;padding:46px 20px 8px}
+    .page-title h1{font-size:clamp(2rem,5vw,3.2rem);font-weight:900}
+    .page-title h1 .g{color:var(--green)}.page-title h1 .o{color:var(--orange)}
+    .page-title p{color:var(--muted);font-weight:700;margin-top:6px}
+
+    /* Сетка карточек персонажей */
+    .chars{max-width:1240px;margin:30px auto 60px;padding:0 24px;
+      display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+    .char{background:#fff;border-radius:22px;overflow:hidden;box-shadow:var(--shadow);
+      border:2px solid #eadfbf;transition:transform .18s, box-shadow .18s}
+    .char:hover{transform:translateY(-6px);box-shadow:0 16px 36px rgba(120,100,60,.22)}
+    .char img{width:100%;height:auto;display:block}
+    /* цветной верхний акцент под каждого героя */
+    .char.c-orange{border-color:#f0b96a}
+    .char.c-blue{border-color:#86b7e0}
+    .char.c-pink{border-color:#ef9ec1}
+    .char.c-green{border-color:#a9cf7e}
+    .char.c-purple{border-color:#bfa3e0}
+
+    .back{display:flex;width:max-content;margin:0 auto 60px;padding:13px 30px;border-radius:999px;
+      background:linear-gradient(180deg,var(--green),var(--green-d));color:#fff;font-weight:800;box-shadow:var(--shadow)}
+    .back:hover{filter:brightness(1.06)}
+
+    .footer{text-align:center;padding:30px;color:var(--muted);font-weight:700;font-size:.85rem;background:#f6edd4}
+
+    @media(max-width:980px){
+      .header{flex-wrap:wrap;gap:8px}.nav{order:3;width:100%}
+      .chars{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:600px){ .chars{grid-template-columns:1fr;max-width:420px} }
+  </style>
 </head>
 <body>
   <header class="header">
     <a class="logo" href="index.html">
-      <span class="logo-emoji">🦔🐹</span>
-      <span class="logo-text"><b class="green">Kirpi</b><b class="orange">Gofer</b>
-        <small>мир добрых приключений</small></span>
+      <span class="logo-imgs"><img src="assets/parts/av_kirpi.jpg" alt=""><img src="assets/parts/av_gofer.jpg" alt=""></span>
+      <span class="logo-text"><b><span class="g">Kirpi</span><span class="o">Gofer</span></b><small>мир добрых приключений</small></span>
     </a>
     <nav class="nav">
       <a href="index.html">Главная</a>
@@ -21,76 +81,27 @@
       <a href="#">Раскраски</a>
       <a href="#">Родителям</a>
     </nav>
-    <div class="header-actions">
-      <button class="icon-btn">🔍<span>Поиск</span></button>
-      <button class="icon-btn">👤<span>Войти</span></button>
+    <div class="actions">
+      <a href="#">🔍<small>Поиск</small></a>
+      <a href="#">👤<small>Войти</small></a>
     </div>
   </header>
 
-  <main class="chars-page">
-    <h1 class="chars-title">Друзья Кирпи и Гофера</h1>
+  <div class="page-title">
+    <h1>Друзья <span class="g">Кирпи</span> и <span class="o">Гофера</span></h1>
+    <p>Познакомьтесь с героями нашего волшебного мира 🌿</p>
+  </div>
 
-    <div class="chars-grid">
-      <article class="char-card">
-        <img src="assets/tisa.svg" alt="Тисса" />
-        <div class="char-info">
-          <h2 class="c-orange">Тисса</h2>
-          <p class="char-kind">бельчонок-девочка</p>
-          <p>Очень быстрая и энергичная. Уверена, что знает все короткие пути, но иногда торопится и ошибается.</p>
-        </div>
-      </article>
+  <section class="chars">
+    <article class="char c-orange"><img src="assets/chars/tissa.jpg" alt="Тисса — бельчонок-девочка" loading="lazy"></article>
+    <article class="char c-blue"><img src="assets/chars/bruno.jpg" alt="Бруно — медвежонок" loading="lazy"></article>
+    <article class="char c-pink"><img src="assets/chars/lulu.jpg" alt="Лулу — лисичка-девочка" loading="lazy"></article>
+    <article class="char c-green"><img src="assets/chars/borik.jpg" alt="Борик — барсучонок" loading="lazy"></article>
+    <article class="char c-purple"><img src="assets/chars/sonya.jpg" alt="Соня — совёнок-девочка" loading="lazy"></article>
+  </section>
 
-      <article class="char-card">
-        <img src="assets/lulu.svg" alt="Лулу" />
-        <div class="char-info">
-          <h2 class="c-pink">Лулу</h2>
-          <p class="char-kind">лисичка-девочка</p>
-          <p>Хитрая и сообразительная. Любит загадки и игры, умеет находить решения таких задач, которые другим не по силам.</p>
-        </div>
-      </article>
+  <a class="back" href="index.html">← На главную</a>
 
-      <article class="char-card">
-        <img src="assets/bruno.svg" alt="Бруно" />
-        <div class="char-info">
-          <h2 class="c-blue">Бруно</h2>
-          <p class="char-kind">медвежонок</p>
-          <p>Добрый и сильный, но немного неуклюжий. Часто смущается, но всегда готов помочь друзьям.</p>
-        </div>
-      </article>
-
-      <article class="char-card">
-        <img src="assets/sonya.svg" alt="Соня" />
-        <div class="char-info">
-          <h2 class="c-purple">Соня</h2>
-          <p class="char-kind">совёнок-девочка</p>
-          <p>Любознательная и внимательная. Много читает и всё запоминает. Первая замечает то, что другие не видят.</p>
-        </div>
-      </article>
-
-      <article class="char-card">
-        <img src="assets/borik.svg" alt="Борик" />
-        <div class="char-info">
-          <h2 class="c-green">Борик</h2>
-          <p class="char-kind">барсучонок</p>
-          <p>Ворчливый и упрямый, считает себя самым мудрым и опытным. Любит порядок и правила, но на самом деле очень хороший друг.</p>
-        </div>
-      </article>
-
-      <article class="char-card">
-        <img src="assets/kirpi.svg" alt="Кирпи" />
-        <div class="char-info">
-          <h2 class="c-orange">Кирпи</h2>
-          <p class="char-kind">ёжик</p>
-          <p>Любознательный ёжик и верный друг. Главный герой нашего волшебного мира, всегда готов к новым приключениям.</p>
-        </div>
-      </article>
-    </div>
-
-    <a class="btn btn-green center" href="index.html">← На главную</a>
-  </main>
-
-  <footer class="footer">
-    <p>© 2026 Мир Кирпи и Гофера · превью-версия 🌱</p>
-  </footer>
+  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱</footer>
 </body>
 </html>
