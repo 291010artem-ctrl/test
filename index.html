@@ -3,78 +3,163 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Мир Кирпи и Гофера — добрые истории для детей</title>
-  <meta name="description" content="Добрые истории, сказки и приключения для детей и их родителей." />
+  <title>Мир Кирпи и Гофера</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; overflow-x: hidden; }
-    body { background: #fdf7e6; font-family: "Nunito", "Segoe UI", Arial, sans-serif; }
+    :root{
+      --green:#6e9d2f; --green-d:#5a8423; --orange:#e8932e; --orange-d:#d97e16;
+      --cream:#fdf7e6; --ink:#5a4a34; --muted:#9a8a72;
+      --shadow:0 10px 30px rgba(120,100,60,.16);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:"Nunito","Segoe UI",Arial,sans-serif;color:var(--ink);background:var(--cream);overflow-x:hidden}
+    a{text-decoration:none;color:inherit}
+    img{display:block}
 
-    /* Картинка во всю ширину браузера, в своих пропорциях:
-       без полос по бокам, без обрезки, без растяжения. */
-    .page {
-      position: relative;
-      width: 100%;
-      line-height: 0;
-    }
-    .page img {
-      width: 100%;
-      height: auto;
-      display: block;
-      image-rendering: -webkit-optimize-contrast;
-    }
+    /* ---- Настоящая шапка с меню ---- */
+    .header{display:flex;align-items:center;gap:24px;padding:8px 30px;background:#fffdf6;
+      border-bottom:2px solid #f1e8d0;position:sticky;top:0;z-index:30}
+    .header .logo{height:52px;width:auto}
+    .nav{display:flex;gap:6px;margin:0 auto;flex-wrap:wrap;justify-content:center}
+    .nav a{padding:8px 16px;border-radius:999px;font-weight:800;font-size:1rem;color:var(--ink)}
+    .nav a:hover{background:#f3ecd6}
+    .nav a.active{background:#f6e3a8;color:var(--green-d)}
+    .actions{display:flex;gap:14px}
+    .actions a{display:flex;flex-direction:column;align-items:center;font-size:1.3rem;color:var(--ink)}
+    .actions small{font-size:.62rem;font-weight:800;color:var(--muted)}
 
-    /* Прозрачные ссылки-«горячие зоны». Координаты в % от картинки. */
-    .hot {
-      position: absolute;
-      display: block;
-      border-radius: 999px;
-      cursor: pointer;
-      transition: background 0.15s, box-shadow 0.15s;
+    /* ---- HERO: фон + настоящие кнопки ---- */
+    .hero{position:relative;width:100%}
+    .hero > img{width:100vw;height:auto}
+    .hero-cta{position:absolute;left:50%;top:60%;transform:translateX(-50%);
+      display:flex;flex-direction:column;align-items:center;gap:1vw;z-index:3}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;
+      padding:.7vw 2vw;border-radius:999px;color:#fff;font-weight:800;
+      font-size:1.3vw;line-height:1.1;box-shadow:var(--shadow);
+      transition:transform .15s,filter .2s;white-space:nowrap}
+    .btn:hover{transform:translateY(-2px);filter:brightness(1.06)}
+    .btn-green{background:linear-gradient(180deg,var(--green),var(--green-d))}
+    .btn-orange{background:linear-gradient(180deg,var(--orange),var(--orange-d))}
+    .hero-choose{margin-top:.5vw;font-weight:800;color:#4a3f2e;font-size:1.05vw}
+    .hero-chevron{font-size:1.8vw;line-height:.2;color:#4a3f2e}
+
+    /* ---- Карточки разделов (горизонтальные) ---- */
+    .features{max-width:1180px;margin:-2.5vw auto 0;padding:0 24px;position:relative;z-index:5;
+      display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+    .feature{display:flex;align-items:center;gap:14px;background:#fff;border-radius:18px;
+      padding:14px 16px 14px 14px;box-shadow:var(--shadow);position:relative;transition:transform .18s;min-height:98px}
+    .feature:hover{transform:translateY(-4px)}
+    .feature .ic{width:64px;height:64px;flex-shrink:0;border-radius:14px;display:block;object-fit:cover}
+    .feature .txt{padding-right:16px}
+    .feature h3{font-size:1.1rem;margin-bottom:3px}
+    .feature p{color:var(--muted);font-weight:600;font-size:.82rem;line-height:1.25}
+    .feature .arrow{position:absolute;right:12px;bottom:8px;font-size:1.2rem;font-weight:900;color:var(--ink)}
+    .f1{background:#f1f7e4}.f2{background:#fdf3da}.f3{background:#f1ecfa}.f4{background:#e6f4fb}
+
+    /* ---- Друзья + Новости ---- */
+    .bottom{max-width:1180px;margin:54px auto 0;padding:0 24px 50px;display:grid;grid-template-columns:2.5fr 1fr;gap:24px;align-items:start}
+    .friends h2,.news h2{font-size:1.5rem;margin-bottom:4px}
+    .muted{color:var(--muted);font-weight:600;margin-bottom:18px}
+    .frow{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+    .friend{text-align:center;transition:transform .18s}
+    .friend:hover{transform:translateY(-5px)}
+    .friend img{width:100%;max-width:96px;aspect-ratio:1;border-radius:50%;box-shadow:var(--shadow);margin:0 auto 8px;object-fit:cover}
+    .friend b{display:block;color:var(--green-d);font-size:.95rem}
+    .friend small{display:block;color:var(--muted);font-size:.68rem;font-weight:600}
+    .all{display:flex;margin:22px auto 0;width:max-content;padding:11px 26px;border-radius:999px;
+      background:linear-gradient(180deg,var(--green),var(--green-d));color:#fff;font-weight:800;box-shadow:var(--shadow)}
+    .news{background:#fdf3da;border-radius:22px;padding:22px;box-shadow:var(--shadow)}
+    .news-item{display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;padding:10px;margin-bottom:10px;font-weight:700;font-size:.9rem;transition:transform .15s}
+    .news-item:hover{transform:translateX(3px)}
+    .news-thumb{width:48px;height:48px;border-radius:10px;background:#eaf6dd;display:grid;place-items:center;font-size:1.4rem;flex-shrink:0}
+    .news-item small{display:block;color:var(--orange-d);font-size:.72rem}
+    .news-all{display:inline-block;margin-top:8px;color:var(--orange-d);font-weight:800}
+
+    .footer{text-align:center;padding:30px;color:var(--muted);font-weight:700;font-size:.85rem;background:#f6edd4}
+
+    /* ---- Мобильная версия ---- */
+    @media(max-width:980px){
+      .header{flex-wrap:wrap;gap:8px}
+      .nav{order:3;width:100%}
+      .features{grid-template-columns:repeat(2,1fr);margin-top:24px}
+      .bottom{grid-template-columns:1fr}
+      .frow{grid-template-columns:repeat(4,1fr)}
     }
-    .hot:hover {
-      background: rgba(255, 255, 255, 0.15);
-      box-shadow: 0 0 0 3px rgba(123, 164, 40, 0.7);
+    @media(max-width:640px){
+      .btn{font-size:3.2vw;padding:1vw 3vw}
+      .hero-choose{font-size:2.4vw}.hero-chevron{font-size:4vw}
+      .features{grid-template-columns:1fr;margin-top:-2vw}
+      .frow{grid-template-columns:repeat(3,1fr)}
     }
-    /* прямоугольные зоны (карточки) — со скруглением поменьше */
-    .hot.card { border-radius: 18px; }
-    /* круглые зоны (аватары героев) */
-    .hot.round { border-radius: 50%; }
   </style>
 </head>
 <body>
-  <div class="page">
-    <img src="assets/home.jpg" alt="Мир Кирпи и Гофера" />
+  <div style="position:fixed;top:8px;right:8px;z-index:999;background:#e8932e;color:#fff;
+    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ГЛАВНАЯВЕРСИЯ&nbsp;v19nbsp;v20</div>
 
-    <!-- ВЕРХНЕЕ МЕНЮ -->
-    <a class="hot" href="index.html"        style="left:31.6%; top:5.7%; width:6.4%; height:4%;"  title="Главная"></a>
-    <a class="hot" href="#"                  style="left:38.2%; top:5.7%; width:4.6%; height:4%;"  title="Истории"></a>
-    <a class="hot" href="characters.html"    style="left:44.2%; top:5.7%; width:5.8%; height:4%;"  title="Персонажи"></a>
-    <a class="hot" href="#"                  style="left:51.3%; top:5.7%; width:3.8%; height:4%;"  title="Игры"></a>
-    <a class="hot" href="#"                  style="left:57.2%; top:5.7%; width:5.2%; height:4%;"  title="Раскраски"></a>
-    <a class="hot" href="#"                  style="left:63.8%; top:5.7%; width:5.4%; height:4%;"  title="Родителям"></a>
+  <!-- Настоящая шапка -->
+  <header class="header">
+    <a href="index.html"><img class="logo" src="assets/parts/logo.jpg" alt="KirpiGofer" /></a>
+    <nav class="nav">
+      <a class="active" href="index.html">Главная</a>
+      <a href="#">Истории</a>
+      <a href="characters.html">Персонажи</a>
+      <a href="#">Игры</a>
+      <a href="#">Раскраски</a>
+      <a href="#">Родителям</a>
+    </nav>
+    <div class="actions">
+      <a href="#">🔍<small>Поиск</small></a>
+      <a href="#">👤<small>Войти</small></a>
+    </div>
+  </header>
 
-    <!-- ГЛАВНЫЕ КНОПКИ -->
-    <a class="hot" href="#"                  style="left:39.2%; top:32.8%; width:22%; height:7.6%;" title="Читать истории"></a>
-    <a class="hot" href="#"                  style="left:39.2%; top:43.1%; width:22%; height:7.5%;" title="Слушать сказки"></a>
+  <!-- HERO: фон с надписью + настоящие кнопки -->
+  <section class="hero">
+    <img src="assets/bg_clean.jpg" alt="Мир Кирпи и Гофера" />
+    <div class="hero-cta">
+      <a class="btn btn-green" href="#">📖 Читать истории</a>
+      <a class="btn btn-orange" href="#">🎧 Слушать сказки</a>
+      <p class="hero-choose">Или выберите, чем заняться:</p>
+      <div class="hero-chevron">⌄</div>
+    </div>
+  </section>
 
-    <!-- КАРТОЧКИ РАЗДЕЛОВ -->
-    <a class="hot card" href="#"             style="left:5%;    top:57%; width:22%; height:14%;"  title="Истории"></a>
-    <a class="hot card" href="#"             style="left:28%;   top:57%; width:22%; height:14%;"  title="Аудиосказки"></a>
-    <a class="hot card" href="#"             style="left:51%;   top:57%; width:22%; height:14%;"  title="Игры"></a>
-    <a class="hot card" href="#"             style="left:74%;   top:57%; width:21%; height:14%;"  title="Раскраски"></a>
+  <!-- Карточки разделов -->
+  <section class="features">
+    <a class="feature f1" href="#"><img class="ic" src="assets/parts/ic_book.jpg" alt=""><div class="txt"><h3>Истории</h3><p>Погружайтесь в увлекательные сказки о Кирпи и Гофере</p></div><span class="arrow">→</span></a>
+    <a class="feature f2" href="#"><img class="ic" src="assets/parts/ic_audio.jpg" alt=""><div class="txt"><h3>Аудиосказки</h3><p>Слушайте добрые истории в исполнении профессионалов</p></div><span class="arrow">→</span></a>
+    <a class="feature f3" href="#"><img class="ic" src="assets/parts/ic_game.jpg" alt=""><div class="txt"><h3>Игры</h3><p>Играйте, решайте задания и помогайте героям</p></div><span class="arrow">→</span></a>
+    <a class="feature f4" href="#"><img class="ic" src="assets/parts/ic_paint.jpg" alt=""><div class="txt"><h3>Раскраски</h3><p>Раскрашивайте любимых героев и развивайте творчество</p></div><span class="arrow">→</span></a>
+  </section>
 
-    <!-- АВАТАРЫ ДРУЗЕЙ (круглые зоны) -->
-    <a class="hot round" href="characters.html" style="left:5.6%;  top:75.5%; width:8%; height:14.5%;" title="Кирпи"></a>
-    <a class="hot round" href="characters.html" style="left:16.6%; top:75.5%; width:8%; height:14.5%;" title="Гофер"></a>
-    <a class="hot round" href="characters.html" style="left:27.6%; top:75.5%; width:8%; height:14.5%;" title="Тиса"></a>
-    <a class="hot round" href="characters.html" style="left:38.6%; top:75.5%; width:8%; height:14.5%;" title="Лулу"></a>
-    <a class="hot round" href="characters.html" style="left:49.6%; top:75.5%; width:8%; height:14.5%;" title="Соня"></a>
-    <a class="hot round" href="characters.html" style="left:60.6%; top:75.5%; width:8%; height:14.5%;" title="Борик"></a>
-    <a class="hot round" href="characters.html" style="left:71.6%; top:75.5%; width:8%; height:14.5%;" title="Бруно"></a>
+  <!-- Друзья + Новости -->
+  <section class="bottom">
+    <div class="friends">
+      <h2>🌿 Наши друзья</h2>
+      <p class="muted">Познакомьтесь с героями нашего волшебного мира</p>
+      <div class="frow">
+        <a class="friend" href="characters.html"><img src="assets/parts/av_kirpi.jpg" alt=""><b>Кирпи</b><small>Любознательный ёжик и верный друг</small></a>
+        <a class="friend" href="characters.html"><img src="assets/parts/av_gofer.jpg" alt=""><b>Гофер</b><small>Добрый суслик, всегда готов помочь</small></a>
+        <a class="friend" href="characters.html"><img src="assets/parts/av_tisa.jpg" alt=""><b>Тиса</b><small>Белочка-непоседа, очень быстрая</small></a>
+        <a class="friend" href="characters.html"><img src="assets/parts/av_lulu.jpg" alt=""><b>Лулу</b><small>Лисичка умная и находчивая</small></a>
+        <a class="friend" href="characters.html"><img src="assets/parts/av_sonya.jpg" alt=""><b>Соня</b><small>Мудрая совушка, знает всё на свете</small></a>
+        <a class="friend" href="characters.html"><img src="assets/parts/av_borik.jpg" alt=""><b>Борик</b><small>Ворчливый барсучонок, но добрый внутри</small></a>
+        <a class="friend" href="characters.html"><img src="assets/parts/av_bruno.jpg" alt=""><b>Бруно</b><small>Сильный медвежонок с большим сердцем</small></a>
+      </div>
+      <a class="all" href="characters.html">Все персонажи</a>
+    </div>
 
-    <!-- КНОПКА «ВСЕ ПЕРСОНАЖИ» -->
-    <a class="hot" href="characters.html"    style="left:33.5%; top:95.3%; width:13%; height:4%;" title="Все персонажи"></a>
-  </div>
+    <aside class="news">
+      <h2>🌿 Новые приключения!</h2>
+      <p class="muted">Мир Кирпи и Гофера растёт каждый день!</p>
+      <a class="news-item" href="#"><span class="news-thumb">🏡</span><span><small>Скоро:</small> Путешествие на ферму</span></a>
+      <a class="news-item" href="#"><span class="news-thumb">🗼</span><span><small>Скоро:</small> Тайна старого маяка</span></a>
+      <a class="news-item" href="#"><span class="news-thumb">🗺️</span><span><small>Скоро:</small> Приключения на новом континенте</span></a>
+      <a class="news-all" href="#">Смотреть все истории →</a>
+    </aside>
+  </section>
+
+  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v20</footer>
 </body>
 </html>
