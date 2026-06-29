@@ -16,18 +16,22 @@
     a{text-decoration:none;color:inherit}
     img{display:block}
 
-    /* ---- HERO: твой фон + настоящие кнопки поверх ---- */
-    /* И картинка, и кнопки меряют ширину одной линейкой (vw) — растут вместе. */
+    /* ---- Настоящая шапка с меню ---- */
+    .header{display:flex;align-items:center;gap:24px;padding:8px 30px;background:#fffdf6;
+      border-bottom:2px solid #f1e8d0;position:sticky;top:0;z-index:30}
+    .header .logo{height:52px;width:auto}
+    .nav{display:flex;gap:6px;margin:0 auto;flex-wrap:wrap;justify-content:center}
+    .nav a{padding:8px 16px;border-radius:999px;font-weight:800;font-size:1rem;color:var(--ink)}
+    .nav a:hover{background:#f3ecd6}
+    .nav a.active{background:#f6e3a8;color:var(--green-d)}
+    .actions{display:flex;gap:14px}
+    .actions a{display:flex;flex-direction:column;align-items:center;font-size:1.3rem;color:var(--ink)}
+    .actions small{font-size:.62rem;font-weight:800;color:var(--muted)}
+
+    /* ---- HERO: фон + настоящие кнопки ---- */
     .hero{position:relative;width:100%}
     .hero > img{width:100vw;height:auto}
-
-    /* кликабельное меню поверх нарисованного (невидимое) */
-    .nav-hot{position:absolute;display:block;border-radius:999px;transition:box-shadow .15s,background .15s}
-    .nav-hot:hover{background:rgba(255,255,255,.15);box-shadow:0 0 0 3px rgba(123,164,40,.6)}
-
-    /* настоящие кнопки, наложенные на фон.
-       Все размеры в vw — кнопки масштабируются ВМЕСТЕ с картинкой. */
-    .hero-cta{position:absolute;left:50%;top:42%;transform:translateX(-50%);
+    .hero-cta{position:absolute;left:50%;top:60%;transform:translateX(-50%);
       display:flex;flex-direction:column;align-items:center;gap:1vw;z-index:3}
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;
       padding:.7vw 2vw;border-radius:999px;color:#fff;font-weight:800;
@@ -39,11 +43,9 @@
     .hero-choose{margin-top:.5vw;font-weight:800;color:#4a3f2e;font-size:1.05vw}
     .hero-chevron{font-size:1.8vw;line-height:.2;color:#4a3f2e}
 
-    /* ---- Карточки разделов ---- */
-    /* небольшой нахлёст карточек на нижний край фона (без хрупких больших отступов) */
+    /* ---- Карточки разделов (горизонтальные) ---- */
     .features{max-width:1180px;margin:-2.5vw auto 0;padding:0 24px;position:relative;z-index:5;
       display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
-    /* карточки горизонтальные: значок слева, текст справа — ниже и шире */
     .feature{display:flex;align-items:center;gap:14px;background:#fff;border-radius:18px;
       padding:14px 16px 14px 14px;box-shadow:var(--shadow);position:relative;transition:transform .18s;min-height:98px}
     .feature:hover{transform:translateY(-4px)}
@@ -77,13 +79,13 @@
 
     /* ---- Мобильная версия ---- */
     @media(max-width:980px){
+      .header{flex-wrap:wrap;gap:8px}
+      .nav{order:3;width:100%}
       .features{grid-template-columns:repeat(2,1fr);margin-top:24px}
       .bottom{grid-template-columns:1fr}
       .frow{grid-template-columns:repeat(4,1fr)}
     }
     @media(max-width:640px){
-      /* кнопки ВСЕГДА остаются по центру на фоне (не пропадают),
-         просто увеличиваем их, чтобы было удобно нажимать */
       .btn{font-size:3.2vw;padding:1vw 3vw}
       .hero-choose{font-size:2.4vw}.hero-chevron{font-size:4vw}
       .features{grid-template-columns:1fr;margin-top:-2vw}
@@ -93,21 +95,28 @@
 </head>
 <body>
   <div style="position:fixed;top:8px;right:8px;z-index:999;background:#e8932e;color:#fff;
-    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v18</div>
+    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v19</div>
 
-  <!-- HERO: твой фон с надписью + настоящие кнопки -->
+  <!-- Настоящая шапка -->
+  <header class="header">
+    <a href="home-real.html"><img class="logo" src="assets/parts/logo.jpg" alt="KirpiGofer" /></a>
+    <nav class="nav">
+      <a class="active" href="home-real.html">Главная</a>
+      <a href="#">Истории</a>
+      <a href="characters.html">Персонажи</a>
+      <a href="#">Игры</a>
+      <a href="#">Раскраски</a>
+      <a href="#">Родителям</a>
+    </nav>
+    <div class="actions">
+      <a href="#">🔍<small>Поиск</small></a>
+      <a href="#">👤<small>Войти</small></a>
+    </div>
+  </header>
+
+  <!-- HERO: фон с надписью + настоящие кнопки -->
   <section class="hero">
     <img src="assets/bg_clean.jpg" alt="Мир Кирпи и Гофера" />
-
-    <!-- невидимое кликабельное меню поверх нарисованного -->
-    <a class="nav-hot" href="home-real.html"   style="left:31.6%;top:5.7%;width:6.4%;height:4%"></a>
-    <a class="nav-hot" href="#"                 style="left:38.2%;top:5.7%;width:4.6%;height:4%"></a>
-    <a class="nav-hot" href="characters.html"   style="left:44.2%;top:5.7%;width:5.8%;height:4%"></a>
-    <a class="nav-hot" href="#"                 style="left:51.3%;top:5.7%;width:3.8%;height:4%"></a>
-    <a class="nav-hot" href="#"                 style="left:57.2%;top:5.7%;width:5.2%;height:4%"></a>
-    <a class="nav-hot" href="#"                 style="left:63.8%;top:5.7%;width:5.4%;height:4%"></a>
-
-    <!-- настоящие кнопки -->
     <div class="hero-cta">
       <a class="btn btn-green" href="#">📖 Читать истории</a>
       <a class="btn btn-orange" href="#">🎧 Слушать сказки</a>
@@ -151,6 +160,6 @@
     </aside>
   </section>
 
-  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v18</footer>
+  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v19</footer>
 </body>
 </html>
