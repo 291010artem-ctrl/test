@@ -19,7 +19,14 @@
     /* ---- Шапка с меню ПОВЕРХ картинки (прозрачная, без белой полосы) ---- */
     .header{display:flex;align-items:center;gap:24px;padding:10px 30px;background:transparent;
       position:absolute;top:0;left:0;right:0;z-index:30}
-    .header .logo{height:52px;width:auto;border-radius:10px}
+    .logo{display:flex;align-items:center;gap:9px}
+    .logo-imgs{display:flex;flex-shrink:0}
+    .logo-imgs img{width:40px;height:40px;border-radius:50%;border:2px solid #fff;object-fit:cover;box-shadow:0 2px 6px rgba(90,74,52,.25)}
+    .logo-imgs img:nth-child(2){margin-left:-14px}
+    .logo-text{display:flex;flex-direction:column;line-height:1.02}
+    .logo-text b{font-size:1.45rem;font-weight:900;letter-spacing:.3px}
+    .logo-text .g{color:var(--green)}.logo-text .o{color:var(--orange)}
+    .logo-text small{font-size:.62rem;font-weight:800;color:#5a4a34;letter-spacing:.3px}
     .nav{display:flex;gap:6px;margin:0 auto;flex-wrap:wrap;justify-content:center}
     .nav a{padding:8px 16px;border-radius:999px;font-weight:800;font-size:1rem;color:var(--ink)}
     .nav a:hover{background:#f3ecd6}
@@ -96,7 +103,10 @@
 <body>
   <!-- Настоящая шапка -->
   <header class="header">
-    <a href="index.html"><img class="logo" src="assets/parts/logo.jpg" alt="KirpiGofer" /></a>
+    <a class="logo" href="index.html">
+      <span class="logo-imgs"><img src="assets/parts/av_kirpi.jpg" alt=""><img src="assets/parts/av_gofer.jpg" alt=""></span>
+      <span class="logo-text"><b><span class="g">Kirpi</span><span class="o">Gofer</span></b><small>мир добрых приключений</small></span>
+    </a>
     <nav class="nav">
       <a class="active" href="index.html">Главная</a>
       <a href="#">Истории</a>
