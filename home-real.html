@@ -16,10 +16,10 @@
     a{text-decoration:none;color:inherit}
     img{display:block}
 
-    /* ---- Настоящая шапка с меню ---- */
-    .header{display:flex;align-items:center;gap:24px;padding:8px 30px;background:#fffdf6;
-      border-bottom:2px solid #f1e8d0;position:sticky;top:0;z-index:30}
-    .header .logo{height:52px;width:auto}
+    /* ---- Шапка с меню ПОВЕРХ картинки (прозрачная, без белой полосы) ---- */
+    .header{display:flex;align-items:center;gap:24px;padding:10px 30px;background:transparent;
+      position:absolute;top:0;left:0;right:0;z-index:30}
+    .header .logo{height:52px;width:auto;border-radius:10px}
     .nav{display:flex;gap:6px;margin:0 auto;flex-wrap:wrap;justify-content:center}
     .nav a{padding:8px 16px;border-radius:999px;font-weight:800;font-size:1rem;color:var(--ink)}
     .nav a:hover{background:#f3ecd6}
@@ -94,14 +94,11 @@
   </style>
 </head>
 <body>
-  <div style="position:fixed;top:8px;right:8px;z-index:999;background:#e8932e;color:#fff;
-    font-weight:900;padding:6px 12px;border-radius:999px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)">ВЕРСИЯ&nbsp;v19</div>
-
   <!-- Настоящая шапка -->
   <header class="header">
-    <a href="home-real.html"><img class="logo" src="assets/parts/logo.jpg" alt="KirpiGofer" /></a>
+    <a href="index.html"><img class="logo" src="assets/parts/logo.jpg" alt="KirpiGofer" /></a>
     <nav class="nav">
-      <a class="active" href="home-real.html">Главная</a>
+      <a class="active" href="index.html">Главная</a>
       <a href="#">Истории</a>
       <a href="characters.html">Персонажи</a>
       <a href="#">Игры</a>
@@ -160,6 +157,6 @@
     </aside>
   </section>
 
-  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v19</footer>
+  <footer class="footer">© 2026 Мир Кирпи и Гофера 🌱 · v20</footer>
 </body>
 </html>

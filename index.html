@@ -16,10 +16,10 @@
     a{text-decoration:none;color:inherit}
     img{display:block}
 
-    /* ---- Настоящая шапка с меню ---- */
-    .header{display:flex;align-items:center;gap:24px;padding:8px 30px;background:#fffdf6;
-      border-bottom:2px solid #f1e8d0;position:sticky;top:0;z-index:30}
-    .header .logo{height:52px;width:auto}
+    /* ---- Шапка с меню ПОВЕРХ картинки (прозрачная, без белой полосы) ---- */
+    .header{display:flex;align-items:center;gap:24px;padding:10px 30px;background:transparent;
+      position:absolute;top:0;left:0;right:0;z-index:30}
+    .header .logo{height:52px;width:auto;border-radius:10px}
     .nav{display:flex;gap:6px;margin:0 auto;flex-wrap:wrap;justify-content:center}
     .nav a{padding:8px 16px;border-radius:999px;font-weight:800;font-size:1rem;color:var(--ink)}
     .nav a:hover{background:#f3ecd6}
