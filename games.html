@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Игры — Мир Кирпи и Гофера</title>
+  <style>
+    :root{
+      --green:#6e9d2f; --green-d:#5a8423; --orange:#e8932e; --orange-d:#d97e16;
+      --ink:#5a4a34; --muted:#9a8a72; --shadow:0 10px 30px rgba(120,100,60,.16);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:"Nunito","Segoe UI",Arial,sans-serif;color:var(--ink);background:#fdf4ea;overflow-x:hidden}
+    a{text-decoration:none;color:inherit}
+    img{display:block}
+
+    /* Шапка */
+    .header{display:flex;align-items:center;gap:24px;padding:10px 30px;background:#fffdf6;
+      border-bottom:2px solid #f1e8d0;position:sticky;top:0;z-index:30}
+    .logo{display:flex;align-items:center;gap:9px}
+    .logo-imgs{display:flex;flex-shrink:0}
+    .logo-imgs img{width:40px;height:40px;border-radius:50%;border:2px solid #fff;object-fit:cover;box-shadow:0 2px 6px rgba(90,74,52,.25)}
+    .logo-imgs img:nth-child(2){margin-left:-14px}
+    .logo-text{display:flex;flex-direction:column;line-height:1.02}
+    .logo-text b{font-size:1.45rem;font-weight:900;letter-spacing:.3px}
+    .logo-text .g{color:var(--green)}.logo-text .o{color:var(--orange)}
+    .logo-text small{font-size:.62rem;font-weight:800;color:#5a4a34;letter-spacing:.3px}
+    .nav{display:flex;gap:6px;margin:0 auto;flex-wrap:wrap;justify-content:center}
+    .nav a{padding:8px 16px;border-radius:999px;font-weight:800;font-size:1rem;color:var(--ink)}
+    .nav a:hover{background:#f3ecd6}
+    .nav a.active{background:#f6e3a8;color:var(--green-d)}
+    .actions{display:flex;gap:14px}
+    .actions a{display:flex;flex-direction:column;align-items:center;font-size:1.3rem;color:var(--ink)}
+    .actions small{font-size:.62rem;font-weight:800;color:var(--muted)}
+
+    .page-title{text-align:center;padding:24px 20px 4px}
+    .page-title h1{font-size:clamp(1.9rem,5vw,3rem);font-weight:900}
+    .page-title h1 .o{color:var(--orange)}
+    .page-title p{color:var(--muted);font-weight:700;margin-top:6px}
+
+    /* Игровая панель */
+    .game{max-width:720px;margin:14px auto 0;padding:0 16px}
+    .bar{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+    .chip{background:#fff;border:2px solid #eadfbf;border-radius:999px;padding:8px 18px;font-weight:800;box-shadow:var(--shadow)}
+    .chip b{color:var(--green-d)}
+    .btn{cursor:pointer;border:none;display:inline-flex;align-items:center;gap:8px;
+      padding:10px 22px;border-radius:999px;color:#fff;font-weight:800;font-size:1rem;
+      background:linear-gradient(180deg,var(--orange),var(--orange-d));box-shadow:var(--shadow);transition:filter .15s,transform .15s}
+    .btn:hover{filter:brightness(1.06);transform:translateY(-2px)}
+
+    /* Поле 4x3 */
+    .board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+    .card{position:relative;aspect-ratio:1;cursor:pointer;perspective:600px}
+    .card .inner{position:absolute;inset:0;transition:transform .35s;transform-style:preserve-3d}
+    .card.flip .inner,.card.done .inner{transform:rotateY(180deg)}
+    .face{position:absolute;inset:0;border-radius:18px;backface-visibility:hidden;
+      display:grid;place-items:center;box-shadow:var(--shadow);overflow:hidden;border:3px solid #fff}
+    .back{background:linear-gradient(160deg,#8cc04a,#5f8a1e);font-size:clamp(28px,7vw,46px)}
+    .front{background:#fff;transform:rotateY(180deg)}
+    .front img{width:100%;height:100%;object-fit:cover}
+    .card.done{cursor:default}
+    .card.done .face{border-color:#bcd98f}
+    .card.done .inner{animation:pop .4s}
+    @keyframes pop{0%{transform:rotateY(180deg) scale(1)}50%{transform:rotateY(180deg) scale(1.08)}100%{transform:rotateY(180deg) scale(1)}}
+
+    /* Победа */
+    .win{max-width:720px;margin:22px auto 0;padding:0 16px;text-align:center;display:none}
+    .win.show{display:block;animation:fade .4s}
+    .win .box{background:#fff;border:3px solid #bcd98f;border-radius:22px;padding:26px 20px;box-shadow:var(--shadow)}
+    .win h2{font-size:1.8rem;color:var(--green-d)}
+    .win p{color:var(--muted);font-weight:700;margin:6px 0 16px}
+    @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+
+    .foot{display:flex;justify-content:center;margin:30px 0 50px}
+    .back-home{display:inline-flex;padding:12px 28px;border-radius:999px;font-weight:800;color:#fff;
+      background:linear-gradient(180deg,var(--green),var(--green-d));box-shadow:var(--shadow)}
+
+    @media(max-width:980px){.header{flex-wrap:wrap;gap:8px}.nav{order:3;width:100%}}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <a class="logo" href="index.html">
+      <span class="logo-imgs"><img src="assets/parts/av_kirpi.jpg" alt=""><img src="assets/parts/av_gofer.jpg" alt=""></span>
+      <span class="logo-text"><b><span class="g">Kirpi</span><span class="o">Gofer</span></b><small>мир добрых приключений</small></span>
+    </a>
+    <nav class="nav">
+      <a href="index.html">Главная</a>
+      <a href="#">Истории</a>
+      <a href="characters.html">Персонажи</a>
+      <a class="active" href="games.html">Игры</a>
+      <a href="#">Раскраски</a>
+      <a href="#">Родителям</a>
+    </nav>
+    <div class="actions">
+      <a href="#">🔍<small>Поиск</small></a>
+      <a href="#">👤<small>Войти</small></a>
+    </div>
+  </header>
+
+  <div class="page-title">
+    <h1>🎮 Найди <span class="o">пару</span>!</h1>
+    <p>Переворачивай карточки и находи одинаковых друзей 🐾</p>
+  </div>
+
+  <div class="game">
+    <div class="bar">
+      <div class="chip">Ходы: <b id="moves">0</b></div>
+      <div class="chip">Найдено: <b id="found">0</b> из 6</div>
+      <button class="btn" id="restart">🔄 Заново</button>
+    </div>
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="win" id="win">
+    <div class="box">
+      <h2>🎉 Молодец!</h2>
+      <p>Ты нашёл все пары за <b id="winMoves">0</b> ходов!</p>
+      <button class="btn" id="again">Сыграть ещё 🐿️</button>
+    </div>
+  </div>
+
+  <div class="foot"><a class="back-home" href="index.html">← На главную</a></div>
+
+  <script>
+    const heroes = [
+      {n:"Кирпи", img:"assets/parts/av_kirpi.jpg"},
+      {n:"Гофер", img:"assets/parts/av_gofer.jpg"},
+      {n:"Тиса",  img:"assets/parts/av_tisa.jpg"},
+      {n:"Лулу",  img:"assets/parts/av_lulu.jpg"},
+      {n:"Соня",  img:"assets/parts/av_sonya.jpg"},
+      {n:"Борик", img:"assets/parts/av_borik.jpg"},
+    ];
+    const board=document.getElementById('board');
+    const movesEl=document.getElementById('moves');
+    const foundEl=document.getElementById('found');
+    const winBox=document.getElementById('win');
+    let first=null, lock=false, moves=0, found=0;
+
+    function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+    function start(){
+      board.innerHTML=''; first=null; lock=false; moves=0; found=0;
+      movesEl.textContent=0; foundEl.textContent=0; winBox.classList.remove('show');
+      const deck=shuffle([...heroes,...heroes].map((h,i)=>({...h,id:i})));
+      deck.forEach(h=>{
+        const c=document.createElement('div');
+        c.className='card'; c.dataset.name=h.n;
+        c.innerHTML=`<div class="inner">
+          <div class="face back">🌿</div>
+          <div class="face front"><img src="${h.img}" alt="${h.n}"></div>
+        </div>`;
+        c.addEventListener('click',()=>flip(c));
+        board.appendChild(c);
+      });
+    }
+
+    function flip(c){
+      if(lock||c.classList.contains('flip')||c.classList.contains('done'))return;
+      c.classList.add('flip');
+      if(!first){first=c;return;}
+      moves++; movesEl.textContent=moves;
+      if(first.dataset.name===c.dataset.name){
+        first.classList.add('done'); c.classList.add('done');
+        first=null; found++; foundEl.textContent=found;
+        if(found===heroes.length) setTimeout(win,500);
+      } else {
+        lock=true;
+        setTimeout(()=>{first.classList.remove('flip');c.classList.remove('flip');first=null;lock=false;},800);
+      }
+    }
+
+    function win(){
+      document.getElementById('winMoves').textContent=moves;
+      winBox.classList.add('show');
+      winBox.scrollIntoView({behavior:'smooth',block:'center'});
+    }
+
+    document.getElementById('restart').addEventListener('click',start);
+    document.getElementById('again').addEventListener('click',start);
+    start();
+  </script>
+</body>
+</html>
