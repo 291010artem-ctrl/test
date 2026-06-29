@@ -56,6 +56,7 @@
     .features{max-width:1200px;margin:-4vw auto 0;padding:0 24px;position:relative;z-index:5;
       display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
     .feature{display:flex;align-items:center;gap:14px;background:#fff;border-radius:18px;
+      border:2px solid #eadfbf;
       padding:14px 16px 14px 14px;box-shadow:var(--shadow);position:relative;transition:transform .18s;min-height:120px}
     .feature:hover{transform:translateY(-4px)}
     .feature .ic{width:72px;height:72px;flex-shrink:0;display:block;object-fit:contain}
@@ -63,8 +64,11 @@
     .feature h3{font-size:1.1rem;margin-bottom:3px}
     .feature p{color:var(--muted);font-weight:600;font-size:.82rem;line-height:1.25}
     .feature .arrow{position:absolute;right:12px;bottom:8px;font-size:1.2rem;font-weight:900;color:var(--ink)}
-    /* все карточки одного молочного цвета — чтобы цветные значки выделялись */
-    .f1,.f2,.f3,.f4{background:#ffffff}
+    /* фон + цветная обводка каждой карточки под цвет значка (как в макете) */
+    .f1{background:#f4f8ea;border-color:#bcd98f}
+    .f2{background:#fdf6e1;border-color:#f3d57f}
+    .f3{background:#f3eefb;border-color:#ccb6ea}
+    .f4{background:#eaf4fc;border-color:#a9d2ee}
 
     /* ---- Друзья + Новости ---- */
     .bottom{max-width:1500px;margin:54px auto 0;padding:0 30px 50px;display:grid;grid-template-columns:2.5fr 1fr;gap:24px;align-items:start}
