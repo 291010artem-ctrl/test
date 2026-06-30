@@ -38,26 +38,26 @@
     .page-title p{color:var(--muted);font-weight:700;margin-top:6px}
 
     /* Уровни сложности */
-    .levels{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px auto 2px;max-width:720px;padding:0 16px}
+    .levels{display:flex;flex-direction:column;gap:8px;margin:0 0 6px}
     .level{cursor:pointer;border:2px solid #eadfbf;background:#fff;border-radius:16px;padding:10px 16px;
-      text-align:center;min-width:150px;box-shadow:var(--shadow);transition:transform .12s,border-color .12s}
+      text-align:left;min-width:0;width:100%;box-shadow:var(--shadow);transition:transform .12s,border-color .12s}
     .level:hover{transform:translateY(-2px)}
     .level.active{border-color:var(--green);background:#f4f8ea}
     .level b{display:block;font-size:1.02rem}
     .level small{color:var(--muted);font-weight:700;font-size:.72rem}
 
     /* Выбор героя */
-    .heroes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:6px auto 0;max-width:700px}
+    .heroes{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin:0 0 6px}
     .hpick{width:46px;height:46px;border-radius:50%;border:3px solid #fff;cursor:pointer;overflow:hidden;box-shadow:var(--shadow);background:#fff}
     .hpick img{width:100%;height:100%;object-fit:contain;background:#fff}
     .hpick.active{outline:3px solid var(--orange);outline-offset:1px}
 
-    .wrap{max-width:760px;margin:6px auto 30px;padding:0 16px;display:grid;
-      grid-template-columns:1fr 240px;gap:20px;align-items:start;justify-content:center}
+    .wrap{max-width:1180px;margin:10px auto 30px;padding:0 20px;display:grid;
+      grid-template-columns:1fr 300px;gap:24px;align-items:start}
     /* холст вписывается в экран по высоте (aspect-ratio задаётся в JS) */
     .stage{position:relative;background:#fff;border:3px solid #eadfbf;border-radius:22px;
       overflow:hidden;box-shadow:var(--shadow);touch-action:none;
-      max-width:100%;max-height:66vh;margin:0 auto;justify-self:center}
+      max-width:100%;max-height:82vh;justify-self:start}
     .stage canvas,.stage .guide,.stage .ref,.stage .prev{position:absolute;inset:0;width:100%;height:100%}
     .stage canvas{cursor:crosshair}
     .stage .guide{mix-blend-mode:multiply;pointer-events:none}
@@ -67,7 +67,7 @@
     .author:focus{outline:2px solid var(--green);border-color:var(--green)}
 
     .tools{background:#fff;border:3px solid #eadfbf;border-radius:22px;padding:16px;box-shadow:var(--shadow)}
-    .tools h3{font-size:1rem;margin:2px 0 10px;color:var(--green-d)}
+    .tools h3{font-size:1rem;margin:12px 0 8px;color:var(--green-d)}.tools h3:first-child{margin-top:0}
     .palette{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
     .palhead{font-size:.72rem;font-weight:800;color:var(--muted);margin-top:2px}
     .palrow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
@@ -118,15 +118,8 @@
     <h1>🎨 Раскрась <span class="o">друга</span>!</h1>
   </div>
 
-  <div class="levels" id="levels">
-    <div class="level active" data-mode="easy"><b>🟢 Лёгкий</b><small>Нажми на область — закрасится</small></div>
-    <div class="level" data-mode="medium"><b>🟡 Средний</b><small>Веди кистью — зона зальётся ровно</small></div>
-    <div class="level" data-mode="pro"><b>🔴 Профи</b><small>Рисуй сам, как настоящий художник</small></div>
-  </div>
-
-  <div class="heroes" id="heroes"></div>
-
   <div class="wrap">
+    <!-- ХОЛСТ слева, большой -->
     <div class="stage" id="stage">
       <canvas id="canvas"></canvas>
       <canvas id="prev" class="prev"></canvas>
@@ -134,7 +127,18 @@
       <img class="ref" id="ref" src="assets/chars/tissa.jpg" alt="" />
     </div>
 
-    <div class="tools">
+    <!-- ВСЕ ФУНКЦИИ справа -->
+    <aside class="tools">
+      <h3>Выбери героя</h3>
+      <div class="heroes" id="heroes"></div>
+
+      <h3>Уровень</h3>
+      <div class="levels" id="levels">
+        <div class="level active" data-mode="easy"><b>🟢 Лёгкий</b><small>Нажми на область — закрасится</small></div>
+        <div class="level" data-mode="medium"><b>🟡 Средний</b><small>Веди кистью — зона зальётся ровно</small></div>
+        <div class="level" data-mode="pro"><b>🔴 Профи</b><small>Рисуй сам</small></div>
+      </div>
+
       <h3>Цвета</h3>
       <div class="palette" id="palette"></div>
       <p class="hint" id="hint"></p>
@@ -147,7 +151,7 @@
         <button class="tbtn primary" id="clear">↺ Очистить</button>
         <button class="tbtn save" id="save">⬇️ Сохранить рисунок</button>
       </div>
-    </div>
+    </aside>
   </div>
 
   <div class="foot"><a class="back-home" href="index.html">← На главную</a></div>
@@ -243,8 +247,8 @@
       if(!W) return;
       stage.style.width=''; stage.style.height='';
       const availW = stage.clientWidth || 360;
-      const maxH = window.innerHeight*0.62;
-      let dw = Math.min(availW, 430), dh = dw*H/W;
+      const maxH = window.innerHeight*0.82;
+      let dw = Math.min(availW, 600), dh = dw*H/W;
       if(dh>maxH){ dh=maxH; dw=dh*W/H; }
       stage.style.width=Math.round(dw)+'px'; stage.style.height=Math.round(dh)+'px';
     }
