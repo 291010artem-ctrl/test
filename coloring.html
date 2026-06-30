@@ -32,13 +32,13 @@
     .actions a{display:flex;flex-direction:column;align-items:center;font-size:1.3rem;color:var(--ink)}
     .actions small{font-size:.62rem;font-weight:800;color:var(--muted)}
 
-    .page-title{text-align:center;padding:8px 20px 2px}
+    .page-title{text-align:center;padding:4px 20px 0}
     .page-title h1{font-size:clamp(1.6rem,4vw,2.4rem);font-weight:900}
     .page-title h1 .o{color:var(--orange)}
     .page-title p{color:var(--muted);font-weight:700;margin-top:6px}
 
     /* Уровни сложности */
-    .levels{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:8px auto 2px;max-width:720px;padding:0 16px}
+    .levels{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px auto 2px;max-width:720px;padding:0 16px}
     .level{cursor:pointer;border:2px solid #eadfbf;background:#fff;border-radius:16px;padding:10px 16px;
       text-align:center;min-width:150px;box-shadow:var(--shadow);transition:transform .12s,border-color .12s}
     .level:hover{transform:translateY(-2px)}
@@ -47,12 +47,12 @@
     .level small{color:var(--muted);font-weight:700;font-size:.72rem}
 
     /* Выбор героя */
-    .heroes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px auto 0;max-width:700px}
+    .heroes{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:6px auto 0;max-width:700px}
     .hpick{width:46px;height:46px;border-radius:50%;border:3px solid #fff;cursor:pointer;overflow:hidden;box-shadow:var(--shadow);background:#fff}
     .hpick img{width:100%;height:100%;object-fit:contain;background:#fff}
     .hpick.active{outline:3px solid var(--orange);outline-offset:1px}
 
-    .wrap{max-width:760px;margin:10px auto 30px;padding:0 16px;display:grid;
+    .wrap{max-width:760px;margin:6px auto 30px;padding:0 16px;display:grid;
       grid-template-columns:1fr 240px;gap:20px;align-items:start;justify-content:center}
     /* холст вписывается в экран по высоте (aspect-ratio задаётся в JS) */
     .stage{position:relative;background:#fff;border:3px solid #eadfbf;border-radius:22px;
@@ -68,7 +68,9 @@
 
     .tools{background:#fff;border:3px solid #eadfbf;border-radius:22px;padding:16px;box-shadow:var(--shadow)}
     .tools h3{font-size:1rem;margin:2px 0 10px;color:var(--green-d)}
-    .palette{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px}
+    .palette{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+    .palhead{font-size:.72rem;font-weight:800;color:var(--muted);margin-top:2px}
+    .palrow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
     .sw{width:100%;aspect-ratio:1;border-radius:50%;border:3px solid #fff;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);transition:transform .12s}
     .sw:hover{transform:scale(1.1)}
     .sw.active{outline:3px solid var(--green);outline-offset:1px}
@@ -104,7 +106,7 @@
       <a href="characters.html">Персонажи</a>
       <a href="games.html">Игры</a>
       <a class="active" href="coloring.html">Раскраски</a>
-      <a href="#">Родителям</a>
+      <a href="parents.html">Родителям</a>
     </nav>
     <div class="actions">
       <a href="#">🔍<small>Поиск</small></a>
@@ -114,7 +116,6 @@
 
   <div class="page-title">
     <h1>🎨 Раскрась <span class="o">друга</span>!</h1>
-    <p>Выбери уровень, героя и цвет</p>
   </div>
 
   <div class="levels" id="levels">
@@ -156,8 +157,16 @@
       {n:"Тисса",img:"tissa"},{n:"Бруно",img:"bruno"},{n:"Лулу",img:"lulu"},
       {n:"Борик",img:"borik"},{n:"Соня",img:"sonya"}
     ];
-    const colors=["#e23b3b","#ef7d2e","#f4c430","#7ec850","#2fa36b","#37b6c9",
-                  "#3f7bd4","#8a5cd4","#e85d9a","#9a6b3f","#3a3a3a","#ffffff"];
+    // цвета каждого героя (то, чем он раскрашен)
+    const charPal={
+      tissa:["#b8460f","#e08334","#f4c089","#f6efd0","#6e2a0c"],
+      bruno:["#7a3a12","#a95b27","#e0b483","#2775a9","#3a2a1a"],
+      lulu:["#dd5b0d","#f77527","#a9410d","#f6efd0","#6e2a0c"],
+      borik:["#3a2a2a","#7a7a7a","#e8e4d2","#5b5b27","#bcbcbc"],
+      sonya:["#8f5b27","#c38f5b","#a97541","#7a5a8f","#5b4127"]
+    };
+    // общий ряд — можно красить и другими цветами
+    const general=["#e23b3b","#f4c430","#7ec850","#37b6c9","#3f7bd4","#8a5cd4","#e85d9a","#3a3a3a","#ffffff"];
     const hints={
       easy:"Нажимай на части рисунка — каждая область закрасится выбранным цветом.",
       medium:"Води кистью по рисунку. Отпустишь — задетые области аккуратно зальются ровно по контуру.",
@@ -170,19 +179,27 @@
     const pctx=prev.getContext('2d');
     const stage=document.getElementById('stage');
     const guide=document.getElementById('guide');
-    let mode='easy', color=colors[0], size=26, erasing=false, drawing=false, last=null, medPts=[];
+    let mode='easy', color="#b8460f", size=26, erasing=false, drawing=false, last=null, medPts=[];
     let gData=null, W=0, H=0;
     const off=document.createElement('canvas'), offc=off.getContext('2d',{willReadFrequently:true});
 
-    // палитра
-    const pal=document.getElementById('palette');
-    colors.forEach((c,i)=>{
-      const b=document.createElement('div'); b.className='sw'+(i===0?' active':'');
-      b.style.background=c;
-      b.onclick=()=>{color=c;erasing=false;document.getElementById('eraser').classList.remove('active');
-        document.querySelectorAll('.sw').forEach(s=>s.classList.remove('active'));b.classList.add('active');};
-      pal.appendChild(b);
-    });
+    // палитра под выбранного героя + общий ряд
+    function renderPalette(name){
+      const pal=document.getElementById('palette'); pal.innerHTML='';
+      [['Цвета героя',charPal[name]||[]],['Другие цвета',general]].forEach(([label,arr])=>{
+        if(!arr.length)return;
+        const t=document.createElement('div'); t.className='palhead'; t.textContent=label; pal.appendChild(t);
+        const row=document.createElement('div'); row.className='palrow';
+        arr.forEach(c=>{
+          const b=document.createElement('div'); b.className='sw'; b.style.background=c;
+          b.onclick=()=>{color=c;erasing=false;document.getElementById('eraser').classList.remove('active');
+            document.querySelectorAll('.sw').forEach(s=>s.classList.remove('active'));b.classList.add('active');};
+          row.appendChild(b);
+        });
+        pal.appendChild(row);
+      });
+      const first=pal.querySelector('.sw'); if(first){first.classList.add('active'); color=(charPal[name]||general)[0];}
+    }
     // герои
     const hbox=document.getElementById('heroes');
     heroes.forEach((h,i)=>{
@@ -214,6 +231,7 @@
         gData=offc.getImageData(0,0,W,H).data;     // контур (границы)
         guide.src=im.src;
         document.getElementById('ref').src=`assets/chars/${name}.jpg`;  // образец (раскрашенный)
+        renderPalette(name);                                            // палитра под этого героя
       };
       im.src=`assets/color/${name}.jpg`;
     }
