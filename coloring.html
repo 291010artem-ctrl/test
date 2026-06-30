@@ -58,6 +58,9 @@
       overflow:hidden;box-shadow:var(--shadow);touch-action:none}
     .stage canvas{display:block;width:100%;height:auto;cursor:crosshair}
     .stage .guide{position:absolute;inset:0;width:100%;height:100%;mix-blend-mode:multiply;pointer-events:none}
+    .stage .ref{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity .12s}
+    .author{width:100%;border:2px solid #eadfbf;border-radius:12px;padding:9px 12px;font:inherit;font-weight:700;margin-bottom:12px}
+    .author:focus{outline:2px solid var(--green);border-color:var(--green)}
 
     .tools{background:#fff;border:3px solid #eadfbf;border-radius:22px;padding:16px;box-shadow:var(--shadow)}
     .tools h3{font-size:1rem;margin:2px 0 10px;color:var(--green-d)}
@@ -122,6 +125,7 @@
     <div class="stage" id="stage">
       <canvas id="canvas"></canvas>
       <img class="guide" id="guide" src="assets/color/tissa.jpg" alt="" />
+      <img class="ref" id="ref" src="assets/chars/tissa.jpg" alt="" />
     </div>
 
     <div class="tools">
@@ -129,10 +133,13 @@
       <div class="palette" id="palette"></div>
       <p class="hint" id="hint"></p>
       <div class="row" id="sizeRow">Кисть <input type="range" id="size" min="6" max="60" value="26"></div>
+      <div class="row">👀 Образец <input type="range" id="refOp" min="0" max="100" value="0"></div>
+      <h3>Имя художника</h3>
+      <input class="author" id="author" maxlength="24" placeholder="Например: Артём" />
       <div class="tbtns">
         <button class="tbtn eraser" id="eraser">🧽 Ластик</button>
         <button class="tbtn primary" id="clear">↺ Очистить</button>
-        <button class="tbtn save" id="save">⬇️ Сохранить</button>
+        <button class="tbtn save" id="save">⬇️ Сохранить рисунок</button>
       </div>
     </div>
   </div>
@@ -196,6 +203,7 @@
         offc.drawImage(im,0,0);
         gData=offc.getImageData(0,0,W,H).data;     // контур (границы)
         guide.src=im.src;
+        document.getElementById('ref').src=`assets/chars/${name}.jpg`;  // образец (раскрашенный)
       };
       im.src=`assets/color/${name}.jpg`;
     }
@@ -262,13 +270,30 @@
     window.addEventListener('touchend',up);
 
     document.getElementById('size').oninput=e=>size=+e.target.value;
+    document.getElementById('refOp').oninput=e=>document.getElementById('ref').style.opacity=e.target.value/100;
     document.getElementById('eraser').onclick=e=>{erasing=!erasing;e.target.classList.toggle('active',erasing);};
     document.getElementById('clear').onclick=()=>ctx.clearRect(0,0,W,H);
+
     document.getElementById('save').onclick=()=>{
-      const out=document.createElement('canvas'); out.width=W; out.height=H;
-      const o=out.getContext('2d'); o.fillStyle='#fff'; o.fillRect(0,0,W,H);
-      o.drawImage(canvas,0,0); o.globalCompositeOperation='multiply'; o.drawImage(guide,0,0,W,H);
-      const a=document.createElement('a'); a.download='raskraska.png'; a.href=out.toDataURL(); a.click();
+      const fh=Math.round(W*0.12);                 // полоса с подписью внизу
+      const out=document.createElement('canvas'); out.width=W; out.height=H+fh;
+      const o=out.getContext('2d');
+      o.fillStyle='#fff'; o.fillRect(0,0,W,H+fh);
+      o.drawImage(canvas,0,0);                      // раскраска ребёнка
+      o.globalCompositeOperation='multiply'; o.drawImage(guide,0,0,W,H);  // контур сверху
+      o.globalCompositeOperation='source-over';
+      // подпись-плашка со знаком сайта и автором
+      o.fillStyle='#f4f8ea'; o.fillRect(0,H,W,fh);
+      o.fillStyle='#eadfbf'; o.fillRect(0,H,W,3);
+      o.textBaseline='middle';
+      o.fillStyle='#5a8423'; o.font=`900 ${Math.round(fh*0.30)}px Nunito,Arial`;
+      o.fillText('🌿 Мир Кирпи и Гофера', W*0.04, H+fh*0.36);
+      o.fillStyle='#5a4a34'; o.font=`bold ${Math.round(fh*0.26)}px Nunito,Arial`;
+      const name=(document.getElementById('author').value||'').trim();
+      o.fillText(name ? ('Художник: '+name) : 'Моя раскраска ✏️', W*0.04, H+fh*0.74);
+      o.fillStyle='#9a8a72'; o.font=`bold ${Math.round(fh*0.2)}px Nunito,Arial`;
+      o.textAlign='right'; o.fillText('kirpigofer • раскраски', W*0.96, H+fh*0.5); o.textAlign='left';
+      const a=document.createElement('a'); a.download='moya-raskraska.png'; a.href=out.toDataURL(); a.click();
     };
   </script>
 </body>
