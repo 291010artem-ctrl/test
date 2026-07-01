@@ -195,6 +195,29 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
 .kg-space .tw{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;
   box-shadow:0 0 6px #fff;animation:kgtwinkle 3s ease-in-out infinite}
 .kg-space .tw.big{width:4px;height:4px}
+
+/* ---------- Дневная тема: облака, бабочки, полянка (только днём) ---------- */
+.kg-day{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.kg-day .cloud{position:absolute;opacity:.9;filter:drop-shadow(0 6px 8px rgba(120,140,160,.15));
+  animation:kgdrift linear infinite}
+.kg-day .spark{position:absolute;width:5px;height:5px;border-radius:50%;background:#fff6c8;
+  box-shadow:0 0 8px #ffe89a;animation:kgtwinkle 3s ease-in-out infinite}
+.kg-day .meadow{position:absolute;left:0;right:0;bottom:0;height:120px;
+  background:linear-gradient(180deg,rgba(175,215,120,0) 0%,rgba(170,214,120,.55) 55%,rgba(150,200,95,.92) 100%)}
+.kg-day .fl{position:absolute;bottom:5px;animation:kgsway ease-in-out infinite;transform-origin:bottom center}
+/* бабочки/пчёлки поверх (порхают по экрану) */
+.kg-fly{position:fixed;inset:0;z-index:9990;overflow:hidden;pointer-events:none}
+.kg-fly .bf{position:absolute;animation:kgflutter linear infinite}
+@keyframes kgdrift{from{transform:translateX(-24vw)}to{transform:translateX(122vw)}}
+@keyframes kgsway{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
+@keyframes kgflutter{
+  0%{transform:translate(-8vw,0) rotate(-8deg)}
+  25%{transform:translate(24vw,-34px) rotate(10deg)}
+  50%{transform:translate(52vw,10px) rotate(-8deg)}
+  75%{transform:translate(82vw,-26px) rotate(10deg)}
+  100%{transform:translate(120vw,6px) rotate(-8deg)}}
+/* днём подвал прозрачный — чтобы полянка была видна под подписью */
+html:not([data-theme="night"]) .footer{background:transparent !important}
 @keyframes kgfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 @keyframes kgtwinkle{0%,100%{opacity:.25}50%{opacity:1}}
 @keyframes kgrocket{
