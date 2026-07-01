@@ -19,9 +19,15 @@ html[data-theme="night"]{
   --shadow:0 12px 30px rgba(0,0,0,.5);
 }
 html[data-theme="night"] body{
-  background:#0e1630 !important;
-  background:linear-gradient(180deg,#0d1430 0%,#152340 45%,#0b1024 100%) !important;
+  background:#12192b !important;
+  /* верх фона = цвет нижних краёв ночной картинки, чтобы стык был незаметным */
+  background:linear-gradient(180deg,#12192b 0px,#141d3c 620px,#0b1024 100%) !important;
   color:var(--ink);
+}
+/* низ фоновой картинки плавно растворяем в фон страницы (нет резкой полосы) */
+html[data-theme="night"] .hero>img{
+  -webkit-mask-image:linear-gradient(180deg,#000 90%,rgba(0,0,0,0) 100%);
+  mask-image:linear-gradient(180deg,#000 90%,rgba(0,0,0,0) 100%);
 }
 
 /* ---------- Шапка ---------- */
