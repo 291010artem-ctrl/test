@@ -99,7 +99,7 @@
       <div class="tab-content" id="tab-camera">
         <div class="card">
           <h3>Камера телефона <span id="camStatus" class="cam-status">телефон не подключён</span></h3>
-          <div class="cam-wrap"><img id="camImg" alt=""><div id="camHint" class="screen-hint">Установи APK на телефон, выдай доступ к камере и нажми «Начать трансляцию» в приложении.</div></div>
+          <div class="cam-wrap"><img id="camImg" alt=""><div id="camHint" class="screen-hint">Установи APK на телефон, выдай доступ к камере и нажми «Начать трансляцию» — телефон подключится автоматически.</div></div>
         </div>
       </div>
 
@@ -116,8 +116,10 @@
           <label class="fld">Иконка (PNG, необязательно)
             <input id="bIcon" type="file" accept="image/png">
           </label>
-          <label class="fld">Адрес панели по умолчанию (зашивается в APK)
-            <input id="bServer" placeholder="192.168.0.10:8787" spellcheck="false">
+          <label class="fld">
+            Адрес панели — зашивается в APK, телефон подключается сам
+            <input id="bServer" placeholder="определяется автоматически…" spellcheck="false" required>
+            <span class="muted-text">Подставляется автоматически. Убедись, что телефон в той же Wi-Fi сети, что и этот ПК.</span>
           </label>
           <div class="fld">Разрешения:
             <label class="chk"><input type="checkbox" checked disabled> Камера</label>

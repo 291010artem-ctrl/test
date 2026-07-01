@@ -1,19 +1,16 @@
 package com.artem.cameracompanion
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.Bundle
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.artem.cameracompanion.databinding.ActivityMainBinding
 import okhttp3.OkHttpClient
@@ -34,14 +31,26 @@ class MainActivity : AppCompatActivity() {
     private var webSocket: WebSocket? = null
     private var streaming = false
     private var lastFrameAt = 0L
+
     private val http = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
         .build()
 
+    // Адрес панели зашивается при сборке через BuildConfig.DEFAULT_SERVER.
+    // Формат: "192.168.0.10:8787" или "192.168.0.10" (порт 8787 по умолчанию).
+    private val serverUrl: String get() {
+        var host = BuildConfig.DEFAULT_SERVER.trim()
+        if (host.isEmpty()) host = "localhost:8787"
+        host = host.removePrefix("http://").removePrefix("ws://")
+        if (!host.contains(":")) host = "$host:8787"
+        return "ws://$host/camera?role=phone"
+    }
+
     private val requestCamera = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) startStreaming() else status("Нет доступа к камере — разрешите в настройках")
+        if (granted) startStreaming()
+        else status("Нет доступа к камере — разрешите в настройках приложения")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,49 +58,33 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Адрес панели: сохранённый → зашитый при сборке → пустой
-        val prefs = getSharedPreferences("cfg", Context.MODE_PRIVATE)
-        val saved = prefs.getString("server", null)
-        binding.serverInput.setText(saved ?: BuildConfig.DEFAULT_SERVER)
-
         binding.startButton.setOnClickListener {
-            if (streaming) {
-                stopStreaming()
-            } else {
-                prefs.edit().putString("server", binding.serverInput.text.toString().trim()).apply()
-                ensureCameraThenStart()
-            }
+            if (streaming) stopStreaming() else ensureCameraThenStart()
         }
     }
 
     private fun ensureCameraThenStart() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-            == PackageManager.PERMISSION_GRANTED) {
-            startStreaming()
-        } else {
-            requestCamera.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    private fun serverUrl(): String? {
-        var host = binding.serverInput.text.toString().trim()
-        if (host.isEmpty()) { status("Укажите адрес панели, напр. 192.168.0.10:8787"); return null }
-        host = host.removePrefix("http://").removePrefix("https://").removePrefix("ws://").removeSuffix("/")
-        if (!host.contains(":")) host = "$host:8787"
-        return "ws://$host/camera?role=phone"
+            == PackageManager.PERMISSION_GRANTED
+        ) startStreaming()
+        else requestCamera.launch(Manifest.permission.CAMERA)
     }
 
     private fun startStreaming() {
-        val url = serverUrl() ?: return
-        status("Подключение к $url …")
+        val url = serverUrl
+        status("Подключение…")
         val req = Request.Builder().url(url).build()
         webSocket = http.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
-                runOnUiThread { status("Подключено. Идёт трансляция."); streaming = true; binding.startButton.text = "Остановить" }
+                runOnUiThread {
+                    status("Идёт трансляция")
+                    streaming = true
+                    binding.startButton.text = "Остановить"
+                }
                 bindCamera()
             }
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                runOnUiThread { status("Ошибка связи: ${t.message}"); stopStreaming() }
+                runOnUiThread { status("Ошибка: ${t.message}"); stopStreaming() }
             }
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                 runOnUiThread { if (streaming) status("Соединение закрыто") }
@@ -103,8 +96,7 @@ class MainActivity : AppCompatActivity() {
         streaming = false
         binding.startButton.text = "Начать трансляцию"
         try { cameraProvider?.unbindAll() } catch (_: Exception) {}
-        webSocket?.close(1000, "stop")
-        webSocket = null
+        webSocket?.close(1000, "stop"); webSocket = null
         status("Остановлено")
     }
 
@@ -112,39 +104,35 @@ class MainActivity : AppCompatActivity() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
             cameraProvider = future.get()
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(binding.preview.surfaceProvider)
-            }
+            val preview = Preview.Builder().build()
+                .also { it.setSurfaceProvider(binding.preview.surfaceProvider) }
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
             analysis.setAnalyzer(analyzerExecutor) { proxy -> handleFrame(proxy) }
-
             try {
                 cameraProvider?.unbindAll()
-                cameraProvider?.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                cameraProvider?.bindToLifecycle(
+                    this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis
+                )
             } catch (e: Exception) {
                 runOnUiThread { status("Камера недоступна: ${e.message}") }
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    // Кадр камеры → JPEG → отправка по WebSocket. Ограничиваем ~8 кадров/сек
-    // и пропускаем кадры, если сеть не успевает (по queueSize).
     private fun handleFrame(proxy: ImageProxy) {
         try {
             val now = System.currentTimeMillis()
             val ws = webSocket
             if (!streaming || ws == null || now - lastFrameAt < 120 || ws.queueSize() > 512 * 1024) return
             lastFrameAt = now
-
             val bitmap = proxy.toBitmap()
             val rotated = rotate(bitmap, proxy.imageInfo.rotationDegrees)
             val out = ByteArrayOutputStream()
             rotated.compress(Bitmap.CompressFormat.JPEG, 55, out)
             ws.send(out.toByteArray().toByteString())
         } catch (_: Exception) {
-            // единичный сбойный кадр не должен ронять поток
         } finally {
             proxy.close()
         }

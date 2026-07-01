@@ -215,6 +215,11 @@ async function loadBuildTab() {
 
 $('#buildBtn').onclick = async () => {
   const msg = $('#buildMsg');
+  if (!$('#bServer').value.trim()) {
+    msg.textContent = 'Укажи адрес панели — он зашивается в APK, чтобы телефон знал куда подключаться.';
+    $('#bServer').focus();
+    return;
+  }
   msg.textContent = 'Сборка… (первая может занять несколько минут)';
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
