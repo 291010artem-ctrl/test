@@ -1,0 +1,194 @@
+:root {
+  --bg: #0f1216;
+  --panel: #171c22;
+  --panel2: #1e252d;
+  --border: #2a333d;
+  --text: #e6edf3;
+  --muted: #8b98a5;
+  --accent: #3fb950;
+  --accent2: #388bfd;
+  --danger: #f85149;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.brand { font-weight: 700; font-size: 18px; }
+
+.device-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); display: inline-block; }
+.dot.on { background: var(--accent); }
+
+.layout { display: flex; gap: 12px; padding: 12px; flex: 1; min-height: 0; }
+
+/* ----- Экран ----- */
+.screen-col { display: flex; flex-direction: column; gap: 8px; }
+
+.screen-toolbar, .text-input-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+.screen-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#screen {
+  max-height: 100%;
+  max-width: 360px;
+  object-fit: contain;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.screen-hint {
+  position: absolute;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+  pointer-events: none;
+  padding: 20px;
+}
+
+.fps { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+.text-input-row input { flex: 1; }
+
+/* ----- Панель / вкладки ----- */
+.panel-col {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tabs { display: flex; border-bottom: 1px solid var(--border); }
+.tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  border-bottom: 2px solid transparent;
+}
+.tab.active { color: var(--text); border-bottom-color: var(--accent2); }
+
+.tab-content { display: none; padding: 14px; overflow: auto; flex: 1; }
+.tab-content.active { display: block; }
+
+.card {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.card h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.kv b { color: var(--muted); font-weight: 500; }
+
+.battery-bar {
+  position: relative;
+  height: 22px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+#batteryFill { height: 100%; background: var(--accent); width: 0%; transition: width .3s; }
+#batteryText {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+}
+
+.row { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+.row input[type=text], .row input:not([type]) { flex: 1; }
+.chk { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.list li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: var(--panel2);
+  font-size: 13px;
+}
+.list li .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list li.dir .name { color: var(--accent2); cursor: pointer; }
+.list .sub { color: var(--muted); font-size: 11px; }
+
+/* ----- Элементы управления ----- */
+button {
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+button:hover { border-color: var(--accent2); }
+button.primary { background: var(--accent2); border-color: var(--accent2); }
+button.sm { padding: 4px 8px; font-size: 12px; }
+
+input, select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent2); }
+
+.toast {
+  position: fixed;
+  bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px);
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  padding: 10px 18px;
+  border-radius: 8px;
+  transition: transform .3s;
+  z-index: 100;
+  max-width: 80vw;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.err { border-color: var(--danger); }

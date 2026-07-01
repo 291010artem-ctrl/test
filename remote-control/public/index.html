@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Android Remote Panel</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">📱 Android Remote Panel</div>
+    <div class="device-picker">
+      <select id="deviceSelect" title="Устройство"></select>
+      <button id="refreshDevices" title="Обновить список">⟳</button>
+      <span id="connState" class="dot" title="Статус"></span>
+      <input id="wifiHost" placeholder="192.168.0.10:5555" size="16">
+      <button id="wifiConnect">Wi-Fi connect</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Левая колонка: экран телефона -->
+    <section class="screen-col">
+      <div class="screen-toolbar">
+        <button id="btnStream" class="primary">▶ Экран</button>
+        <button data-key="BACK" title="Назад">◀</button>
+        <button data-key="HOME" title="Домой">●</button>
+        <button data-key="RECENTS" title="Недавние">■</button>
+        <button data-key="POWER" title="Питание">⏻</button>
+        <button data-key="VOLUME_UP" title="Громче">🔊+</button>
+        <button data-key="VOLUME_DOWN" title="Тише">🔊−</button>
+        <span id="fps" class="fps"></span>
+      </div>
+      <div class="screen-wrap">
+        <img id="screen" alt="Экран телефона появится здесь" draggable="false">
+        <div id="screenHint" class="screen-hint">Нажми «▶ Экран», чтобы начать трансляцию.<br>Клик = тап, перетаскивание = свайп. Печатай с клавиатуры.</div>
+      </div>
+      <div class="text-input-row">
+        <input id="textInput" placeholder="Текст для отправки на телефон…">
+        <button id="sendText">Отправить</button>
+        <button data-key="ENTER">⏎ Enter</button>
+        <button data-key="DEL">⌫ Del</button>
+      </div>
+    </section>
+
+    <!-- Правая колонка: вкладки -->
+    <section class="panel-col">
+      <nav class="tabs">
+        <button class="tab active" data-tab="dashboard">Дашборд</button>
+        <button class="tab" data-tab="apps">Приложения</button>
+        <button class="tab" data-tab="files">Файлы</button>
+        <button class="tab" data-tab="notifs">Уведомления</button>
+      </nav>
+
+      <div class="tab-content active" id="tab-dashboard">
+        <div class="card" id="infoCard"><h3>Устройство</h3><div class="kv" id="infoKv">—</div></div>
+        <div class="card" id="batteryCard">
+          <h3>Батарея</h3>
+          <div class="battery-bar"><div id="batteryFill"></div><span id="batteryText"></span></div>
+          <div class="kv" id="batteryKv">—</div>
+        </div>
+        <button id="refreshDash">Обновить</button>
+      </div>
+
+      <div class="tab-content" id="tab-apps">
+        <div class="row">
+          <input id="appFilter" placeholder="Фильтр по имени пакета…">
+          <label class="chk"><input type="checkbox" id="appsAll"> все</label>
+          <button id="refreshApps">Обновить</button>
+        </div>
+        <ul id="appList" class="list"></ul>
+      </div>
+
+      <div class="tab-content" id="tab-files">
+        <div class="row">
+          <input id="filePath" value="/sdcard" spellcheck="false">
+          <button id="goPath">Открыть</button>
+          <button id="upPath" title="Вверх">↑</button>
+        </div>
+        <div class="row">
+          <input type="file" id="uploadInput">
+          <button id="uploadBtn">Загрузить сюда</button>
+        </div>
+        <ul id="fileList" class="list"></ul>
+      </div>
+
+      <div class="tab-content" id="tab-notifs">
+        <div class="row">
+          <input id="notifTitle" placeholder="Заголовок">
+          <input id="notifText" placeholder="Текст">
+          <button id="postNotif">Отправить на телефон</button>
+        </div>
+        <button id="refreshNotifs">Обновить список</button>
+        <ul id="notifList" class="list"></ul>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="panel.js"></script>
+</body>
+</html>
