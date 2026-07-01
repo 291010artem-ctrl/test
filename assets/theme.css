@@ -1,6 +1,9 @@
 /* ===== Ночная тема «Мир Кирпи и Гофера» =====
    Включается атрибутом html[data-theme="night"] (ставит theme.js). */
 
+/* декоративные слои (космос ночью, полянка днём) цепляются за низ ВСЕЙ страницы */
+body{position:relative}
+
 /* Переключатель день/ночь (солнце ⇄ луна) */
 .theme-toggle{cursor:pointer;border:none;background:transparent;padding:0;display:flex;flex-direction:column;align-items:center;gap:2px}
 .theme-toggle .tt-track{width:56px;height:28px;border-radius:999px;position:relative;
