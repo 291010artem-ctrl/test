@@ -93,8 +93,8 @@
       .wrap{grid-template-columns:1fr}
     }
   </style>
-  <link rel="stylesheet" href="assets/theme.css?v=14" />
-  <script src="assets/theme.js?v=14"></script>
+  <link rel="stylesheet" href="assets/theme.css?v=15" />
+  <script src="assets/theme.js?v=15"></script>
 </head>
 <body>
   <header class="header">
@@ -240,7 +240,7 @@
         offc.drawImage(im,0,0);
         gData=offc.getImageData(0,0,W,H).data;     // контур (границы)
         guide.src=im.src;
-        document.getElementById('ref').src=`assets/chars/${name}.jpg`;  // образец (раскрашенный)
+        document.getElementById('ref').src=`assets/color/${name}_c.jpg`;  // образец (раскрашенный, без текста)
         renderPalette(name);                                            // палитра под этого героя
       };
       im.src=`assets/color/${name}.jpg`;
@@ -356,6 +356,6 @@
         KG.award(map[curHero]||'kirpi'); }
     };
   </script>
-  <script src="assets/kg.js?v=14"></script>
+  <script src="assets/kg.js?v=15"></script>
 </body>
 </html>
