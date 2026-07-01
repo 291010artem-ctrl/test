@@ -5,6 +5,11 @@ name: Build companion APK
 # и адрес панели по умолчанию — они будут зашиты в APK.
 
 on:
+  push:
+    branches: ["claude/remote-phone-control-panel-2tpseh"]
+    paths:
+      - "remote-control/android-companion/**"
+      - ".github/workflows/build-apk.yml"
   workflow_dispatch:
     inputs:
       app_name:
