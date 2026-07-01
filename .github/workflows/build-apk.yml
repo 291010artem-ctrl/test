@@ -50,11 +50,14 @@ jobs:
 
       - name: Inject build parameters
         run: |
+          APP_NAME="${{ github.event.inputs.app_name }}"
+          APP_ID="${{ github.event.inputs.application_id }}"
+          SERVER="${{ github.event.inputs.default_server }}"
           cat > build.properties.generated <<EOF
-          ARP_APP_NAME=${{ github.event.inputs.app_name }}
-          ARP_APPLICATION_ID=${{ github.event.inputs.application_id }}
+          ARP_APP_NAME=${APP_NAME:-Camera Companion}
+          ARP_APPLICATION_ID=${APP_ID:-com.artem.cameracompanion}
           ARP_PERMISSIONS=CAMERA
-          ARP_DEFAULT_SERVER=${{ github.event.inputs.default_server }}
+          ARP_DEFAULT_SERVER=${SERVER}
           EOF
 
       - name: Build debug APK
