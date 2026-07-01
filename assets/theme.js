@@ -77,17 +77,25 @@
     if(document.getElementById('kg-space')) return;
     const d=document.createElement('div');
     d.className='kg-space'; d.id='kg-space'; d.setAttribute('aria-hidden','true');
+    // звёзды по всей площади страницы (плотность зависит от высоты)
+    const h=Math.max(document.body.scrollHeight, window.innerHeight);
+    const count=Math.min(240, Math.max(80, Math.round(h/9)));
     let tw='';
-    for(let i=0;i<14;i++){
-      tw+='<span class="tw" style="left:'+(4+Math.random()*92).toFixed(1)+'%;top:'+(6+Math.random()*88).toFixed(1)+
+    for(let i=0;i<count;i++){
+      const big=Math.random()<0.22?' big':'';
+      tw+='<span class="tw'+big+'" style="left:'+(1+Math.random()*98).toFixed(1)+'%;top:'+(1+Math.random()*98).toFixed(1)+
           '%;animation-delay:'+(-Math.random()*3).toFixed(2)+'s"></span>';
     }
     d.innerHTML=tw+
       '<div class="planet p1"></div>'+
       '<div class="planet p2"></div>'+
       '<div class="planet p3"><span class="ring"></span></div>'+
+      '<div class="planet p4"></div>'+
+      '<div class="planet p5"></div>'+
+      '<div class="planet p6"></div>'+
       '<div class="ufo">🛸</div>'+
-      '<div class="rocket">🚀</div>';
+      '<div class="rocket">🚀</div>'+
+      '<div class="rocket rocket2">🚀</div>';
     document.body.appendChild(d);
   }
   function removeSpace(){ const d=document.getElementById('kg-space'); if(d) d.remove(); }

@@ -117,11 +117,12 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
 
 /* ---------- Космос внизу (только ночью) — НЕ добавляет высоту,
    прикреплён к низу окна и лежит ПОЗАДИ контента, заполняя пустоту ---------- */
-.kg-space{position:absolute;left:0;right:0;bottom:0;height:230px;z-index:-1;overflow:hidden;pointer-events:none}
+/* слой космоса на ВСЮ высоту страницы: звёзды повсюду, планеты внизу */
+.kg-space{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
 .kg-space .planet{position:absolute;border-radius:50%}
 
 /* газовый гигант с полосами (тёплый) */
-.kg-space .p1{width:78px;height:78px;left:9%;top:32px;
+.kg-space .p1{width:78px;height:78px;left:8%;bottom:80px;
   background:
     radial-gradient(circle at 34% 28%,rgba(255,255,255,.5),rgba(255,255,255,0) 38%),
     repeating-linear-gradient(8deg,#e7b06a 0 5px,#cf9850 5px 9px,#dda760 9px 14px,#bd8746 14px 19px),
@@ -131,7 +132,7 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
   animation:kgfloat 9s ease-in-out infinite}
 
 /* землеподобная (голубая с «континентами») */
-.kg-space .p2{width:48px;height:48px;left:33%;top:18px;
+.kg-space .p2{width:48px;height:48px;left:29%;bottom:128px;
   background:
     radial-gradient(circle at 34% 28%,rgba(255,255,255,.55),rgba(255,255,255,0) 40%),
     radial-gradient(ellipse 12px 7px at 62% 58%,#78b46e,transparent 60%),
@@ -143,23 +144,57 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
   animation:kgfloat 11s ease-in-out -3s infinite}
 
 /* планета с кольцом (фиолетовая, Сатурн) */
-.kg-space .p3{width:58px;height:58px;right:13%;top:40px;
+.kg-space .p3{width:58px;height:58px;right:12%;bottom:66px;
   background:
     radial-gradient(circle at 35% 28%,rgba(255,255,255,.45),rgba(255,255,255,0) 40%),
     radial-gradient(circle at 50% 50%,#d3b6f2,#6b4aa0 84%);
   box-shadow:inset -10px -9px 20px rgba(28,10,58,.62),inset 6px 5px 12px rgba(238,222,255,.3),
     0 0 20px rgba(160,130,230,.26);
   animation:kgfloat 10s ease-in-out -5s infinite}
-/* кольцо: наклонный эллипс */
 .kg-space .p3 .ring{position:absolute;left:-42%;top:33%;width:184%;height:34%;border-radius:50%;
   border:4px solid rgba(228,208,255,.55);border-top-color:rgba(245,232,255,.75);
   transform:rotate(-20deg);box-shadow:0 0 6px rgba(200,180,240,.25)}
 
-.kg-space .rocket{position:absolute;left:-8%;top:120px;font-size:30px;
+/* Марс (красный) */
+.kg-space .p4{width:40px;height:40px;left:51%;bottom:44px;
+  background:
+    radial-gradient(circle at 34% 28%,rgba(255,255,255,.4),rgba(255,255,255,0) 40%),
+    radial-gradient(ellipse 9px 6px at 60% 62%,#a63a1c,transparent 60%),
+    radial-gradient(ellipse 6px 4px at 38% 40%,#b6512a,transparent 60%),
+    radial-gradient(circle at 50% 50%,#e07a44,#8f3115 86%);
+  box-shadow:inset -7px -6px 14px rgba(50,10,0,.6),inset 5px 4px 9px rgba(255,200,160,.28),
+    0 0 16px rgba(220,110,60,.25);
+  animation:kgfloat 8s ease-in-out -2s infinite}
+
+/* Луна (серая, с кратерами) */
+.kg-space .p5{width:32px;height:32px;right:31%;bottom:132px;
+  background:
+    radial-gradient(circle at 33% 28%,rgba(255,255,255,.5),rgba(255,255,255,0) 42%),
+    radial-gradient(circle 4px at 62% 40%,rgba(120,120,130,.7),transparent 70%),
+    radial-gradient(circle 3px at 40% 66%,rgba(120,120,130,.65),transparent 70%),
+    radial-gradient(circle 2px at 70% 68%,rgba(120,120,130,.6),transparent 70%),
+    radial-gradient(circle at 50% 50%,#dfe1e8,#8b8f9c 88%);
+  box-shadow:inset -6px -5px 12px rgba(20,20,35,.55),inset 4px 3px 7px rgba(255,255,255,.35),
+    0 0 12px rgba(200,205,225,.22);
+  animation:kgfloat 12s ease-in-out -6s infinite}
+
+/* маленькая бирюзовая планета вдали */
+.kg-space .p6{width:34px;height:34px;left:71%;bottom:104px;
+  background:
+    radial-gradient(circle at 34% 28%,rgba(255,255,255,.45),rgba(255,255,255,0) 40%),
+    radial-gradient(circle at 50% 50%,#7ce0d0,#227d78 86%);
+  box-shadow:inset -6px -5px 12px rgba(0,30,35,.55),inset 4px 3px 8px rgba(210,255,250,.3),
+    0 0 14px rgba(90,220,200,.24);
+  animation:kgfloat 9s ease-in-out -4s infinite}
+
+.kg-space .rocket{position:absolute;left:-8%;bottom:96px;font-size:30px;
   animation:kgrocket 15s linear infinite}
-.kg-space .ufo{position:absolute;right:26%;top:14px;font-size:26px;animation:kgfloat 6s ease-in-out infinite}
+.kg-space .rocket2{position:absolute;left:-8%;bottom:150px;font-size:22px;
+  animation:kgrocket 22s linear -8s infinite}
+.kg-space .ufo{position:absolute;right:24%;bottom:180px;font-size:26px;animation:kgfloat 6s ease-in-out infinite}
 .kg-space .tw{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;
   box-shadow:0 0 6px #fff;animation:kgtwinkle 3s ease-in-out infinite}
+.kg-space .tw.big{width:4px;height:4px}
 @keyframes kgfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 @keyframes kgtwinkle{0%,100%{opacity:.25}50%{opacity:1}}
 @keyframes kgrocket{
