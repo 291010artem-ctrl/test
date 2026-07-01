@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "description": "Веб-панель для удалённого управления Android-телефоном с ПК через ADB",
   "type": "module",
-  "main": "server.js",
+  "main": "electron/main.js",
+  "author": "Artem",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "app": "electron .",
+    "dist": "electron-builder --win",
+    "dist:portable": "electron-builder --win portable",
+    "dist:linux": "electron-builder --linux",
+    "dist:mac": "electron-builder --mac"
   },
   "engines": {
     "node": ">=18"
@@ -15,5 +20,56 @@
     "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.artem.androidremotepanel",
+    "productName": "Android Remote Panel",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**",
+      "server.js",
+      "adb.js",
+      "public/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "platform-tools",
+        "to": "platform-tools",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "artifactName": "AndroidRemotePanel-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Android Remote Panel"
+    },
+    "portable": {
+      "artifactName": "AndroidRemotePanel-${version}-portable.exe"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Utility"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.utilities"
+    }
   }
 }

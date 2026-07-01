@@ -167,8 +167,29 @@ wss.on('connection', (ws) => {
   ws.on('close', () => { streaming = false; });
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`\n  Android Remote Panel запущена:`);
-  console.log(`  →  http://localhost:${PORT}\n`);
-  console.log(`  Убедись, что телефон подключён и "adb devices" его видит.\n`);
-});
+// Запуск сервера. Возвращает { server, port } — используется как из CLI,
+// так и из Electron (main-процесс поднимает сервер внутри приложения).
+export function startServer({ port = PORT, host = HOST } = {}) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      const actualPort = server.address().port;
+      resolve({ server, port: actualPort, host });
+    });
+  });
+}
+
+// Если файл запущен напрямую (node server.js) — стартуем в «браузерном» режиме.
+const isDirectRun = process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectRun) {
+  startServer().then(({ port }) => {
+    console.log(`\n  Android Remote Panel запущена:`);
+    console.log(`  →  http://localhost:${port}\n`);
+    console.log(`  Убедись, что телефон подключён и "adb devices" его видит.\n`);
+  }).catch((e) => {
+    console.error('Не удалось запустить сервер:', e.message);
+    process.exit(1);
+  });
+}
