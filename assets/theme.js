@@ -72,6 +72,26 @@
     stars=[]; if(ctx&&cv) ctx.clearRect(0,0,cv.width,cv.height);
   }
 
+  /* ---------- космическая полоса внизу страницы ---------- */
+  function addSpace(){
+    if(document.getElementById('kg-space')) return;
+    const d=document.createElement('div');
+    d.className='kg-space'; d.id='kg-space'; d.setAttribute('aria-hidden','true');
+    let tw='';
+    for(let i=0;i<14;i++){
+      tw+='<span class="tw" style="left:'+(4+Math.random()*92).toFixed(1)+'%;top:'+(6+Math.random()*88).toFixed(1)+
+          '%;animation-delay:'+(-Math.random()*3).toFixed(2)+'s"></span>';
+    }
+    d.innerHTML=tw+
+      '<div class="planet p1"></div>'+
+      '<div class="planet p2"></div>'+
+      '<div class="planet p3"><span class="ring"></span></div>'+
+      '<div class="ufo">🛸</div>'+
+      '<div class="rocket">🚀</div>';
+    document.body.appendChild(d);
+  }
+  function removeSpace(){ const d=document.getElementById('kg-space'); if(d) d.remove(); }
+
   /* ---------- смена фона-героя на главной ---------- */
   function swapHero(t){
     document.querySelectorAll('img[data-day]').forEach(img=>{
@@ -82,8 +102,8 @@
 
   function apply(t,animate){
     theme=t; localStorage.setItem(KEY,t);
-    if(t==='night'){ root.setAttribute('data-theme','night'); startSky(); }
-    else{ root.removeAttribute('data-theme'); stopSky(); }
+    if(t==='night'){ root.setAttribute('data-theme','night'); startSky(); addSpace(); }
+    else{ root.removeAttribute('data-theme'); stopSky(); removeSpace(); }
     swapHero(t);
     const knob=document.querySelector('.theme-toggle .tt-knob');
     if(knob) knob.textContent = t==='night' ? '🌙' : '🌞';
@@ -100,6 +120,6 @@
     if(actions) actions.appendChild(btn); else { btn.style.cssText+=';position:fixed;right:16px;bottom:16px;z-index:9995'; document.body.appendChild(btn); }
 
     swapHero(theme);
-    if(theme==='night') startSky();
+    if(theme==='night'){ startSky(); addSpace(); }
   });
 })();
