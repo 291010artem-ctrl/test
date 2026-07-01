@@ -101,40 +101,55 @@
   function removeSpace(){ const d=document.getElementById('kg-space'); if(d) d.remove(); }
 
   /* ---------- дневной декор: облака, полянка, бабочки ---------- */
+  function grassBg(front){
+    const top=front?'#8fca4c':'#79b23c', bot=front?'#5a9a2c':'#4a851f';
+    // силуэт травы — мягкие «холмики» из кривых
+    const svg="<svg xmlns='http://www.w3.org/2000/svg' width='220' height='100'>"+
+      "<defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>"+
+      "<stop offset='0' stop-color='"+top+"'/><stop offset='1' stop-color='"+bot+"'/></linearGradient></defs>"+
+      "<path fill='url(#g)' d='M0,100 L0,64 Q7,32 15,60 Q23,28 32,58 Q42,24 51,56 Q62,40 71,62 "+
+      "Q82,28 92,58 Q103,42 113,60 Q124,26 134,56 Q145,44 155,60 Q166,30 176,58 Q187,42 198,60 Q208,32 220,58 L220,100 Z'/>"+
+      "</svg>";
+    return "url(\"data:image/svg+xml,"+encodeURIComponent(svg)+"\")";
+  }
   function addDay(){
     if(document.getElementById('kg-day')) return;
     const d=document.createElement('div'); d.className='kg-day'; d.id='kg-day'; d.setAttribute('aria-hidden','true');
-    let html='';
-    // облака вверху
-    [['4%',52,64],['9%',36,92],['6%',44,120],['13%',30,150]].forEach((c,i)=>{
-      const [t,s,dur]=c;
-      html+='<div class="cloud" style="top:'+t+';font-size:'+s+'px;animation-duration:'+dur+'s;animation-delay:'+(-i*20)+'s">☁️</div>';
+
+    // облака вверху (нарисованные)
+    [['3%',1.0,70],['8%',0.75,100],['5%',0.9,132],['12%',0.6,160]].forEach((c,i)=>{
+      const [t,sc,dur]=c;
+      const cl=document.createElement('div'); cl.className='cloud';
+      cl.style.cssText='top:'+t+';transform:scale('+sc+');animation-duration:'+dur+'s;animation-delay:'+(-i*22)+'s';
+      d.appendChild(cl);
     });
-    // солнечные искорки по площади
-    for(let i=0;i<20;i++){
-      html+='<span class="spark" style="left:'+(2+Math.random()*96).toFixed(1)+'%;top:'+(3+Math.random()*78).toFixed(1)+
-            '%;animation-delay:'+(-Math.random()*3).toFixed(2)+'s"></span>';
+
+    // трава — два слоя
+    const gb=document.createElement('div'); gb.className='grass back'; gb.style.backgroundImage=grassBg(false); d.appendChild(gb);
+    const gf=document.createElement('div'); gf.className='grass'; gf.style.backgroundImage=grassBg(true); d.appendChild(gf);
+
+    // цветы (нарисованные)
+    const petals=['#ff8fb1','#ff6f91','#c48cff','#ff7a7a','#ffb14d','#ffffff'];
+    for(let i=0;i<9;i++){
+      const fl=document.createElement('div'); fl.className='flower';
+      fl.style.setProperty('--pc', petals[Math.floor(Math.random()*petals.length)]);
+      const sc=(0.8+Math.random()*0.6).toFixed(2);
+      fl.style.cssText+='left:'+(3+Math.random()*94).toFixed(1)+'%;transform:scale('+sc+');'+
+        'animation-duration:'+(3+Math.random()*2.5).toFixed(1)+'s;animation-delay:'+(-Math.random()*3).toFixed(1)+'s';
+      fl.innerHTML='<span class="stem"></span><span class="leaf"></span><span class="head"></span><span class="core"></span>';
+      d.appendChild(fl);
     }
-    // полянка с цветами внизу
-    html+='<div class="meadow"></div>';
-    const flowers=['🌷','🌼','🌻','🌸','🍄','🌿','🌷','🐞'];
-    for(let i=0;i<18;i++){
-      const e=flowers[Math.floor(Math.random()*flowers.length)];
-      html+='<div class="fl" style="left:'+(1+Math.random()*96).toFixed(1)+'%;font-size:'+(19+Math.random()*13).toFixed(0)+
-            'px;animation-duration:'+(3+Math.random()*3).toFixed(1)+'s;animation-delay:'+(-Math.random()*3).toFixed(1)+'s">'+e+'</div>';
+
+    // лёгкие пушинки
+    for(let i=0;i<7;i++){
+      const p=document.createElement('span'); p.className='pollen';
+      p.style.cssText='left:'+(4+Math.random()*92).toFixed(1)+'%;bottom:'+(20+Math.random()*40).toFixed(0)+'px;'+
+        'animation-duration:'+(9+Math.random()*7).toFixed(1)+'s;animation-delay:'+(-Math.random()*9).toFixed(1)+'s';
+      d.appendChild(p);
     }
-    d.innerHTML=html; document.body.appendChild(d);
-    // бабочки и пчёлки поверх
-    const f=document.createElement('div'); f.className='kg-fly'; f.id='kg-fly'; f.setAttribute('aria-hidden','true');
-    const bugs=['🦋','🐝','🦋','🐞','🦋'];
-    let fb='';
-    for(let i=0;i<6;i++){
-      fb+='<div class="bf" style="top:'+(8+Math.random()*64).toFixed(0)+'%;font-size:'+(22+Math.random()*10).toFixed(0)+
-          'px;animation-duration:'+(16+Math.random()*12).toFixed(0)+'s;animation-delay:'+(-Math.random()*20).toFixed(0)+'s">'+bugs[i%bugs.length]+'</div>';
-    }
-    f.innerHTML=fb; document.body.appendChild(f);
+    document.body.appendChild(d);
   }
-  function removeDay(){ ['kg-day','kg-fly'].forEach(id=>{const x=document.getElementById(id); if(x) x.remove();}); }
+  function removeDay(){ const x=document.getElementById('kg-day'); if(x) x.remove(); }
 
   /* ---------- смена фона-героя на главной ---------- */
   function swapHero(t){

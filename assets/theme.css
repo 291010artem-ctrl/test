@@ -196,27 +196,33 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
   box-shadow:0 0 6px #fff;animation:kgtwinkle 3s ease-in-out infinite}
 .kg-space .tw.big{width:4px;height:4px}
 
-/* ---------- Дневная тема: облака, бабочки, полянка (только днём) ---------- */
+/* ---------- Дневная тема: мягкие облака, травка, цветы (только днём) ---------- */
 .kg-day{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
-.kg-day .cloud{position:absolute;opacity:.9;filter:drop-shadow(0 6px 8px rgba(120,140,160,.15));
-  animation:kgdrift linear infinite}
-.kg-day .spark{position:absolute;width:5px;height:5px;border-radius:50%;background:#fff6c8;
-  box-shadow:0 0 8px #ffe89a;animation:kgtwinkle 3s ease-in-out infinite}
-.kg-day .meadow{position:absolute;left:0;right:0;bottom:0;height:120px;
-  background:linear-gradient(180deg,rgba(175,215,120,0) 0%,rgba(170,214,120,.55) 55%,rgba(150,200,95,.92) 100%)}
-.kg-day .fl{position:absolute;bottom:5px;animation:kgsway ease-in-out infinite;transform-origin:bottom center}
-/* бабочки/пчёлки поверх (порхают по экрану) */
-.kg-fly{position:fixed;inset:0;z-index:9990;overflow:hidden;pointer-events:none}
-.kg-fly .bf{position:absolute;animation:kgflutter linear infinite}
-@keyframes kgdrift{from{transform:translateX(-24vw)}to{transform:translateX(122vw)}}
-@keyframes kgsway{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
-@keyframes kgflutter{
-  0%{transform:translate(-8vw,0) rotate(-8deg)}
-  25%{transform:translate(24vw,-34px) rotate(10deg)}
-  50%{transform:translate(52vw,10px) rotate(-8deg)}
-  75%{transform:translate(82vw,-26px) rotate(10deg)}
-  100%{transform:translate(120vw,6px) rotate(-8deg)}}
-/* днём подвал прозрачный — чтобы полянка была видна под подписью */
+/* нарисованные пушистые облака */
+.kg-day .cloud{position:absolute;width:110px;height:34px;background:#fff;border-radius:34px;opacity:.92;
+  filter:drop-shadow(0 8px 10px rgba(150,170,190,.16));animation:kgdrift linear infinite}
+.kg-day .cloud::before{content:"";position:absolute;width:50px;height:50px;background:#fff;border-radius:50%;top:-22px;left:14px}
+.kg-day .cloud::after{content:"";position:absolute;width:36px;height:36px;background:#fff;border-radius:50%;top:-14px;left:54px}
+/* трава силуэтом (два слоя — для глубины) */
+.kg-day .grass{position:absolute;left:0;right:0;bottom:0;height:84px;background-repeat:repeat-x;background-position:left bottom;background-size:auto 84px}
+.kg-day .grass.back{height:98px;background-size:auto 98px;opacity:.5;filter:saturate(.8) brightness(.92)}
+/* нарисованные цветы */
+.kg-day .flower{position:absolute;bottom:6px;transform-origin:bottom center;animation:kgsway ease-in-out infinite}
+.kg-day .flower .stem{position:absolute;left:50%;bottom:0;width:3px;height:38px;transform:translateX(-50%);
+  background:linear-gradient(#6cae3a,#4f8a28);border-radius:2px}
+.kg-day .flower .leaf{position:absolute;left:calc(50% - 11px);bottom:13px;width:11px;height:7px;background:#5fa030;
+  border-radius:0 70% 0 70%;transform:rotate(-24deg)}
+.kg-day .flower .head{position:absolute;left:50%;bottom:32px;width:10px;height:10px;border-radius:50%;transform:translateX(-50%);
+  background:var(--pc);box-shadow:7px 0 0 var(--pc),-7px 0 0 var(--pc),0 7px 0 var(--pc),0 -7px 0 var(--pc)}
+.kg-day .flower .core{position:absolute;left:50%;bottom:35px;width:7px;height:7px;border-radius:50%;transform:translateX(-50%);
+  background:#ffd54a;z-index:1}
+/* лёгкие пушинки/пыльца поднимаются */
+.kg-day .pollen{position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(255,247,200,.9);
+  box-shadow:0 0 7px rgba(255,236,150,.7);animation:kgrise linear infinite}
+@keyframes kgdrift{from{transform:translateX(-26vw)}to{transform:translateX(126vw)}}
+@keyframes kgsway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
+@keyframes kgrise{0%{transform:translate(0,0);opacity:0}12%{opacity:.9}100%{transform:translate(34px,-170px);opacity:0}}
+/* днём подвал прозрачный — чтобы травка была видна под подписью */
 html:not([data-theme="night"]) .footer{background:transparent !important}
 @keyframes kgfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 @keyframes kgtwinkle{0%,100%{opacity:.25}50%{opacity:1}}
