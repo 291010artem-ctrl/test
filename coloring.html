@@ -93,8 +93,8 @@
       .wrap{grid-template-columns:1fr}
     }
   </style>
-  <link rel="stylesheet" href="assets/theme.css?v=13" />
-  <script src="assets/theme.js?v=13"></script>
+  <link rel="stylesheet" href="assets/theme.css?v=14" />
+  <script src="assets/theme.js?v=14"></script>
 </head>
 <body>
   <header class="header">
@@ -160,11 +160,13 @@
 
   <script>
     const heroes=[
+      {n:"Полянка",img:"garden"},
       {n:"Тисса",img:"tissa"},{n:"Бруно",img:"bruno"},{n:"Лулу",img:"lulu"},
       {n:"Борик",img:"borik"},{n:"Соня",img:"sonya"}
     ];
     // цвета каждого героя (то, чем он раскрашен)
     const charPal={
+      garden:["#ff8fb1","#ffd23e","#7ec850","#4db6e6","#ff9a3d","#c48cff","#3f8f2e","#dff0ff"],
       tissa:["#b8460f","#e08334","#f4c089","#f6efd0","#6e2a0c"],
       bruno:["#7a3a12","#a95b27","#e0b483","#2775a9","#3a2a1a"],
       lulu:["#dd5b0d","#f77527","#a9410d","#f6efd0","#6e2a0c"],
@@ -243,8 +245,8 @@
       };
       im.src=`assets/color/${name}.jpg`;
     }
-    guide.addEventListener('load',()=>{ if(!gData) loadHero('tissa'); });
-    loadHero('tissa');
+    guide.addEventListener('load',()=>{ if(!gData) loadHero('garden'); });
+    loadHero('garden');
 
     // подгоняем холст: по ширине колонки, но не выше ~62% экрана
     function fitStage(){
@@ -354,6 +356,6 @@
         KG.award(map[curHero]||'kirpi'); }
     };
   </script>
-  <script src="assets/kg.js?v=13"></script>
+  <script src="assets/kg.js?v=14"></script>
 </body>
 </html>
