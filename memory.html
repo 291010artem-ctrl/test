@@ -90,11 +90,11 @@
       <a href="characters.html">Персонажи</a>
       <a href="games.html">Игры</a>
       <a href="coloring.html">Раскраски</a>
+      <a href="stickers.html">Копилка</a>
       <a href="parents.html">Родителям</a>
     </nav>
     <div class="actions">
       <a href="#">🔍<small>Поиск</small></a>
-      <a href="#">👤<small>Войти</small></a>
     </div>
   </header>
 
@@ -122,6 +122,7 @@
 
   <div class="foot"><a class="back-home" href="games.html">← К играм</a></div>
 
+  <script src="assets/kg.js"></script>
   <script>
     const heroes = [
       {n:"Кирпи", img:"assets/parts/av_kirpi.jpg"},
@@ -150,7 +151,7 @@
           <div class="face back">🌿</div>
           <div class="face front"><img src="${h.img}" alt="${h.n}"></div>
         </div>`;
-        c.addEventListener('click',()=>flip(c));
+        c.addEventListener('click',()=>{ if(window.KG&&!lock&&!c.classList.contains('flip')&&!c.classList.contains('done'))KG.click(); flip(c); });
         board.appendChild(c);
       });
     }
@@ -162,9 +163,11 @@
       moves++; movesEl.textContent=moves;
       if(first.dataset.name===c.dataset.name){
         first.classList.add('done'); c.classList.add('done');
+        if(window.KG)KG.match();
         first=null; found++; foundEl.textContent=found;
         if(found===heroes.length) setTimeout(win,500);
       } else {
+        if(window.KG)KG.miss();
         lock=true;
         setTimeout(()=>{first.classList.remove('flip');c.classList.remove('flip');first=null;lock=false;},800);
       }
@@ -174,6 +177,7 @@
       document.getElementById('winMoves').textContent=moves;
       winBox.classList.add('show');
       winBox.scrollIntoView({behavior:'smooth',block:'center'});
+      if(window.KG){ const pool=Object.keys(KG.heroes); KG.award(pool[Math.floor(Math.random()*pool.length)]); }
     }
 
     document.getElementById('restart').addEventListener('click',start);

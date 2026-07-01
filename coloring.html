@@ -106,11 +106,11 @@
       <a href="characters.html">Персонажи</a>
       <a href="games.html">Игры</a>
       <a class="active" href="coloring.html">Раскраски</a>
+      <a href="stickers.html">Копилка</a>
       <a href="parents.html">Родителям</a>
     </nav>
     <div class="actions">
       <a href="#">🔍<small>Поиск</small></a>
-      <a href="#">👤<small>Войти</small></a>
     </div>
   </header>
 
@@ -184,6 +184,7 @@
     const stage=document.getElementById('stage');
     const guide=document.getElementById('guide');
     let mode='easy', color="#b8460f", size=26, erasing=false, drawing=false, last=null, medPts=[];
+    let curHero='tissa';
     let gData=null, W=0, H=0;
     const off=document.createElement('canvas'), offc=off.getContext('2d',{willReadFrequently:true});
 
@@ -224,6 +225,7 @@
     document.getElementById('sizeRow').style.display='none';
 
     function loadHero(name){
+      curHero=name;
       const im=new Image();
       im.onload=()=>{
         W=im.naturalWidth; H=im.naturalHeight;
@@ -345,7 +347,11 @@
       o.fillStyle='#9a8a72'; o.font=`bold ${Math.round(fh*0.2)}px Nunito,Arial`;
       o.textAlign='right'; o.fillText('kirpigofer • раскраски', W*0.96, H+fh*0.5); o.textAlign='left';
       const a=document.createElement('a'); a.download='moya-raskraska.png'; a.href=out.toDataURL(); a.click();
+      // наклейка-награда за сохранённый рисунок
+      if(window.KG){ const map={tissa:'tisa',bruno:'bruno',lulu:'lulu',borik:'borik',sonya:'sonya'};
+        KG.award(map[curHero]||'kirpi'); }
     };
   </script>
+  <script src="assets/kg.js"></script>
 </body>
 </html>

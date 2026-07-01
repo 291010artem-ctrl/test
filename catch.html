@@ -58,9 +58,9 @@
     </a>
     <nav class="nav">
       <a href="index.html">Главная</a><a href="#">Истории</a><a href="characters.html">Персонажи</a>
-      <a href="games.html">Игры</a><a href="coloring.html">Раскраски</a><a href="parents.html">Родителям</a>
+      <a href="games.html">Игры</a><a href="coloring.html">Раскраски</a><a href="stickers.html">Копилка</a><a href="parents.html">Родителям</a>
     </nav>
-    <div class="actions"><a href="#">🔍<small>Поиск</small></a><a href="#">👤<small>Войти</small></a></div>
+    <div class="actions"><a href="#">🔍<small>Поиск</small></a></div>
   </header>
 
   <div class="page-title">
@@ -94,7 +94,7 @@
     for(let i=0;i<9;i++){
       const h=document.createElement('div'); h.className='hole';
       const img=document.createElement('img'); img.alt='друг';
-      img.addEventListener('click',()=>{ if(running && h.classList.contains('up')){ h.classList.remove('up'); score++; scoreEl.textContent=score; }});
+      img.addEventListener('click',()=>{ if(running && h.classList.contains('up')){ h.classList.remove('up'); score++; scoreEl.textContent=score; if(window.KG)KG.match(); }});
       h.appendChild(img); grid.appendChild(h); holes.push(h);
     }
 
@@ -126,9 +126,11 @@
       document.getElementById('start').textContent='▶ Играть снова';
       document.getElementById('finalScore').textContent=score;
       winBox.classList.add('show');
+      if(window.KG){ const pool=Object.keys(KG.heroes); KG.award(pool[Math.floor(Math.random()*pool.length)]); }
     }
     document.getElementById('start').onclick=start;
     document.getElementById('again').onclick=start;
   </script>
+  <script src="assets/kg.js"></script>
 </body>
 </html>
