@@ -5,3 +5,10 @@ dist/
 # Бинарники adb, если положишь их в platform-tools (README.txt оставляем)
 platform-tools/*
 !platform-tools/README.txt
+
+# Android: сборочные артефакты и файл параметров, который генерирует панель
+android-companion/build.properties.generated
+android-companion/.gradle/
+android-companion/build/
+android-companion/app/build/
+android-companion/local.properties

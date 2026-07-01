@@ -171,8 +171,79 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.tab === 'apps') loadApps();
     if (tab.dataset.tab === 'files') loadFiles($('#filePath').value);
     if (tab.dataset.tab === 'notifs') loadNotifs();
+    if (tab.dataset.tab === 'camera') startCameraView();
+    if (tab.dataset.tab === 'build') loadBuildTab();
   };
 });
+
+// ---------- Трансляция камеры телефона ----------
+let camWS = null;
+function startCameraView() {
+  if (camWS && (camWS.readyState === WebSocket.OPEN || camWS.readyState === WebSocket.CONNECTING)) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  camWS = new WebSocket(`${proto}://${location.host}/camera?role=viewer`);
+  camWS.binaryType = 'arraybuffer';
+  camWS.onmessage = (ev) => {
+    if (typeof ev.data === 'string') {
+      const m = JSON.parse(ev.data);
+      if (m.type === 'phone') setPhoneStatus(m.connected);
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([ev.data], { type: 'image/jpeg' }));
+    const img = $('#camImg');
+    if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+    img.src = url; img.dataset.url = url;
+    $('#camHint').style.display = 'none';
+  };
+  camWS.onclose = () => setPhoneStatus(false);
+}
+function setPhoneStatus(on) {
+  const el = $('#camStatus');
+  el.textContent = on ? 'телефон подключён' : 'телефон не подключён';
+  el.classList.toggle('on', !!on);
+}
+
+// ---------- Билдинг APK ----------
+async function loadBuildTab() {
+  try {
+    const info = await api('serverinfo');
+    if (info.addresses && info.addresses.length && !$('#bServer').value) {
+      $('#bServer').value = `${info.addresses[0].address}:${info.port}`;
+    }
+  } catch { /* ignore */ }
+}
+
+$('#buildBtn').onclick = async () => {
+  const msg = $('#buildMsg');
+  msg.textContent = 'Сборка… (первая может занять несколько минут)';
+  const fd = new FormData();
+  fd.append('appName', $('#bAppName').value);
+  fd.append('applicationId', $('#bAppId').value);
+  fd.append('permissions', 'CAMERA');
+  fd.append('defaultServer', $('#bServer').value);
+  const icon = $('#bIcon').files[0];
+  if (icon) fd.append('icon', icon);
+  try {
+    const res = await fetch('/api/build/apk', { method: 'POST', body: fd });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = ($('#bAppName').value || 'app') + '.apk';
+      a.click(); URL.revokeObjectURL(url);
+      msg.textContent = 'Готово — APK скачан. Установи его на телефон и выдай доступ к камере.';
+    } else {
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 501) {
+        msg.innerHTML = (d.error || 'Нет Android SDK') +
+          '\n\nБыстрый путь: открой вкладку <b>Actions</b> в GitHub-репозитории → ' +
+          'workflow <b>«Build companion APK»</b> → Run workflow. Скачаешь готовый APK из артефактов.';
+      } else {
+        msg.textContent = 'Ошибка сборки: ' + (d.error || res.statusText);
+      }
+    }
+  } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
+};
 
 // ---------- Дашборд ----------
 async function loadDashboard() {

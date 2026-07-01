@@ -50,6 +50,8 @@
         <button class="tab" data-tab="apps">Приложения</button>
         <button class="tab" data-tab="files">Файлы</button>
         <button class="tab" data-tab="notifs">Уведомления</button>
+        <button class="tab" data-tab="camera">Трансляция</button>
+        <button class="tab" data-tab="build">Билдинг APK</button>
       </nav>
 
       <div class="tab-content active" id="tab-dashboard">
@@ -92,6 +94,38 @@
         </div>
         <button id="refreshNotifs">Обновить список</button>
         <ul id="notifList" class="list"></ul>
+      </div>
+
+      <div class="tab-content" id="tab-camera">
+        <div class="card">
+          <h3>Камера телефона <span id="camStatus" class="cam-status">телефон не подключён</span></h3>
+          <div class="cam-wrap"><img id="camImg" alt=""><div id="camHint" class="screen-hint">Установи APK на телефон, выдай доступ к камере и нажми «Начать трансляцию» в приложении.</div></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-build">
+        <div class="card">
+          <h3>Конструктор APK</h3>
+          <p class="muted-text">Приложение просит только доступ к камере и стримит её в эту панель.</p>
+          <label class="fld">Название приложения
+            <input id="bAppName" value="Camera Companion">
+          </label>
+          <label class="fld">Package (applicationId)
+            <input id="bAppId" value="com.artem.cameracompanion" spellcheck="false">
+          </label>
+          <label class="fld">Иконка (PNG, необязательно)
+            <input id="bIcon" type="file" accept="image/png">
+          </label>
+          <label class="fld">Адрес панели по умолчанию (зашивается в APK)
+            <input id="bServer" placeholder="192.168.0.10:8787" spellcheck="false">
+          </label>
+          <div class="fld">Разрешения:
+            <label class="chk"><input type="checkbox" checked disabled> Камера</label>
+            <span class="muted-text">(другие права добавим позже)</span>
+          </div>
+          <button id="buildBtn" class="primary">Собрать APK</button>
+          <div id="buildMsg" class="build-msg"></div>
+        </div>
       </div>
     </section>
   </div>

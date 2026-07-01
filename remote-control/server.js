@@ -10,10 +10,13 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as adb from './adb.js';
+import * as builder from './builder.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8787;
-const HOST = process.env.HOST || '127.0.0.1'; // по умолчанию только localhost — безопасно
+// 0.0.0.0 — чтобы телефон в той же сети мог прислать поток камеры в панель.
+// Если нужен доступ только с этого ПК — задай HOST=127.0.0.1.
+const HOST = process.env.HOST || '0.0.0.0';
 
 const app = express();
 app.use(express.json());
@@ -97,9 +100,91 @@ app.get('/api/files/download', h(async (req, res) => {
   res.download(tmp, path.basename(remotePath), () => fs.unlink(tmp, () => {}));
 }));
 
+// ---- Инфо о сети (какой адрес вводить в телефоне) ----
+function lanAddresses() {
+  const out = [];
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+    for (const a of addrs || []) {
+      if (a.family === 'IPv4' && !a.internal) out.push({ iface: name, address: a.address });
+    }
+  }
+  return out;
+}
+app.get('/api/serverinfo', (req, res) => {
+  res.json({ port: server.address()?.port || PORT, addresses: lanAddresses() });
+});
+
+// ---- Сборка APK ----
+app.get('/api/build/config', (req, res) => {
+  res.json({
+    permissions: builder.AVAILABLE_PERMISSIONS,
+    hasSdk: builder.hasAndroidSdk(),
+  });
+});
+
+const iconUpload = multer({ dest: path.join(os.tmpdir(), 'arp-icons') });
+app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
+  const cfg = {
+    appName: req.body.appName,
+    applicationId: req.body.applicationId,
+    permissions: (req.body.permissions || 'CAMERA').split(',').map((s) => s.trim()).filter(Boolean),
+    defaultServer: req.body.defaultServer,
+  };
+  try {
+    const { apkPath, fileName } = await builder.buildApk(cfg, req.file?.path);
+    if (req.file) fs.unlink(req.file.path, () => {});
+    res.download(apkPath, fileName, () => fs.unlink(apkPath, () => {}));
+  } catch (e) {
+    if (req.file) fs.unlink(req.file.path, () => {});
+    res.status(e.code === 'NO_SDK' ? 501 : 500).json({ error: e.message, code: e.code });
+  }
+}));
+
 // ---- Сервер + WebSocket ----
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+// Два WebSocket-канала на одном сервере: /ws (управление панелью) и
+// /camera (поток камеры телефона: role=phone публикует, role=viewer смотрит).
+const wss = new WebSocketServer({ noServer: true });
+const wssCamera = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url, 'http://localhost');
+  if (pathname === '/ws') {
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  } else if (pathname === '/camera') {
+    wssCamera.handleUpgrade(req, socket, head, (ws) => wssCamera.emit('connection', ws, req));
+  } else {
+    socket.destroy();
+  }
+});
+
+// Релей камеры: телефон (role=phone) шлёт бинарные JPEG-кадры,
+// панель (role=viewer) их получает. Храним последний кадр и статус телефона.
+const cameraViewers = new Set();
+let phoneSocket = null;
+
+function notifyViewers(obj) {
+  const data = JSON.stringify(obj);
+  for (const v of cameraViewers) if (v.readyState === v.OPEN) v.send(data);
+}
+
+wssCamera.on('connection', (ws, req) => {
+  const role = new URL(req.url, 'http://localhost').searchParams.get('role') || 'viewer';
+  if (role === 'phone') {
+    phoneSocket = ws;
+    notifyViewers({ type: 'phone', connected: true });
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        for (const v of cameraViewers) if (v.readyState === v.OPEN) v.send(data, { binary: true });
+      }
+    });
+    ws.on('close', () => { if (phoneSocket === ws) phoneSocket = null; notifyViewers({ type: 'phone', connected: false }); });
+  } else {
+    cameraViewers.add(ws);
+    ws.send(JSON.stringify({ type: 'phone', connected: !!phoneSocket }));
+    ws.on('close', () => cameraViewers.delete(ws));
+  }
+});
 
 wss.on('connection', (ws) => {
   let streaming = false;

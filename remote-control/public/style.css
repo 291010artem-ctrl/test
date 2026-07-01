@@ -179,6 +179,26 @@ input, select {
 }
 input:focus, select:focus { outline: none; border-color: var(--accent2); }
 
+/* ----- Камера / билдинг ----- */
+.cam-wrap {
+  position: relative;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 300px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+#camImg { max-width: 100%; max-height: 60vh; object-fit: contain; }
+.cam-status { font-size: 12px; font-weight: 400; color: var(--danger); margin-left: 8px; }
+.cam-status.on { color: var(--accent); }
+
+.fld { display: block; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.fld input:not([type=checkbox]) { display: block; width: 100%; margin-top: 4px; }
+.muted-text { color: var(--muted); font-size: 12px; }
+.build-msg { margin-top: 10px; font-size: 13px; white-space: pre-wrap; }
+.build-msg a { color: var(--accent2); }
+
 .toast {
   position: fixed;
   bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px);

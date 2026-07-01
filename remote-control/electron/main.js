@@ -78,7 +78,8 @@ app.whenReady().then(async () => {
   try {
     // Импортируем сервер уже после установки ADB_PATH.
     const { startServer } = await import('../server.js');
-    info = await startServer({ host: '127.0.0.1', port: 0 }); // 0 = свободный порт
+    // 0.0.0.0 — чтобы телефон в той же сети мог прислать поток камеры.
+    info = await startServer({ host: '0.0.0.0', port: 0 }); // 0 = свободный порт
   } catch (e) {
     dialog.showErrorBox('Не удалось запустить сервер', String(e && e.message || e));
     app.quit();
