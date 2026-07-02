@@ -246,6 +246,7 @@ const wssCamera = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url, 'http://localhost');
+  console.log(`[WS] upgrade: ${pathname} from ${req.socket.remoteAddress}`);
   if (pathname === '/ws') {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   } else if (pathname === '/camera') {
@@ -267,6 +268,7 @@ function notifyViewers(obj) {
 
 wssCamera.on('connection', (ws, req) => {
   const role = new URL(req.url, 'http://localhost').searchParams.get('role') || 'viewer';
+  console.log(`[CAM] connected: role=${role} from ${req.socket.remoteAddress}`);
   if (role === 'phone') {
     phoneSocket = ws;
     notifyViewers({ type: 'phone', connected: true });
