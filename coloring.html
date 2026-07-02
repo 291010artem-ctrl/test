@@ -53,9 +53,9 @@
     .hpick.active{outline:3px solid var(--orange);outline-offset:1px}
 
     /* весь интерфейс помещается в один экран без прокрутки */
-    .wrap{max-width:1180px;margin:6px auto;padding:0 16px;display:grid;
+    .wrap{max-width:1180px;margin:8px auto;padding:0 16px;display:grid;
       grid-template-columns:1fr 300px;gap:18px;align-items:stretch;
-      height:calc(100dvh - 104px)}
+      height:calc(100dvh - 80px)}
     /* холст — максимально большой в пределах колонки и высоты экрана (размер задаётся в JS) */
     .stage{position:relative;background:#fff;border:3px solid #eadfbf;border-radius:22px;
       overflow:hidden;box-shadow:var(--shadow);touch-action:none;
@@ -120,9 +120,6 @@
     </div>
   </header>
 
-  <div class="page-title">
-    <h1>🎨 Раскрась <span class="o">друга</span>!</h1>
-  </div>
 
   <div class="wrap">
     <!-- ХОЛСТ слева, большой -->
