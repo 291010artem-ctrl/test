@@ -37,60 +37,64 @@
     .page-title h1 .o{color:var(--orange)}
     .page-title p{color:var(--muted);font-weight:700;margin-top:6px}
 
-    /* Уровни сложности */
-    .levels{display:flex;flex-direction:column;gap:8px;margin:0 0 6px}
-    .level{cursor:pointer;border:2px solid #eadfbf;background:#fff;border-radius:16px;padding:10px 16px;
-      text-align:left;min-width:0;width:100%;box-shadow:var(--shadow);transition:transform .12s,border-color .12s}
+    /* Уровни сложности — компактно в ряд */
+    .levels{display:flex;flex-direction:row;gap:6px;margin:0 0 4px}
+    .level{cursor:pointer;border:2px solid #eadfbf;background:#fff;border-radius:12px;padding:7px 6px;
+      text-align:center;flex:1;min-width:0;box-shadow:var(--shadow);transition:transform .12s,border-color .12s}
     .level:hover{transform:translateY(-2px)}
     .level.active{border-color:var(--green);background:#f4f8ea}
-    .level b{display:block;font-size:1.02rem}
-    .level small{color:var(--muted);font-weight:700;font-size:.72rem}
+    .level b{display:block;font-size:.82rem;white-space:nowrap}
+    .level small{display:none}
 
     /* Выбор героя */
-    .heroes{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin:0 0 6px}
-    .hpick{width:46px;height:46px;border-radius:50%;border:3px solid #fff;cursor:pointer;overflow:hidden;box-shadow:var(--shadow);background:#fff}
+    .heroes{display:flex;gap:7px;justify-content:flex-start;flex-wrap:wrap;margin:0 0 4px}
+    .hpick{width:40px;height:40px;border-radius:50%;border:3px solid #fff;cursor:pointer;overflow:hidden;box-shadow:var(--shadow);background:#fff}
     .hpick img{width:100%;height:100%;object-fit:contain;background:#fff}
     .hpick.active{outline:3px solid var(--orange);outline-offset:1px}
 
-    .wrap{max-width:1180px;margin:10px auto 30px;padding:0 20px;display:grid;
-      grid-template-columns:1fr 300px;gap:24px;align-items:start}
-    /* холст вписывается в экран по высоте (aspect-ratio задаётся в JS) */
+    /* весь интерфейс помещается в один экран без прокрутки */
+    .wrap{max-width:1180px;margin:6px auto;padding:0 16px;display:grid;
+      grid-template-columns:1fr 300px;gap:18px;align-items:stretch;
+      height:calc(100dvh - 182px)}
+    /* холст — максимально большой в пределах колонки и высоты экрана (размер задаётся в JS) */
     .stage{position:relative;background:#fff;border:3px solid #eadfbf;border-radius:22px;
       overflow:hidden;box-shadow:var(--shadow);touch-action:none;
-      max-width:100%;max-height:82vh;justify-self:start}
+      max-width:100%;max-height:100%;justify-self:start;align-self:start}
     .stage canvas,.stage .guide,.stage .ref,.stage .prev{position:absolute;inset:0;width:100%;height:100%}
     .stage canvas{cursor:crosshair}
     .stage .guide{mix-blend-mode:multiply;pointer-events:none}
     .stage .ref{pointer-events:none;opacity:0;transition:opacity .12s}
     .stage .prev{pointer-events:none}
-    .author{width:100%;border:2px solid #eadfbf;border-radius:12px;padding:9px 12px;font:inherit;font-weight:700;margin-bottom:12px}
+    .author{width:100%;border:2px solid #eadfbf;border-radius:12px;padding:7px 12px;font:inherit;font-weight:700;margin-bottom:8px}
     .author:focus{outline:2px solid var(--green);border-color:var(--green)}
 
-    .tools{background:#fff;border:3px solid #eadfbf;border-radius:22px;padding:16px;box-shadow:var(--shadow)}
-    .tools h3{font-size:1rem;margin:12px 0 8px;color:var(--green-d)}.tools h3:first-child{margin-top:0}
-    .palette{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
-    .palhead{font-size:.72rem;font-weight:800;color:var(--muted);margin-top:2px}
-    .palrow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .tools{background:#fff;border:3px solid #eadfbf;border-radius:22px;padding:16px;box-shadow:var(--shadow);
+      max-height:100%;overflow-y:auto}
+    .tools h3{font-size:.95rem;margin:8px 0 5px;color:var(--green-d)}.tools h3:first-child{margin-top:0}
+    .palette{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
+    .palhead{font-size:.7rem;font-weight:800;color:var(--muted);margin-top:1px}
+    .palrow{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
     .sw{width:100%;aspect-ratio:1;border-radius:50%;border:3px solid #fff;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);transition:transform .12s}
     .sw:hover{transform:scale(1.1)}
     .sw.active{outline:3px solid var(--green);outline-offset:1px}
-    .row{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:800;font-size:.9rem}
+    .row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:800;font-size:.85rem}
     .row input[type=range]{flex:1}
-    .tbtns{display:flex;flex-direction:column;gap:8px}
-    .tbtn{cursor:pointer;border:none;padding:11px;border-radius:14px;font-weight:800;font-size:.95rem;background:#f3ecd6;color:var(--ink);transition:filter .15s}
+    .tbtns{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+    .tbtn{cursor:pointer;border:none;padding:9px;border-radius:12px;font-weight:800;font-size:.9rem;background:#f3ecd6;color:var(--ink);transition:filter .15s}
     .tbtn:hover{filter:brightness(.97)}
     .tbtn.eraser.active{background:#ffd9b0}
     .tbtn.primary{background:linear-gradient(180deg,var(--green),var(--green-d));color:#fff}
-    .tbtn.save{background:linear-gradient(180deg,var(--orange),var(--orange-d));color:#fff}
-    .hint{font-size:.8rem;color:var(--muted);font-weight:700;margin-bottom:12px;line-height:1.3}
+    .tbtn.save{grid-column:1/3;background:linear-gradient(180deg,var(--orange),var(--orange-d));color:#fff}
+    .hint{font-size:.72rem;color:var(--muted);font-weight:700;margin-bottom:8px;line-height:1.25}
 
-    .foot{display:flex;justify-content:center;margin:20px 0 50px}
+    .foot{display:flex;justify-content:center;margin:8px 0 10px}
     .back-home{display:inline-flex;padding:12px 28px;border-radius:999px;font-weight:800;color:#fff;
       background:linear-gradient(180deg,var(--green),var(--green-d));box-shadow:var(--shadow)}
 
     @media(max-width:860px){
       .header{flex-wrap:wrap;gap:8px}.nav{order:3;width:100%}
-      .wrap{grid-template-columns:1fr}
+      .wrap{grid-template-columns:1fr;height:auto}
+      .tools{max-height:none;overflow:visible}
     }
   </style>
   <link rel="stylesheet" href="assets/theme.css?v=20" />
@@ -254,13 +258,22 @@
     // подгоняем холст: по ширине колонки, но не выше ~62% экрана
     function fitStage(){
       if(!W) return;
-      stage.style.width=''; stage.style.height='';
-      const availW = stage.clientWidth || 360;
-      const maxH = window.innerHeight*0.82;
-      let dw = Math.min(availW, 600), dh = dw*H/W;
-      if(dh>maxH){ dh=maxH; dw=dh*W/H; }
-      stage.style.width=Math.round(dw)+'px'; stage.style.height=Math.round(dh)+'px';
+      const wrap=document.querySelector('.wrap');
+      const wide = window.innerWidth>860;
+      let availW, availH;
+      if(wide){
+        availW = wrap.clientWidth - 300 - 18;      // ширина колонки = wrap минус панель(300) и gap(18)
+        availH = wrap.clientHeight;                // вся высота ряда
+      } else {
+        stage.style.width=''; stage.style.height='';
+        availW = wrap.clientWidth;
+        availH = window.innerHeight*0.82;
+      }
+      const scale = Math.min(availW/W, availH/H);
+      const dw = Math.max(60, Math.floor(W*scale)), dh = Math.max(60, Math.floor(H*scale));
+      stage.style.width=dw+'px'; stage.style.height=dh+'px';
     }
+    window.addEventListener('load', fitStage);
     window.addEventListener('resize',fitStage);
 
     function hexRGB(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
