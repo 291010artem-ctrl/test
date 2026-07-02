@@ -53,9 +53,9 @@
     .hpick.active{outline:3px solid var(--orange);outline-offset:1px}
 
     /* весь интерфейс помещается в один экран без прокрутки */
-    .wrap{max-width:1180px;margin:6px auto;padding:0 16px;display:grid;
+    .wrap{max-width:1180px;margin:10px auto;padding:0 16px;display:grid;
       grid-template-columns:1fr 300px;gap:18px;align-items:stretch;
-      height:calc(100dvh - 182px)}
+      height:calc(100dvh - 138px)}
     /* холст — максимально большой в пределах колонки и высоты экрана (размер задаётся в JS) */
     .stage{position:relative;background:#fff;border:3px solid #eadfbf;border-radius:22px;
       overflow:hidden;box-shadow:var(--shadow);touch-action:none;
@@ -160,7 +160,6 @@
     </aside>
   </div>
 
-  <div class="foot"><a class="back-home" href="index.html">← На главную</a></div>
 
   <script>
     const heroes=[
