@@ -177,41 +177,52 @@ document.querySelectorAll('.tab').forEach((tab) => {
 });
 
 // ---------- Трансляция камеры телефона ----------
-let camWS = null;
-function startCameraView() {
-  if (camWS && (camWS.readyState === WebSocket.OPEN || camWS.readyState === WebSocket.CONNECTING)) return;
+const camWS = { back: null, front: null };
+const phoneConnected = { back: false, front: false };
+
+function startCamViewer(cam) {
+  const ws = camWS[cam];
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  camWS = new WebSocket(`${proto}://${location.host}/camera?role=viewer`);
-  camWS.binaryType = 'arraybuffer';
-  camWS.onmessage = (ev) => {
+  const sock = new WebSocket(`${proto}://${location.host}/camera?role=viewer&cam=${cam}`);
+  sock.binaryType = 'arraybuffer';
+  sock.onmessage = (ev) => {
     if (typeof ev.data === 'string') {
       const m = JSON.parse(ev.data);
-      if (m.type === 'phone') setPhoneStatus(m.connected);
+      if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
       return;
     }
+    const imgId = cam === 'back' ? '#camImg' : '#camImgFront';
+    const hintId = cam === 'back' ? '#camHint' : '#camHintFront';
     const url = URL.createObjectURL(new Blob([ev.data], { type: 'image/jpeg' }));
-    const img = $('#camImg');
+    const img = $(imgId);
     if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
     img.src = url; img.dataset.url = url;
-    $('#camHint').style.display = 'none';
+    const hint = $(hintId);
+    if (hint) hint.style.display = 'none';
   };
-  camWS.onclose = () => setPhoneStatus(false);
+  sock.onclose = () => { phoneConnected[cam] = false; updatePhoneStatus(); };
+  camWS[cam] = sock;
 }
-function setPhoneStatus(on) {
+
+function startCameraView() {
+  startCamViewer('back');
+  startCamViewer('front');
+}
+
+function updatePhoneStatus() {
+  const on = phoneConnected.back || phoneConnected.front;
   const el = $('#camStatus');
   el.textContent = on ? 'телефон подключён' : 'телефон не подключён';
   el.classList.toggle('on', !!on);
   $('#camStart').disabled = !on;
   $('#camStop').disabled = !on;
-  $('#camSwitch').disabled = !on;
 }
 
 $('#camStart').onclick = () =>
   jpost('camera/command', { cmd: 'start' }).catch((e) => toast(e.message, true));
 $('#camStop').onclick = () =>
   jpost('camera/command', { cmd: 'stop' }).catch((e) => toast(e.message, true));
-$('#camSwitch').onclick = () =>
-  jpost('camera/command', { cmd: 'switch' }).catch((e) => toast(e.message, true));
 
 // ---------- Билдинг APK ----------
 async function loadBuildTab() {

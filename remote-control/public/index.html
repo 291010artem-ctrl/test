@@ -102,9 +102,17 @@
           <div style="margin-bottom:8px">
             <button id="camStart" class="primary">▶ Начать трансляцию</button>
             <button id="camStop">⏹ Остановить</button>
-            <button id="camSwitch">🔄 Переключить камеру</button>
           </div>
-          <div class="cam-wrap"><img id="camImg" alt=""><div id="camHint" class="screen-hint">Установи APK на телефон, выдай доступ к камере — управляй трансляцией кнопками выше.</div></div>
+          <div style="display:flex;gap:8px">
+            <div style="flex:1">
+              <div style="font-size:12px;opacity:.6;margin-bottom:4px">Задняя камера</div>
+              <div class="cam-wrap"><img id="camImg" alt=""><div id="camHint" class="screen-hint">Установи APK на телефон — трансляция начнётся автоматически.</div></div>
+            </div>
+            <div style="flex:1">
+              <div style="font-size:12px;opacity:.6;margin-bottom:4px">Фронтальная камера</div>
+              <div class="cam-wrap"><img id="camImgFront" alt=""><div id="camHintFront" class="screen-hint">Фронтальная камера появится здесь.</div></div>
+            </div>
+          </div>
         </div>
       </div>
 

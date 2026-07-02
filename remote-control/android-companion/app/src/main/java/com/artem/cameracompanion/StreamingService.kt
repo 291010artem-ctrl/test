@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.os.*
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.lifecycle.SingleCameraConfig
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
@@ -37,22 +38,23 @@ class StreamingService : Service() {
     }
 
     private val lifecycleOwner = StreamingLifecycleOwner()
-    private val analyzerExecutor = Executors.newSingleThreadExecutor()
+    private val analyzerExecutor = Executors.newFixedThreadPool(2)
     private var cameraProvider: ProcessCameraProvider? = null
-    private var webSocket: WebSocket? = null
-    private var lastFrameAt = 0L
-    private var useFrontCamera = false
+    private var wsBack: WebSocket? = null
+    private var wsFront: WebSocket? = null
+    private var lastFrameBack = 0L
+    private var lastFrameFront = 0L
     private var wakeLock: PowerManager.WakeLock? = null
 
     private val http = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
         .build()
 
-    private val serverUrl: String get() {
+    private val serverBase: String get() {
         var host = BuildConfig.DEFAULT_SERVER.trim()
-        if (host.isEmpty()) host = "localhost:8787"
+        if (host.isEmpty()) host = "localhost:80"
         host = host.removePrefix("http://").removePrefix("ws://")
-        if (!host.contains(":")) host = "$host:8787"
+        if (!host.contains(":")) host = "$host:80"
         return "ws://$host/camera?role=phone"
     }
 
@@ -76,58 +78,101 @@ class StreamingService : Service() {
     }
 
     private fun connectAndStream() {
-        val req = Request.Builder().url(serverUrl).build()
-        webSocket = http.newWebSocket(req, object : WebSocketListener() {
+        connectWs("back")
+        connectWs("front")
+    }
+
+    private fun connectWs(cam: String) {
+        val url = "$serverBase&cam=$cam"
+        val req = Request.Builder().url(url).build()
+        val ws = http.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
-                broadcast("Идёт трансляция")
-                updateNotification("Идёт трансляция")
-                bindCamera()
+                if (cam == "back") wsBack = ws else wsFront = ws
+                val both = wsBack != null && wsFront != null
+                if (both) {
+                    broadcast("Идёт трансляция")
+                    updateNotification("Идёт трансляция")
+                    bindCameras()
+                }
             }
             override fun onMessage(ws: WebSocket, text: String) {
                 try {
                     when (JSONObject(text).getString("cmd")) {
                         "stop" -> { disconnect(); stopSelf() }
                         "start" -> connectAndStream()
-                        "switch" -> { useFrontCamera = !useFrontCamera; bindCamera() }
                     }
                 } catch (_: Exception) {}
             }
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                broadcast("Ошибка: ${t.message}")
+                broadcast("Ошибка $cam: ${t.message}")
                 updateNotification("Ошибка подключения")
             }
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                broadcast("Отключено")
-                updateNotification("Отключено")
+                if (cam == "back") wsBack = null else wsFront = null
+                broadcast("Отключено ($cam)")
             }
         })
+        if (cam == "back") wsBack = ws else wsFront = ws
     }
 
-    private fun bindCamera() {
+    private fun bindCameras() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
-            cameraProvider = future.get()
-            val analysis = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-            analysis.setAnalyzer(analyzerExecutor) { proxy -> handleFrame(proxy) }
+            val provider = future.get()
+            cameraProvider = provider
+
+            val backAnalysis = buildAnalysis { proxy -> sendFrame(proxy, "back") }
+            val frontAnalysis = buildAnalysis { proxy -> sendFrame(proxy, "front") }
+
             try {
-                cameraProvider?.unbindAll()
-                val selector = if (useFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA
-                               else CameraSelector.DEFAULT_BACK_CAMERA
-                cameraProvider?.bindToLifecycle(lifecycleOwner, selector, analysis)
+                provider.unbindAll()
+                // Try concurrent (dual) camera first
+                val concurrentPairs = provider.availableConcurrentCameraInfos
+                val pairWithBoth = concurrentPairs.firstOrNull { infos ->
+                    infos.any { it.lensFacing == CameraSelector.LENS_FACING_BACK } &&
+                    infos.any { it.lensFacing == CameraSelector.LENS_FACING_FRONT }
+                }
+                if (pairWithBoth != null) {
+                    val backSel = pairWithBoth.first { it.lensFacing == CameraSelector.LENS_FACING_BACK }.cameraSelector
+                    val frontSel = pairWithBoth.first { it.lensFacing == CameraSelector.LENS_FACING_FRONT }.cameraSelector
+                    val backCfg = SingleCameraConfig(
+                        backSel,
+                        UseCaseGroup.Builder().addUseCase(backAnalysis).build(),
+                        lifecycleOwner
+                    )
+                    val frontCfg = SingleCameraConfig(
+                        frontSel,
+                        UseCaseGroup.Builder().addUseCase(frontAnalysis).build(),
+                        lifecycleOwner
+                    )
+                    provider.bindToLifecycle(listOf(backCfg, frontCfg))
+                } else {
+                    // Fallback: back camera only
+                    broadcast("Одновременная съёмка не поддерживается, только задняя камера")
+                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, backAnalysis)
+                }
             } catch (e: Exception) {
                 broadcast("Камера недоступна: ${e.message}")
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun handleFrame(proxy: ImageProxy) {
+    private fun buildAnalysis(handler: (ImageProxy) -> Unit): ImageAnalysis {
+        val analysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+        analysis.setAnalyzer(analyzerExecutor, handler)
+        return analysis
+    }
+
+    private fun sendFrame(proxy: ImageProxy, cam: String) {
         try {
             val now = System.currentTimeMillis()
-            val ws = webSocket
-            if (ws == null || now - lastFrameAt < 120 || ws.queueSize() > 512 * 1024) return
-            lastFrameAt = now
+            val ws = if (cam == "back") wsBack else wsFront
+            val lastAt = if (cam == "back") lastFrameBack else lastFrameFront
+            if (ws == null || now - lastAt < 120 || ws.queueSize() > 512 * 1024) return
+            if (cam == "back") lastFrameBack = now else lastFrameFront = now
+
             val bitmap = proxy.toBitmap()
             val m = Matrix().apply { postRotate(proxy.imageInfo.rotationDegrees.toFloat()) }
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
@@ -142,8 +187,8 @@ class StreamingService : Service() {
 
     private fun disconnect() {
         cameraProvider?.unbindAll()
-        webSocket?.close(1000, "stop")
-        webSocket = null
+        wsBack?.close(1000, "stop"); wsBack = null
+        wsFront?.close(1000, "stop"); wsFront = null
     }
 
     override fun onDestroy() {

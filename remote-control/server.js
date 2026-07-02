@@ -144,10 +144,9 @@ app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
 // ---- Управление камерой телефона из панели ----
 app.post('/api/camera/command', h(async (req, res) => {
   const { cmd } = req.body;
-  if (!phoneSocket || phoneSocket.readyState !== phoneSocket.OPEN) {
-    return res.status(503).json({ error: 'Телефон не подключён' });
-  }
-  phoneSocket.send(JSON.stringify({ cmd }));
+  const active = Object.values(phoneSockets).filter(ws => ws?.readyState === ws?.OPEN);
+  if (!active.length) return res.status(503).json({ error: 'Телефон не подключён' });
+  active.forEach(ws => ws.send(JSON.stringify({ cmd })));
   res.json({ ok: true });
 }));
 
@@ -256,32 +255,43 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-// Релей камеры: телефон (role=phone) шлёт бинарные JPEG-кадры,
-// панель (role=viewer) их получает. Храним последний кадр и статус телефона.
-const cameraViewers = new Set();
-let phoneSocket = null;
+// Релей камеры: телефон шлёт два потока (back + front), панель их получает.
+const phoneSockets = { back: null, front: null };
+const viewerSets = { back: new Set(), front: new Set() };
 
-function notifyViewers(obj) {
+function notifyViewersCam(cam, obj) {
   const data = JSON.stringify(obj);
-  for (const v of cameraViewers) if (v.readyState === v.OPEN) v.send(data);
+  for (const v of viewerSets[cam] || []) if (v.readyState === v.OPEN) v.send(data);
+}
+function notifyAllViewers(obj) {
+  notifyViewersCam('back', obj);
+  notifyViewersCam('front', obj);
 }
 
+// Для /api/camera/command — совместимость со старым phoneSocket
+Object.defineProperty(globalThis, 'phoneSocket', { get: () => phoneSockets.back, configurable: true });
+
 wssCamera.on('connection', (ws, req) => {
-  const role = new URL(req.url, 'http://localhost').searchParams.get('role') || 'viewer';
-  console.log(`[CAM] connected: role=${role} from ${req.socket.remoteAddress}`);
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const role = params.get('role') || 'viewer';
+  const cam = params.get('cam') || 'back';
+  console.log(`[CAM] connected: role=${role} cam=${cam} from ${req.socket.remoteAddress}`);
   if (role === 'phone') {
-    phoneSocket = ws;
-    notifyViewers({ type: 'phone', connected: true });
+    phoneSockets[cam] = ws;
+    notifyViewersCam(cam, { type: 'phone', connected: true, cam });
     ws.on('message', (data, isBinary) => {
       if (isBinary) {
-        for (const v of cameraViewers) if (v.readyState === v.OPEN) v.send(data, { binary: true });
+        for (const v of viewerSets[cam] || []) if (v.readyState === v.OPEN) v.send(data, { binary: true });
       }
     });
-    ws.on('close', () => { if (phoneSocket === ws) phoneSocket = null; notifyViewers({ type: 'phone', connected: false }); });
+    ws.on('close', () => {
+      if (phoneSockets[cam] === ws) phoneSockets[cam] = null;
+      notifyViewersCam(cam, { type: 'phone', connected: false, cam });
+    });
   } else {
-    cameraViewers.add(ws);
-    ws.send(JSON.stringify({ type: 'phone', connected: !!phoneSocket }));
-    ws.on('close', () => cameraViewers.delete(ws));
+    (viewerSets[cam] || viewerSets.back).add(ws);
+    ws.send(JSON.stringify({ type: 'phone', connected: !!phoneSockets[cam], cam }));
+    ws.on('close', () => (viewerSets[cam] || viewerSets.back).delete(ws));
   }
 });
 
