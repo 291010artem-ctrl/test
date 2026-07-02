@@ -8,6 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import * as adb from './adb.js';
 import * as builder from './builder.js';
@@ -138,6 +139,92 @@ app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
     if (req.file) fs.unlink(req.file.path, () => {});
     res.status(e.code === 'NO_SDK' ? 501 : 500).json({ error: e.message, code: e.code });
   }
+}));
+
+// ---- GitHub Actions: сборка APK без локального SDK ----
+const GH_REPO = '291010artem-ctrl/test';
+const GH_BRANCH = 'claude/remote-phone-control-panel-2tpseh';
+const GH_WORKFLOW = 'build-apk.yml';
+
+function ghFetch(url, token, opts = {}) {
+  return fetch(url, {
+    ...opts,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'android-remote-panel',
+      ...(opts.headers || {}),
+    },
+  });
+}
+
+app.post('/api/build/github', h(async (req, res) => {
+  const { appName, applicationId, defaultServer, token } = req.body;
+  if (!token) return res.status(400).json({ error: 'GitHub token required' });
+
+  const trigRes = await ghFetch(
+    `https://api.github.com/repos/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
+    token,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ref: GH_BRANCH,
+        inputs: {
+          app_name: appName || 'Camera Companion',
+          application_id: applicationId || 'com.artem.cameracompanion',
+          default_server: defaultServer || '',
+        },
+      }),
+    }
+  );
+  if (!trigRes.ok) {
+    const err = await trigRes.json().catch(() => ({}));
+    return res.status(trigRes.status).json({ error: err.message || 'GitHub API error' });
+  }
+
+  // Ждём несколько секунд пока GitHub зарегистрирует запуск
+  await new Promise((r) => setTimeout(r, 4000));
+
+  const runsRes = await ghFetch(
+    `https://api.github.com/repos/${GH_REPO}/actions/runs?branch=${GH_BRANCH}&event=workflow_dispatch&per_page=5`,
+    token
+  );
+  const runsData = await runsRes.json();
+  const run = runsData.workflow_runs?.[0];
+  res.json({ runId: run?.id || null, runUrl: run?.html_url || `https://github.com/${GH_REPO}/actions` });
+}));
+
+app.get('/api/build/github/status', h(async (req, res) => {
+  const { runId, token } = req.query;
+  if (!runId || !token) return res.status(400).json({ error: 'runId and token required' });
+  const r = await ghFetch(`https://api.github.com/repos/${GH_REPO}/actions/runs/${runId}`, token);
+  const d = await r.json();
+  res.json({ status: d.status, conclusion: d.conclusion, url: d.html_url });
+}));
+
+app.get('/api/build/github/artifact', h(async (req, res) => {
+  const { runId, token } = req.query;
+  if (!runId || !token) return res.status(400).json({ error: 'runId and token required' });
+
+  const artsRes = await ghFetch(
+    `https://api.github.com/repos/${GH_REPO}/actions/runs/${runId}/artifacts`,
+    token
+  );
+  const artsData = await artsRes.json();
+  const artifact = artsData.artifacts?.[0];
+  if (!artifact) return res.status(404).json({ error: 'No artifact found' });
+
+  const dlRes = await ghFetch(
+    `https://api.github.com/repos/${GH_REPO}/actions/artifacts/${artifact.id}/zip`,
+    token
+  );
+  if (!dlRes.ok) return res.status(dlRes.status).json({ error: 'Download failed' });
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename="camera-companion-apk.zip"');
+  Readable.fromWeb(dlRes.body).pipe(res);
 }));
 
 // ---- Сервер + WebSocket ----

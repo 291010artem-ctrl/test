@@ -211,7 +211,15 @@ async function loadBuildTab() {
       $('#bServer').value = `${info.addresses[0].address}:${info.port}`;
     }
   } catch { /* ignore */ }
+  const saved = localStorage.getItem('arp_gh_token');
+  if (saved && !$('#bGhToken').value) $('#bGhToken').value = saved;
 }
+
+$('#bGhToken').addEventListener('change', () => {
+  const v = $('#bGhToken').value.trim();
+  if (v) localStorage.setItem('arp_gh_token', v);
+  else localStorage.removeItem('arp_gh_token');
+});
 
 $('#buildBtn').onclick = async () => {
   const msg = $('#buildMsg');
@@ -220,7 +228,7 @@ $('#buildBtn').onclick = async () => {
     $('#bServer').focus();
     return;
   }
-  msg.textContent = 'Сборка… (первая может занять несколько минут)';
+  msg.textContent = 'Сборка…';
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);
@@ -237,18 +245,71 @@ $('#buildBtn').onclick = async () => {
       a.href = url; a.download = ($('#bAppName').value || 'app') + '.apk';
       a.click(); URL.revokeObjectURL(url);
       msg.textContent = 'Готово — APK скачан. Установи его на телефон и выдай доступ к камере.';
+    } else if (res.status === 501) {
+      const token = $('#bGhToken').value.trim();
+      if (token) {
+        await buildViaGitHub(token, msg);
+      } else {
+        msg.textContent = 'Android SDK не найден. Введи GitHub Token выше — APK соберётся автоматически с нужным IP и скачается сюда.';
+        $('#bGhToken').focus();
+      }
     } else {
       const d = await res.json().catch(() => ({}));
-      if (res.status === 501) {
-        msg.innerHTML = (d.error || 'Нет Android SDK') +
-          '\n\nБыстрый путь: открой вкладку <b>Actions</b> в GitHub-репозитории → ' +
-          'workflow <b>«Build companion APK»</b> → Run workflow. Скачаешь готовый APK из артефактов.';
-      } else {
-        msg.textContent = 'Ошибка сборки: ' + (d.error || res.statusText);
-      }
+      msg.textContent = 'Ошибка сборки: ' + (d.error || res.statusText);
     }
   } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
 };
+
+async function buildViaGitHub(token, msgEl) {
+  msgEl.textContent = 'Отправляем задание на GitHub Actions…';
+  try {
+    const trigRes = await fetch('/api/build/github', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        appName: $('#bAppName').value,
+        applicationId: $('#bAppId').value,
+        defaultServer: $('#bServer').value,
+        token,
+      }),
+    });
+    const td = await trigRes.json();
+    if (!trigRes.ok) {
+      msgEl.textContent = 'Ошибка GitHub API: ' + (td.error || trigRes.statusText);
+      return;
+    }
+    const { runId, runUrl } = td;
+    if (!runId) {
+      msgEl.innerHTML = `Сборка запущена, но ID запуска не получили. <a href="${runUrl}" target="_blank">Открыть Actions</a>`;
+      return;
+    }
+    msgEl.innerHTML = `Сборка идёт (#${runId})… это займёт ~2-3 мин.<br><a href="${runUrl}" target="_blank">Открыть в GitHub Actions</a>`;
+
+    const poll = setInterval(async () => {
+      try {
+        const sr = await fetch(`/api/build/github/status?runId=${runId}&token=${encodeURIComponent(token)}`);
+        const sd = await sr.json();
+        if (sd.status === 'completed') {
+          clearInterval(poll);
+          if (sd.conclusion === 'success') {
+            msgEl.innerHTML = 'Сборка готова! Скачиваем APK…';
+            const a = document.createElement('a');
+            a.href = `/api/build/github/artifact?runId=${runId}&token=${encodeURIComponent(token)}`;
+            a.download = 'camera-companion-apk.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => {
+              msgEl.innerHTML = 'APK скачан (zip-архив — внутри <b>app-debug.apk</b>). Установи на телефон и выдай доступ к камере.<br><a href="' + sd.url + '" target="_blank">Посмотреть сборку</a>';
+            }, 1500);
+          } else {
+            msgEl.innerHTML = `Ошибка сборки (${sd.conclusion}). <a href="${sd.url}" target="_blank">Смотри лог в Actions</a>`;
+          }
+        }
+      } catch { /* ignore transient poll errors */ }
+    }, 12000);
+  } catch (e) { msgEl.textContent = 'Ошибка: ' + e.message; }
+}
 
 // ---------- Дашборд ----------
 async function loadDashboard() {

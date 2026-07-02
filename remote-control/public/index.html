@@ -125,6 +125,10 @@
             <label class="chk"><input type="checkbox" checked disabled> Камера</label>
             <span class="muted-text">(другие права добавим позже)</span>
           </div>
+          <label class="fld">GitHub Token <span class="muted-text">(если нет Android SDK — APK собирается на GitHub Actions)</span>
+            <input id="bGhToken" type="password" placeholder="ghp_…" spellcheck="false" autocomplete="off">
+            <span class="muted-text">Personal Access Token с правом <b>workflow</b>. <a href="https://github.com/settings/tokens/new?scopes=workflow" target="_blank">Создать токен</a>. Хранится только в браузере.</span>
+          </label>
           <button id="buildBtn" class="primary">Собрать APK</button>
           <div id="buildMsg" class="build-msg"></div>
         </div>
