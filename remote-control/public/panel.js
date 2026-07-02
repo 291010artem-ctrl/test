@@ -201,7 +201,14 @@ function setPhoneStatus(on) {
   const el = $('#camStatus');
   el.textContent = on ? 'телефон подключён' : 'телефон не подключён';
   el.classList.toggle('on', !!on);
+  $('#camStart').disabled = !on;
+  $('#camStop').disabled = !on;
 }
+
+$('#camStart').onclick = () =>
+  jpost('camera/command', { cmd: 'start' }).catch((e) => toast(e.message, true));
+$('#camStop').onclick = () =>
+  jpost('camera/command', { cmd: 'stop' }).catch((e) => toast(e.message, true));
 
 // ---------- Билдинг APK ----------
 async function loadBuildTab() {

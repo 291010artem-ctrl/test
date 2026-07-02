@@ -19,6 +19,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -82,6 +83,14 @@ class MainActivity : AppCompatActivity() {
                     binding.startButton.text = "Остановить"
                 }
                 bindCamera()
+            }
+            override fun onMessage(ws: WebSocket, text: String) {
+                try {
+                    when (JSONObject(text).getString("cmd")) {
+                        "stop" -> runOnUiThread { stopStreaming() }
+                        "start" -> runOnUiThread { if (!streaming) ensureCameraThenStart() }
+                    }
+                } catch (_: Exception) {}
             }
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 runOnUiThread { status("Ошибка: ${t.message}"); stopStreaming() }

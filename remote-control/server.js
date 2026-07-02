@@ -141,6 +141,16 @@ app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
   }
 }));
 
+// ---- Управление камерой телефона из панели ----
+app.post('/api/camera/command', h(async (req, res) => {
+  const { cmd } = req.body;
+  if (!phoneSocket || phoneSocket.readyState !== phoneSocket.OPEN) {
+    return res.status(503).json({ error: 'Телефон не подключён' });
+  }
+  phoneSocket.send(JSON.stringify({ cmd }));
+  res.json({ ok: true });
+}));
+
 // ---- GitHub Actions: сборка APK без локального SDK ----
 const GH_REPO = '291010artem-ctrl/test';
 const GH_BRANCH = 'claude/remote-phone-control-panel-2tpseh';

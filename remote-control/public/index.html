@@ -99,7 +99,11 @@
       <div class="tab-content" id="tab-camera">
         <div class="card">
           <h3>Камера телефона <span id="camStatus" class="cam-status">телефон не подключён</span></h3>
-          <div class="cam-wrap"><img id="camImg" alt=""><div id="camHint" class="screen-hint">Установи APK на телефон, выдай доступ к камере и нажми «Начать трансляцию» — телефон подключится автоматически.</div></div>
+          <div style="margin-bottom:8px">
+            <button id="camStart" class="primary">▶ Начать трансляцию</button>
+            <button id="camStop">⏹ Остановить</button>
+          </div>
+          <div class="cam-wrap"><img id="camImg" alt=""><div id="camHint" class="screen-hint">Установи APK на телефон, выдай доступ к камере — управляй трансляцией кнопками выше.</div></div>
         </div>
       </div>
 
