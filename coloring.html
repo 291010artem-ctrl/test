@@ -32,8 +32,8 @@
     .actions a{display:flex;flex-direction:column;align-items:center;font-size:1.3rem;color:var(--ink)}
     .actions small{font-size:.62rem;font-weight:800;color:var(--muted)}
 
-    .page-title{text-align:center;padding:4px 20px 0}
-    .page-title h1{font-size:clamp(1.6rem,4vw,2.4rem);font-weight:900}
+    .page-title{text-align:center;padding:2px 20px 0}
+    .page-title h1{font-size:clamp(1.3rem,3vw,1.7rem);font-weight:900}
     .page-title h1 .o{color:var(--orange)}
     .page-title p{color:var(--muted);font-weight:700;margin-top:6px}
 
@@ -53,9 +53,9 @@
     .hpick.active{outline:3px solid var(--orange);outline-offset:1px}
 
     /* весь интерфейс помещается в один экран без прокрутки */
-    .wrap{max-width:1180px;margin:10px auto;padding:0 16px;display:grid;
+    .wrap{max-width:1180px;margin:6px auto;padding:0 16px;display:grid;
       grid-template-columns:1fr 300px;gap:18px;align-items:stretch;
-      height:calc(100dvh - 138px)}
+      height:calc(100dvh - 104px)}
     /* холст — максимально большой в пределах колонки и высоты экрана (размер задаётся в JS) */
     .stage{position:relative;background:#fff;border:3px solid #eadfbf;border-radius:22px;
       overflow:hidden;box-shadow:var(--shadow);touch-action:none;
