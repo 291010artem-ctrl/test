@@ -160,8 +160,6 @@
 
   <script>
     const heroes=[
-      {n:"Полянка",img:"garden"},
-      {n:"Джойстик",img:"joystick"},{n:"Палитра",img:"palette"},
       {n:"Тисса",img:"tissa"},{n:"Бруно",img:"bruno"},{n:"Лулу",img:"lulu"},
       {n:"Борик",img:"borik"},{n:"Соня",img:"sonya"}
     ];
@@ -248,8 +246,8 @@
       };
       im.src=`assets/color/${name}.jpg?v=21`;
     }
-    guide.addEventListener('load',()=>{ if(!gData) loadHero('garden'); });
-    loadHero('garden');
+    guide.addEventListener('load',()=>{ if(!gData) loadHero('tissa'); });
+    loadHero('tissa');
 
     // подгоняем холст: по ширине колонки, но не выше ~62% экрана
     function fitStage(){
