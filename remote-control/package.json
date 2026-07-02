@@ -36,6 +36,7 @@
       "electron/**",
       "server.js",
       "adb.js",
+      "builder.js",
       "public/**",
       "package.json"
     ],
