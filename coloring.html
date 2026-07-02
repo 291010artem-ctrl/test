@@ -246,7 +246,7 @@
         document.getElementById('ref').src=`assets/chars/${name}.jpg`;  // образец (раскрашенный)
         renderPalette(name);                                            // палитра под этого героя
       };
-      im.src=`assets/color/${name}.jpg`;
+      im.src=`assets/color/${name}.jpg?v=21`;
     }
     guide.addEventListener('load',()=>{ if(!gData) loadHero('garden'); });
     loadHero('garden');
