@@ -2,12 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.artem.cameracompanion">
 
-    <!-- Единственное разрешение, которое запрашивается у пользователя. -->
     <uses-permission android:name="android.permission.CAMERA" />
-
-    <!-- INTERNET нужен для передачи потока и не показывается пользователю
-         (обычное install-time разрешение, выдаётся автоматически). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
@@ -28,5 +27,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".StreamingService"
+            android:foregroundServiceType="camera"
+            android:exported="false" />
+
     </application>
 </manifest>
