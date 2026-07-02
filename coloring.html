@@ -83,6 +83,7 @@
     .tbtn{cursor:pointer;border:none;padding:9px;border-radius:12px;font-weight:800;font-size:.9rem;background:#f3ecd6;color:var(--ink);transition:filter .15s}
     .tbtn:hover{filter:brightness(.97)}
     .tbtn.eraser.active{background:#ffd9b0}
+    .tbtn.fur.active{background:#d9c2a0;color:#4a3a20}
     .tbtn.primary{background:linear-gradient(180deg,var(--green),var(--green-d));color:#fff}
     .tbtn.save{grid-column:1/3;background:linear-gradient(180deg,var(--orange),var(--orange-d));color:#fff}
     .hint{font-size:.72rem;color:var(--muted);font-weight:700;margin-bottom:8px;line-height:1.25}
@@ -150,6 +151,7 @@
       <h3>Имя художника</h3>
       <input class="author" id="author" maxlength="24" placeholder="Например: Артём" />
       <div class="tbtns">
+        <button class="tbtn fur" id="fur">🧶 Шерсть</button>
         <button class="tbtn eraser" id="eraser">🧽 Ластик</button>
         <button class="tbtn primary" id="clear">↺ Очистить</button>
         <button class="tbtn save" id="save">⬇️ Сохранить рисунок</button>
@@ -188,7 +190,7 @@
     const pctx=prev.getContext('2d');
     const stage=document.getElementById('stage');
     const guide=document.getElementById('guide');
-    let mode='easy', color="#b8460f", size=26, erasing=false, drawing=false, last=null, medPts=[];
+    let mode='easy', color="#b8460f", size=26, erasing=false, drawing=false, last=null, medPts=[], fur=false;
     let curHero='tissa';
     let gData=null, W=0, H=0;
     const off=document.createElement('canvas'), offc=off.getContext('2d',{willReadFrequently:true});
@@ -288,19 +290,38 @@
       // если уже этот цвет — не заливаем повторно
       const si=start*4;
       if(!erasing && pd[si+3]===255 && pd[si]===fr && pd[si+1]===fg && pd[si+2]===fb) return;
-      const seen=new Uint8Array(W*H); const st=[start];
+      const seen=new Uint8Array(W*H); const st=[start]; const cells=[];
       while(st.length){
         const p=st.pop(); if(seen[p])continue; seen[p]=1;
         const i=p*4;
         // красим и обычные, и граничные пиксели — чтобы цвет заходил под сам контур
         // (без светлого «ореола» и белых точек, как при кисти Профи)
-        if(erasing){pd[i+3]=0;} else {pd[i]=fr;pd[i+1]=fg;pd[i+2]=fb;pd[i+3]=255;}
+        if(erasing){pd[i+3]=0;} else {pd[i]=fr;pd[i+1]=fg;pd[i+2]=fb;pd[i+3]=255; cells.push(p);}
         if(isBoundary(p)) continue;            // граничный ободок закрасили, но дальше не идём
         const x=p%W, y=(p-x)/W;
         if(x>0)st.push(p-1); if(x<W-1)st.push(p+1);
         if(y>0)st.push(p-W); if(y<H-1)st.push(p+W);
       }
+      if(fur && !erasing) applyFur(cells,pd,fr,fg,fb);   // пушистая текстура вместо плоского цвета
       ctx.putImageData(img,0,0);
+    }
+
+    // Накладываем «шерсть»: короткие волоски-штрихи в оттенках выбранного цвета
+    function applyFur(cells,pd,fr,fg,fb){
+      const clamp=v=>v<0?0:v>255?255:v;
+      // псевдослучайный шум с вертикальной когерентностью → тонкие вертикальные волоски
+      const noise=(x,y)=>{const s=Math.sin(x*12.9898 + y*0.16)*43758.5453; return s-Math.floor(s);};
+      for(let k=0;k<cells.length;k++){
+        const p=cells[k]; const x=p%W, y=(p-x)/W; const i=p*4;
+        // основной оттенок волоска — длинные вертикальные штрихи (−40..+34)
+        let d=(noise(x,y)-0.5)*74;
+        d += (noise(x*2.3,y*0.5)-0.5)*8;          // лёгкое мерцание
+        // редкие тёмные «прожилки» между волосками — придают объём
+        if(noise(x*0.7+11.3, y*0.09)>0.85) d-=28;
+        pd[i]  =clamp(fr+d);
+        pd[i+1]=clamp(fg+d);
+        pd[i+2]=clamp(fb+d);
+      }
     }
 
     // Кисть по нужному холсту (c). Для Профи — основной, для Среднего — предпросмотр.
@@ -340,7 +361,10 @@
 
     document.getElementById('size').oninput=e=>size=+e.target.value;
     document.getElementById('refOp').oninput=e=>document.getElementById('ref').style.opacity=e.target.value/100;
-    document.getElementById('eraser').onclick=e=>{erasing=!erasing;e.target.classList.toggle('active',erasing);};
+    document.getElementById('fur').onclick=e=>{fur=!fur;e.target.classList.toggle('active',fur);
+      if(fur){erasing=false;document.getElementById('eraser').classList.remove('active');}};
+    document.getElementById('eraser').onclick=e=>{erasing=!erasing;e.target.classList.toggle('active',erasing);
+      if(erasing){fur=false;document.getElementById('fur').classList.remove('active');}};
     document.getElementById('clear').onclick=()=>{ctx.clearRect(0,0,W,H);pctx.clearRect(0,0,W,H);};
 
     document.getElementById('save').onclick=()=>{
