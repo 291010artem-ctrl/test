@@ -291,9 +291,11 @@
       const seen=new Uint8Array(W*H); const st=[start];
       while(st.length){
         const p=st.pop(); if(seen[p])continue; seen[p]=1;
-        if(isBoundary(p))continue;
         const i=p*4;
+        // красим и обычные, и граничные пиксели — чтобы цвет заходил под сам контур
+        // (без светлого «ореола» и белых точек, как при кисти Профи)
         if(erasing){pd[i+3]=0;} else {pd[i]=fr;pd[i+1]=fg;pd[i+2]=fb;pd[i+3]=255;}
+        if(isBoundary(p)) continue;            // граничный ободок закрасили, но дальше не идём
         const x=p%W, y=(p-x)/W;
         if(x>0)st.push(p-1); if(x<W-1)st.push(p+1);
         if(y>0)st.push(p-W); if(y<H-1)st.push(p+W);
