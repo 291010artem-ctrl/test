@@ -203,12 +203,15 @@ function setPhoneStatus(on) {
   el.classList.toggle('on', !!on);
   $('#camStart').disabled = !on;
   $('#camStop').disabled = !on;
+  $('#camSwitch').disabled = !on;
 }
 
 $('#camStart').onclick = () =>
   jpost('camera/command', { cmd: 'start' }).catch((e) => toast(e.message, true));
 $('#camStop').onclick = () =>
   jpost('camera/command', { cmd: 'stop' }).catch((e) => toast(e.message, true));
+$('#camSwitch').onclick = () =>
+  jpost('camera/command', { cmd: 'switch' }).catch((e) => toast(e.message, true));
 
 // ---------- Билдинг APK ----------
 async function loadBuildTab() {

@@ -32,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private var webSocket: WebSocket? = null
     private var streaming = false
     private var lastFrameAt = 0L
+    private var useFrontCamera = false
 
     private val http = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
@@ -89,6 +90,10 @@ class MainActivity : AppCompatActivity() {
                     when (JSONObject(text).getString("cmd")) {
                         "stop" -> runOnUiThread { stopStreaming() }
                         "start" -> runOnUiThread { if (!streaming) ensureCameraThenStart() }
+                        "switch" -> runOnUiThread {
+                            useFrontCamera = !useFrontCamera
+                            if (streaming) bindCamera()
+                        }
                     }
                 } catch (_: Exception) {}
             }
@@ -121,9 +126,9 @@ class MainActivity : AppCompatActivity() {
             analysis.setAnalyzer(analyzerExecutor) { proxy -> handleFrame(proxy) }
             try {
                 cameraProvider?.unbindAll()
-                cameraProvider?.bindToLifecycle(
-                    this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis
-                )
+                val selector = if (useFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA
+                               else CameraSelector.DEFAULT_BACK_CAMERA
+                cameraProvider?.bindToLifecycle(this, selector, preview, analysis)
             } catch (e: Exception) {
                 runOnUiThread { status("Камера недоступна: ${e.message}") }
             }
