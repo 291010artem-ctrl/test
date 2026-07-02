@@ -26,7 +26,7 @@
     .page-title h1{font-size:clamp(1.9rem,5vw,3rem);font-weight:900}.page-title h1 .o{color:var(--orange)}
     .page-title p{color:var(--muted);font-weight:700;margin-top:6px}
 
-    .games{max-width:900px;margin:24px auto 0;padding:0 24px;display:grid;grid-template-columns:repeat(2,1fr);gap:24px}
+    .games{max-width:960px;margin:24px auto 0;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
     .gcard{display:block;background:#fff;border:3px solid #eadfbf;border-radius:24px;padding:26px 22px;text-align:center;
       box-shadow:var(--shadow);transition:transform .18s,box-shadow .18s}
     .gcard:hover{transform:translateY(-6px);box-shadow:0 18px 38px rgba(120,100,60,.22)}
@@ -35,14 +35,14 @@
     .gcard p{color:var(--muted);font-weight:700;font-size:.92rem;margin-bottom:16px}
     .gcard .play{display:inline-block;padding:10px 26px;border-radius:999px;color:#fff;font-weight:800;
       background:linear-gradient(180deg,var(--green),var(--green-d));box-shadow:var(--shadow)}
-    .g1{border-color:#f3d57f}.g2{border-color:#a9d2ee}
+    .g1{border-color:#f3d57f}.g2{border-color:#a9d2ee}.g3{border-color:#bcd98f}
 
     .foot{display:flex;justify-content:center;margin:34px 0 50px}
     .back-home{display:inline-flex;padding:12px 28px;border-radius:999px;font-weight:800;color:#fff;background:linear-gradient(180deg,var(--green),var(--green-d));box-shadow:var(--shadow)}
     @media(max-width:700px){.header{flex-wrap:wrap;gap:8px}.nav{order:3;width:100%}.games{grid-template-columns:1fr;max-width:420px}}
   </style>
-  <link rel="stylesheet" href="assets/theme.css?v=16" />
-  <script src="assets/theme.js?v=16"></script>
+  <link rel="stylesheet" href="assets/theme.css?v=19" />
+  <script src="assets/theme.js?v=19"></script>
 </head>
 <body>
   <header class="header">
@@ -73,6 +73,12 @@
       <div class="emoji">🌟</div>
       <h3>Поймай друга</h3>
       <p>Друзья выглядывают из норок — успей нажать на них за 30 секунд!</p>
+      <span class="play">Играть ▶</span>
+    </a>
+    <a class="gcard g3" href="eggs.html">
+      <div class="emoji">🥚</div>
+      <h3>Гофер ловит яйца</h3>
+      <p>Двигай Гофера под падающие яйца и лови их в корзинку!</p>
       <span class="play">Играть ▶</span>
     </a>
   </section>

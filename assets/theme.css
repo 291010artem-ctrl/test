@@ -1,8 +1,9 @@
 /* ===== Ночная тема «Мир Кирпи и Гофера» =====
    Включается атрибутом html[data-theme="night"] (ставит theme.js). */
 
-/* декоративные слои (космос ночью, полянка днём) цепляются за низ ВСЕЙ страницы */
-body{position:relative}
+/* декоративные слои (космос ночью, полянка днём) цепляются за низ ВСЕЙ страницы,
+   а страница занимает не меньше высоты экрана — чтобы планеты/трава были у самого низа */
+body{position:relative;min-height:100vh}
 
 /* Переключатель день/ночь (солнце ⇄ луна) */
 .theme-toggle{cursor:pointer;border:none;background:transparent;padding:0;display:flex;flex-direction:column;align-items:center;gap:2px}
@@ -23,8 +24,9 @@ html[data-theme="night"]{
 }
 html[data-theme="night"] body{
   background:#12192b !important;
-  /* верх фона = цвет нижних краёв ночной картинки, чтобы стык был незаметным */
-  background:linear-gradient(180deg,#12192b 0px,#141d3c 620px,#0b1024 100%) !important;
+  /* плавный градиент без светлой полосы посередине; верх = цвет низа ночной картинки */
+  background:linear-gradient(180deg,#12192b 0%,#0d1430 100%) !important;
+  background-attachment:fixed !important;
   color:var(--ink);
   position:relative;   /* чтобы космос внизу цеплялся за низ страницы, а не за экран */
 }
@@ -125,7 +127,7 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
 .kg-space .planet{position:absolute;border-radius:50%}
 
 /* газовый гигант с полосами (тёплый) */
-.kg-space .p1{width:78px;height:78px;left:8%;bottom:80px;
+.kg-space .p1{width:78px;height:78px;left:8%;bottom:30px;
   background:
     radial-gradient(circle at 34% 28%,rgba(255,255,255,.5),rgba(255,255,255,0) 38%),
     repeating-linear-gradient(8deg,#e7b06a 0 5px,#cf9850 5px 9px,#dda760 9px 14px,#bd8746 14px 19px),
@@ -135,7 +137,7 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
   animation:kgfloat 9s ease-in-out infinite}
 
 /* землеподобная (голубая с «континентами») */
-.kg-space .p2{width:48px;height:48px;left:29%;bottom:128px;
+.kg-space .p2{width:48px;height:48px;left:29%;bottom:84px;
   background:
     radial-gradient(circle at 34% 28%,rgba(255,255,255,.55),rgba(255,255,255,0) 40%),
     radial-gradient(ellipse 12px 7px at 62% 58%,#78b46e,transparent 60%),
@@ -147,7 +149,7 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
   animation:kgfloat 11s ease-in-out -3s infinite}
 
 /* планета с кольцом (фиолетовая, Сатурн) */
-.kg-space .p3{width:58px;height:58px;right:12%;bottom:66px;
+.kg-space .p3{width:58px;height:58px;right:12%;bottom:24px;
   background:
     radial-gradient(circle at 35% 28%,rgba(255,255,255,.45),rgba(255,255,255,0) 40%),
     radial-gradient(circle at 50% 50%,#d3b6f2,#6b4aa0 84%);
@@ -159,7 +161,7 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
   transform:rotate(-20deg);box-shadow:0 0 6px rgba(200,180,240,.25)}
 
 /* Марс (красный) */
-.kg-space .p4{width:40px;height:40px;left:51%;bottom:44px;
+.kg-space .p4{width:40px;height:40px;left:51%;bottom:18px;
   background:
     radial-gradient(circle at 34% 28%,rgba(255,255,255,.4),rgba(255,255,255,0) 40%),
     radial-gradient(ellipse 9px 6px at 60% 62%,#a63a1c,transparent 60%),
@@ -170,7 +172,7 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
   animation:kgfloat 8s ease-in-out -2s infinite}
 
 /* Луна (серая, с кратерами) */
-.kg-space .p5{width:32px;height:32px;right:31%;bottom:132px;
+.kg-space .p5{width:32px;height:32px;right:31%;bottom:96px;
   background:
     radial-gradient(circle at 33% 28%,rgba(255,255,255,.5),rgba(255,255,255,0) 42%),
     radial-gradient(circle 4px at 62% 40%,rgba(120,120,130,.7),transparent 70%),
@@ -182,7 +184,7 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
   animation:kgfloat 12s ease-in-out -6s infinite}
 
 /* маленькая бирюзовая планета вдали */
-.kg-space .p6{width:34px;height:34px;left:71%;bottom:104px;
+.kg-space .p6{width:34px;height:34px;left:71%;bottom:64px;
   background:
     radial-gradient(circle at 34% 28%,rgba(255,255,255,.45),rgba(255,255,255,0) 40%),
     radial-gradient(circle at 50% 50%,#7ce0d0,#227d78 86%);
@@ -190,11 +192,11 @@ html[data-theme="night"] .footer{background:transparent !important;color:#8090bd
     0 0 14px rgba(90,220,200,.24);
   animation:kgfloat 9s ease-in-out -4s infinite}
 
-.kg-space .rocket{position:absolute;left:-8%;bottom:96px;font-size:30px;
+.kg-space .rocket{position:absolute;left:-8%;bottom:58px;font-size:30px;
   animation:kgrocket 15s linear infinite}
-.kg-space .rocket2{position:absolute;left:-8%;bottom:150px;font-size:22px;
+.kg-space .rocket2{position:absolute;left:-8%;bottom:104px;font-size:22px;
   animation:kgrocket 22s linear -8s infinite}
-.kg-space .ufo{position:absolute;right:24%;bottom:180px;font-size:26px;animation:kgfloat 6s ease-in-out infinite}
+.kg-space .ufo{position:absolute;right:24%;bottom:128px;font-size:26px;animation:kgfloat 6s ease-in-out infinite}
 .kg-space .tw{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;
   box-shadow:0 0 6px #fff;animation:kgtwinkle 3s ease-in-out infinite}
 .kg-space .tw.big{width:4px;height:4px}
@@ -233,4 +235,4 @@ html:not([data-theme="night"]) .footer{background:transparent !important}
   0%{transform:translate(0,0) rotate(38deg);opacity:0}
   6%{opacity:1} 90%{opacity:1}
   100%{transform:translate(118vw,-120px) rotate(38deg);opacity:0}}
-@media(max-width:640px){.kg-space{height:140px}.kg-space .p1{width:54px;height:54px;top:52px}.kg-space .rocket{font-size:24px}}
+@media(max-width:640px){.kg-space .p1{width:60px;height:60px}.kg-space .rocket{font-size:24px}}
