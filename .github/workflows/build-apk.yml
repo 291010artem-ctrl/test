@@ -70,15 +70,24 @@ jobs:
           EOF
           MANIFEST="app/src/main/AndroidManifest.xml"
           if [ "$CAM" != "true" ]; then
-            sed -i '/android.permission.CAMERA/d' "$MANIFEST"
+            sed -i '/android\.permission\.CAMERA/d' "$MANIFEST"
             sed -i '/FOREGROUND_SERVICE_CAMERA/d' "$MANIFEST"
-            echo "Camera permission removed from manifest"
           fi
           if [ "$MIC" != "true" ]; then
-            sed -i '/android.permission.RECORD_AUDIO/d' "$MANIFEST"
+            sed -i '/android\.permission\.RECORD_AUDIO/d' "$MANIFEST"
             sed -i '/FOREGROUND_SERVICE_MICROPHONE/d' "$MANIFEST"
-            echo "Microphone permission removed from manifest"
           fi
+          # Синхронизируем foregroundServiceType с выбранными разрешениями
+          FST=""
+          [ "$CAM" = "true" ] && FST="${FST:+$FST|}camera"
+          [ "$MIC" = "true" ] && FST="${FST:+$FST|}microphone"
+          if [ -n "$FST" ]; then
+            sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
+          else
+            sed -i '/android:foregroundServiceType/d' "$MANIFEST"
+          fi
+          echo "Manifest permissions: CAM=$CAM MIC=$MIC FST=${FST:-none}"
+          grep 'uses-permission\|foregroundService' "$MANIFEST" || true
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace

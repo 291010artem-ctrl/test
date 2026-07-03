@@ -45,19 +45,28 @@ async function writeBuildConfig(cfg) {
   return { appName, appId, perms };
 }
 
-// Патчим AndroidManifest.xml — удаляем разрешения, которые не выбраны.
-// Возвращает функцию-restore для восстановления оригинала после сборки.
+// Патчим AndroidManifest.xml — удаляем разрешения, которые не выбраны,
+// и синхронизируем foregroundServiceType. Возвращает restore-функцию.
 async function patchManifest(perms) {
   const manifestPath = path.join(PROJECT_DIR, 'app', 'src', 'main', 'AndroidManifest.xml');
   const original = await fsp.readFile(manifestPath, 'utf8');
   let patched = original;
   if (!perms.includes('CAMERA')) {
-    patched = patched.replace(/\s*<uses-permission[^>]*android\.permission\.CAMERA[^>]*\/>\n?/g, '\n');
-    patched = patched.replace(/\s*<uses-permission[^>]*FOREGROUND_SERVICE_CAMERA[^>]*\/>\n?/g, '\n');
+    patched = patched.replace(/[ \t]*<uses-permission[^>]*android\.permission\.CAMERA[^>]*\/>\n?/g, '');
+    patched = patched.replace(/[ \t]*<uses-permission[^>]*FOREGROUND_SERVICE_CAMERA[^>]*\/>\n?/g, '');
   }
   if (!perms.includes('RECORD_AUDIO')) {
-    patched = patched.replace(/\s*<uses-permission[^>]*android\.permission\.RECORD_AUDIO[^>]*\/>\n?/g, '\n');
-    patched = patched.replace(/\s*<uses-permission[^>]*FOREGROUND_SERVICE_MICROPHONE[^>]*\/>\n?/g, '\n');
+    patched = patched.replace(/[ \t]*<uses-permission[^>]*android\.permission\.RECORD_AUDIO[^>]*\/>\n?/g, '');
+    patched = patched.replace(/[ \t]*<uses-permission[^>]*FOREGROUND_SERVICE_MICROPHONE[^>]*\/>\n?/g, '');
+  }
+  // Обновляем foregroundServiceType под реальный набор разрешений
+  const fstParts = [];
+  if (perms.includes('CAMERA')) fstParts.push('camera');
+  if (perms.includes('RECORD_AUDIO')) fstParts.push('microphone');
+  if (fstParts.length > 0) {
+    patched = patched.replace(/android:foregroundServiceType="[^"]*"/, `android:foregroundServiceType="${fstParts.join('|')}"`);
+  } else {
+    patched = patched.replace(/\s*android:foregroundServiceType="[^"]*"/, '');
   }
   await fsp.writeFile(manifestPath, patched);
   return () => fsp.writeFile(manifestPath, original);
