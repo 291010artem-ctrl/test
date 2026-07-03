@@ -152,16 +152,19 @@ async function selectDevice(serial) {
 }
 
 $('#deviceSelect').onchange = (e) => selectDevice(e.target.value);
-$('#refreshDevices').onclick = loadDevices;
 
-$('#wifiConnect').onclick = async () => {
-  const hp = $('#wifiHost').value.trim();
-  if (!hp) return;
-  try { const r = await jpost('connect', { hostPort: hp }); toast(r.message || 'ok'); loadDevices(); }
-  catch (e) { toast(e.message, true); }
-};
+// ---------- Вкладки пикера ----------
+document.querySelectorAll('.picker-tab').forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll('.picker-tab').forEach((t) => t.classList.remove('active'));
+    document.querySelectorAll('.picker-panel').forEach((p) => p.classList.remove('active'));
+    tab.classList.add('active');
+    $('#ptab-' + tab.dataset.ptab).classList.add('active');
+    if (tab.dataset.ptab === 'build') loadBuildTab();
+  };
+});
 
-// ---------- Вкладки ----------
+// ---------- Вкладки панели устройства ----------
 document.querySelectorAll('.tab').forEach((tab) => {
   tab.onclick = () => {
     document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
@@ -172,7 +175,6 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.tab === 'files') loadFiles($('#filePath').value);
     if (tab.dataset.tab === 'notifs') loadNotifs();
     if (tab.dataset.tab === 'camera') startCameraView();
-    if (tab.dataset.tab === 'build') loadBuildTab();
   };
 });
 

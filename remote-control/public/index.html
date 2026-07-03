@@ -10,19 +10,60 @@
   <header class="topbar">
     <button id="backBtn" class="sm" style="display:none" title="Назад к выбору устройства">← Устройства</button>
     <div class="brand">📱 Android Remote Panel</div>
-    <span id="connState" class="dot" style="display:none"></span>
   </header>
 
-  <!-- Экран выбора устройства (companion-app телефоны) -->
+  <!-- Первый экран: выбор устройства + билдинг APK -->
   <div id="picker" class="picker">
-    <div class="picker-top">
-      <span class="picker-title">Выбери устройство</span>
-      <button id="pickerRefresh" class="sm">⟳ Обновить</button>
+    <nav class="picker-tabs">
+      <button class="picker-tab active" data-ptab="devices">Устройства</button>
+      <button class="picker-tab" data-ptab="build">Собрать APK</button>
+    </nav>
+
+    <!-- Вкладка: список устройств -->
+    <div class="picker-panel active" id="ptab-devices">
+      <div class="picker-top">
+        <button id="pickerRefresh" class="sm">⟳ Обновить</button>
+      </div>
+      <div id="phoneGrid" class="phone-list"></div>
+      <p id="pickerStatus" class="picker-status">Ожидание подключения телефонов…</p>
     </div>
-    <div id="phoneGrid" class="phone-list"></div>
-    <p id="pickerStatus" class="picker-status">Ожидание подключения телефонов…</p>
+
+    <!-- Вкладка: конструктор APK -->
+    <div class="picker-panel" id="ptab-build">
+      <div class="build-scroll">
+        <div class="card">
+          <h3>Конструктор APK</h3>
+          <p class="muted-text">Приложение просит только доступ к камере и стримит её в эту панель.</p>
+          <label class="fld">Название приложения
+            <input id="bAppName" value="Camera Companion">
+          </label>
+          <label class="fld">Package (applicationId)
+            <input id="bAppId" value="com.artem.cameracompanion" spellcheck="false">
+          </label>
+          <label class="fld">Иконка (PNG, необязательно)
+            <input id="bIcon" type="file" accept="image/png">
+          </label>
+          <label class="fld">
+            Адрес панели — зашивается в APK, телефон подключается сам
+            <input id="bServer" placeholder="определяется автоматически…" spellcheck="false" required>
+            <span class="muted-text">Подставляется автоматически. Убедись, что телефон в той же Wi-Fi сети, что и этот ПК.</span>
+          </label>
+          <div class="fld">Разрешения:
+            <label class="chk"><input type="checkbox" checked disabled> Камера</label>
+            <label class="chk"><input type="checkbox" id="permMic"> Микрофон</label>
+          </div>
+          <label class="fld">GitHub Token <span class="muted-text">(если нет Android SDK — APK собирается на GitHub Actions)</span>
+            <input id="bGhToken" type="password" placeholder="ghp_…" spellcheck="false" autocomplete="off">
+            <span class="muted-text">Personal Access Token с правом <b>workflow</b>. <a href="https://github.com/settings/tokens/new?scopes=workflow" target="_blank">Создать токен</a>. Хранится только в браузере.</span>
+          </label>
+          <button id="buildBtn" class="primary">Собрать APK</button>
+          <div id="buildMsg" class="build-msg"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <!-- Панель управления устройством (открывается после выбора) -->
   <div class="layout" style="display:none">
     <!-- Левая колонка: экран телефона -->
     <section class="screen-col">
@@ -56,7 +97,6 @@
         <button class="tab" data-tab="files">Файлы</button>
         <button class="tab" data-tab="notifs">Уведомления</button>
         <button class="tab" data-tab="camera">Трансляция</button>
-        <button class="tab" data-tab="build">Билдинг APK</button>
       </nav>
 
       <div class="tab-content active" id="tab-dashboard">
@@ -119,37 +159,6 @@
               <div class="cam-wrap"><img id="camImgFront" alt=""><div id="camHintFront" class="screen-hint">Фронтальная камера появится здесь.</div></div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div class="tab-content" id="tab-build">
-        <div class="card">
-          <h3>Конструктор APK</h3>
-          <p class="muted-text">Приложение просит только доступ к камере и стримит её в эту панель.</p>
-          <label class="fld">Название приложения
-            <input id="bAppName" value="Camera Companion">
-          </label>
-          <label class="fld">Package (applicationId)
-            <input id="bAppId" value="com.artem.cameracompanion" spellcheck="false">
-          </label>
-          <label class="fld">Иконка (PNG, необязательно)
-            <input id="bIcon" type="file" accept="image/png">
-          </label>
-          <label class="fld">
-            Адрес панели — зашивается в APK, телефон подключается сам
-            <input id="bServer" placeholder="определяется автоматически…" spellcheck="false" required>
-            <span class="muted-text">Подставляется автоматически. Убедись, что телефон в той же Wi-Fi сети, что и этот ПК.</span>
-          </label>
-          <div class="fld">Разрешения:
-            <label class="chk"><input type="checkbox" checked disabled> Камера</label>
-            <label class="chk"><input type="checkbox" id="permMic"> Микрофон</label>
-          </div>
-          <label class="fld">GitHub Token <span class="muted-text">(если нет Android SDK — APK собирается на GitHub Actions)</span>
-            <input id="bGhToken" type="password" placeholder="ghp_…" spellcheck="false" autocomplete="off">
-            <span class="muted-text">Personal Access Token с правом <b>workflow</b>. <a href="https://github.com/settings/tokens/new?scopes=workflow" target="_blank">Создать токен</a>. Хранится только в браузере.</span>
-          </label>
-          <button id="buildBtn" class="primary">Собрать APK</button>
-          <div id="buildMsg" class="build-msg"></div>
         </div>
       </div>
     </section>
