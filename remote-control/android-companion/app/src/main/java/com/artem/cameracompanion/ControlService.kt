@@ -1,6 +1,7 @@
 package com.artem.cameracompanion
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityService.ScreenCapture
 import android.accessibilityservice.GestureDescription
 import android.annotation.SuppressLint
 import android.content.Intent
