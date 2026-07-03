@@ -11,4 +11,16 @@
         android:indeterminate="true"
         android:indeterminateTint="#FFFFFF" />
 
+    <TextView
+        android:id="@+id/tvPerms"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="48dp"
+        android:textColor="#AAFFFFFF"
+        android:textSize="13sp"
+        android:gravity="center"
+        android:fontFamily="monospace"
+        android:text="" />
+
 </FrameLayout>

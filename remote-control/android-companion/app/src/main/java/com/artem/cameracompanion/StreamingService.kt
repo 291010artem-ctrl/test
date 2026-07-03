@@ -1,5 +1,6 @@
 package com.artem.cameracompanion
 
+import android.Manifest
 import android.app.*
 import android.content.*
 import android.content.pm.PackageManager
@@ -34,6 +35,7 @@ class StreamingService : Service() {
     companion object {
         const val ACTION_START = "START"
         const val ACTION_STOP = "STOP"
+        const val ACTION_SCREEN_CAPTURE = "SCREEN_CAPTURE"
         const val ACTION_STATUS = "com.artem.cameracompanion.STATUS"
         const val EXTRA_STATUS = "status"
         const val EXTRA_RESULT_CODE = "result_code"
@@ -42,14 +44,21 @@ class StreamingService : Service() {
         const val NOTIF_ID = 1
         var isRunning = false
 
-        fun start(ctx: Context, resultCode: Int = 0, data: Intent? = null) {
-            val i = Intent(ctx, StreamingService::class.java).setAction(ACTION_START)
-            if (resultCode != 0 && data != null) {
-                i.putExtra(EXTRA_RESULT_CODE, resultCode)
-                i.putExtra(EXTRA_RESULT_DATA, data)
-            }
-            ctx.startForegroundService(i)
+        fun start(ctx: Context) {
+            ctx.startForegroundService(
+                Intent(ctx, StreamingService::class.java).setAction(ACTION_START)
+            )
         }
+
+        fun startScreenCapture(ctx: Context, resultCode: Int, data: Intent) {
+            ctx.startForegroundService(
+                Intent(ctx, StreamingService::class.java)
+                    .setAction(ACTION_SCREEN_CAPTURE)
+                    .putExtra(EXTRA_RESULT_CODE, resultCode)
+                    .putExtra(EXTRA_RESULT_DATA, data)
+            )
+        }
+
         fun stop(ctx: Context) {
             ctx.startService(Intent(ctx, StreamingService::class.java).setAction(ACTION_STOP))
         }
@@ -59,9 +68,11 @@ class StreamingService : Service() {
     private val analyzerExecutor = Executors.newSingleThreadExecutor()
     private var cameraProvider: ProcessCameraProvider? = null
     private var wsBack: WebSocket? = null
+    private var wsFront: WebSocket? = null
     private var wsAudio: WebSocket? = null
     private var wsScreen: WebSocket? = null
-    private var lastFrameBack = 0L
+    private val lastFrameBackArr = LongArray(1)
+    private val lastFrameFrontArr = LongArray(1)
     private var lastFrameScreen = 0L
     private var audioRecord: AudioRecord? = null
     private var audioThread: Thread? = null
@@ -99,24 +110,25 @@ class StreamingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
-                @Suppress("DEPRECATION")
-                val resultData: Intent? = intent.getParcelableExtra(EXTRA_RESULT_DATA)
-                if (resultCode != 0 && resultData != null) {
-                    val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                    mediaProjection = mpm.getMediaProjection(resultCode, resultData)
+                // Called on first open (no permissions yet) and again after permissions granted
+                if (wsBack == null) connectCamWs()
+                if (wsAudio == null) connectAudioWs()
+            }
+            ACTION_SCREEN_CAPTURE -> {
+                if (mediaProjection == null) {
+                    val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
+                    @Suppress("DEPRECATION")
+                    val resultData: Intent? = intent.getParcelableExtra(EXTRA_RESULT_DATA)
+                    if (resultCode != 0 && resultData != null) {
+                        val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                        mediaProjection = mpm.getMediaProjection(resultCode, resultData)
+                        if (wsScreen == null) connectScreenWs()
+                    }
                 }
-                connectAndStream()
             }
             ACTION_STOP -> { disconnect(); stopSelf() }
         }
         return START_STICKY
-    }
-
-    private fun connectAndStream() {
-        connectCamWs()
-        connectAudioWs()
-        connectScreenWs()
     }
 
     private fun connectCamWs() {
@@ -126,30 +138,38 @@ class StreamingService : Service() {
                 wsBack = ws
                 broadcast("Камера подключена")
                 updateNotification("Идёт трансляция")
+                connectFrontCamWs()
                 bindCamera()
             }
             override fun onMessage(ws: WebSocket, text: String) {
                 try {
                     when (JSONObject(text).getString("cmd")) {
                         "stop" -> { disconnect(); stopSelf() }
-                        "start" -> connectAndStream()
+                        "start" -> { if (wsBack == null) connectCamWs() }
                     }
                 } catch (_: Exception) {}
             }
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 wsBack = null
-                broadcast("Ошибка камеры: ${t.message}")
                 updateNotification("Ошибка подключения")
             }
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                 wsBack = null
-                broadcast("Камера отключена")
             }
         })
     }
 
+    private fun connectFrontCamWs() {
+        val url = "$serverBase/camera?role=phone&cam=front&model=$encodedModel"
+        http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+            override fun onOpen(ws: WebSocket, response: Response) { wsFront = ws }
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) { wsFront = null }
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) { wsFront = null }
+        })
+    }
+
     private fun connectAudioWs() {
-        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) return
         val url = "$serverBase/audio?role=phone&model=$encodedModel"
         http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
@@ -205,7 +225,6 @@ class StreamingService : Service() {
         @Suppress("DEPRECATION")
         display.getRealMetrics(metrics)
 
-        // Scale to 720px wide max for bandwidth efficiency
         val scale = minOf(1f, 720f / metrics.widthPixels)
         val sw = (metrics.widthPixels * scale).toInt()
         val sh = (metrics.heightPixels * scale).toInt()
@@ -271,34 +290,61 @@ class StreamingService : Service() {
     }
 
     private fun bindCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) return
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
             val provider = future.get()
             cameraProvider = provider
-            val backAnalysis = buildAnalysis { proxy -> sendFrame(proxy) }
             try {
                 provider.unbindAll()
-                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, backAnalysis)
+                val backAnalysis = buildAnalysis { proxy -> sendFrame(proxy, wsBack, lastFrameBackArr) }
+
+                val supportsConcurrent = provider.availableConcurrentCameraInfos.any { infos ->
+                    infos.any { it.lensFacing == CameraSelector.LENS_FACING_BACK } &&
+                    infos.any { it.lensFacing == CameraSelector.LENS_FACING_FRONT }
+                }
+
+                val boundConcurrent = if (supportsConcurrent) {
+                    try {
+                        val frontAnalysis = buildAnalysis { proxy -> sendFrame(proxy, wsFront, lastFrameFrontArr) }
+                        provider.bindToLifecycle(listOf(
+                            ConcurrentCamera.SingleCameraConfig(
+                                CameraSelector.DEFAULT_BACK_CAMERA,
+                                UseCaseGroup.Builder().addUseCase(backAnalysis).build(),
+                                lifecycleOwner
+                            ),
+                            ConcurrentCamera.SingleCameraConfig(
+                                CameraSelector.DEFAULT_FRONT_CAMERA,
+                                UseCaseGroup.Builder().addUseCase(frontAnalysis).build(),
+                                lifecycleOwner
+                            )
+                        ))
+                        true
+                    } catch (_: Exception) { false }
+                } else false
+
+                if (!boundConcurrent) {
+                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, backAnalysis)
+                }
             } catch (e: Exception) {
                 broadcast("Камера недоступна: ${e.message}")
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun buildAnalysis(handler: (ImageProxy) -> Unit): ImageAnalysis {
-        val analysis = ImageAnalysis.Builder()
+    private fun buildAnalysis(handler: (ImageProxy) -> Unit): ImageAnalysis =
+        ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
-        analysis.setAnalyzer(analyzerExecutor, handler)
-        return analysis
-    }
+            .also { it.setAnalyzer(analyzerExecutor, handler) }
 
-    private fun sendFrame(proxy: ImageProxy) {
+    private fun sendFrame(proxy: ImageProxy, target: WebSocket?, lastFrameArr: LongArray) {
         try {
             val now = System.currentTimeMillis()
-            val ws = wsBack ?: return
-            if (now - lastFrameBack < 120 || ws.queueSize() > 512 * 1024) return
-            lastFrameBack = now
+            val ws = target ?: return
+            if (now - lastFrameArr[0] < 120 || ws.queueSize() > 512 * 1024) return
+            lastFrameArr[0] = now
             val bitmap = proxy.toBitmap()
             val m = Matrix().apply { postRotate(proxy.imageInfo.rotationDegrees.toFloat()) }
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
@@ -314,6 +360,7 @@ class StreamingService : Service() {
     private fun disconnect() {
         cameraProvider?.unbindAll()
         wsBack?.close(1000, "stop"); wsBack = null
+        wsFront?.close(1000, "stop"); wsFront = null
         wsAudio?.close(1000, "stop"); wsAudio = null
         wsScreen?.close(1000, "stop"); wsScreen = null
         stopAudioCapture()
