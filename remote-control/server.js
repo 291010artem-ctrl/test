@@ -285,6 +285,9 @@ const phones = new Map();
 let activePhoneIp = null;
 const viewerSets = { back: new Set(), front: new Set() };
 const audioViewers = new Set();
+const busyViewers = { back: new WeakSet(), front: new WeakSet() };
+const busyScreenViewers = new WeakSet();
+const busyAudioViewers = new WeakSet();
 
 function phoneLabel(ip) { return ip.replace('::ffff:', ''); }
 
@@ -373,7 +376,12 @@ wssCamera.on('connection', (ws, req) => {
 
     ws.on('message', (data, isBinary) => {
       if (isBinary && ip === activePhoneIp) {
-        for (const v of viewerSets[cam] || []) if (v.readyState === v.OPEN) v.send(data, { binary: true });
+        for (const v of viewerSets[cam] || []) {
+          if (v.readyState === v.OPEN && !busyViewers[cam].has(v)) {
+            busyViewers[cam].add(v);
+            v.send(data, { binary: true }, () => busyViewers[cam].delete(v));
+          }
+        }
       }
     });
     ws.on('close', () => {
@@ -404,7 +412,12 @@ wssAudio.on('connection', (ws, req) => {
     notifyPhoneList();
     ws.on('message', (data, isBinary) => {
       if (isBinary && ip === activePhoneIp) {
-        for (const v of audioViewers) if (v.readyState === v.OPEN) v.send(data, { binary: true });
+        for (const v of audioViewers) {
+          if (v.readyState === v.OPEN && !busyAudioViewers.has(v)) {
+            busyAudioViewers.add(v);
+            v.send(data, { binary: true }, () => busyAudioViewers.delete(v));
+          }
+        }
       }
     });
     ws.on('close', () => {
@@ -499,7 +512,12 @@ wssScreen.on('connection', (ws, req) => {
     screenPhones.set(ip, ws);
     ws.on('message', (data, isBinary) => {
       if (isBinary && ip === activePhoneIp) {
-        for (const v of screenViewers) if (v.readyState === v.OPEN) v.send(data, { binary: true });
+        for (const v of screenViewers) {
+          if (v.readyState === v.OPEN && !busyScreenViewers.has(v)) {
+            busyScreenViewers.add(v);
+            v.send(data, { binary: true }, () => busyScreenViewers.delete(v));
+          }
+        }
       }
     });
     ws.on('close', () => { if (screenPhones.get(ip) === ws) screenPhones.delete(ip); });
