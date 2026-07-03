@@ -3,9 +3,11 @@
     package="com.artem.cameracompanion">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
@@ -30,7 +32,7 @@
 
         <service
             android:name=".StreamingService"
-            android:foregroundServiceType="camera"
+            android:foregroundServiceType="camera|microphone"
             android:exported="false" />
 
     </application>

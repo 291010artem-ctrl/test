@@ -205,9 +205,51 @@ function startCamViewer(cam) {
   camWS[cam] = sock;
 }
 
+// ---------- Аудио с телефона ----------
+let audioCtx = null;
+let audioWs = null;
+let audioMuted = true; // по умолчанию без звука
+let nextAudioTime = 0;
+const AUDIO_SAMPLE_RATE = 16000;
+
+function startAudioViewer() {
+  if (audioWs && (audioWs.readyState === WebSocket.OPEN || audioWs.readyState === WebSocket.CONNECTING)) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  audioWs = new WebSocket(`${proto}://${location.host}/audio?role=viewer`);
+  audioWs.binaryType = 'arraybuffer';
+  audioWs.onmessage = (ev) => {
+    if (audioMuted || typeof ev.data === 'string') return;
+    if (!audioCtx) return;
+    const int16 = new Int16Array(ev.data);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+    const buf = audioCtx.createBuffer(1, float32.length, AUDIO_SAMPLE_RATE);
+    buf.copyToChannel(float32, 0);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    if (nextAudioTime < now + 0.02) nextAudioTime = now + 0.06;
+    src.start(nextAudioTime);
+    nextAudioTime += buf.duration;
+  };
+  audioWs.onclose = () => {};
+}
+
+$('#camMute').onclick = () => {
+  if (!audioCtx) {
+    audioCtx = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
+    nextAudioTime = 0;
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  audioMuted = !audioMuted;
+  $('#camMute').textContent = audioMuted ? '🔇 Без звука' : '🔊 Со звуком';
+};
+
 function startCameraView() {
   startCamViewer('back');
   startCamViewer('front');
+  startAudioViewer();
 }
 
 function updatePhoneStatus() {

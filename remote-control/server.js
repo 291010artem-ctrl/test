@@ -243,6 +243,7 @@ const server = http.createServer(app);
 // /camera (поток камеры телефона: role=phone публикует, role=viewer смотрит).
 const wss = new WebSocketServer({ noServer: true });
 const wssCamera = new WebSocketServer({ noServer: true });
+const wssAudio = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url, 'http://localhost');
@@ -251,6 +252,8 @@ server.on('upgrade', (req, socket, head) => {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   } else if (pathname === '/camera') {
     wssCamera.handleUpgrade(req, socket, head, (ws) => wssCamera.emit('connection', ws, req));
+  } else if (pathname === '/audio') {
+    wssAudio.handleUpgrade(req, socket, head, (ws) => wssAudio.emit('connection', ws, req));
   } else {
     socket.destroy();
   }
@@ -293,6 +296,27 @@ wssCamera.on('connection', (ws, req) => {
     (viewerSets[cam] || viewerSets.back).add(ws);
     ws.send(JSON.stringify({ type: 'phone', connected: !!phoneSockets[cam], cam }));
     ws.on('close', () => (viewerSets[cam] || viewerSets.back).delete(ws));
+  }
+});
+
+// Релей аудио: телефон публикует PCM-поток, панель получает.
+let phoneAudioWs = null;
+const audioViewers = new Set();
+
+wssAudio.on('connection', (ws, req) => {
+  const role = new URL(req.url, 'http://localhost').searchParams.get('role') || 'viewer';
+  console.log(`[AUDIO] connected: role=${role} from ${req.socket.remoteAddress}`);
+  if (role === 'phone') {
+    phoneAudioWs = ws;
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        for (const v of audioViewers) if (v.readyState === v.OPEN) v.send(data, { binary: true });
+      }
+    });
+    ws.on('close', () => { if (phoneAudioWs === ws) phoneAudioWs = null; });
+  } else {
+    audioViewers.add(ws);
+    ws.on('close', () => audioViewers.delete(ws));
   }
 });
 

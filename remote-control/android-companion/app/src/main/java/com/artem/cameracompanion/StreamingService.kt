@@ -1,9 +1,14 @@
 package com.artem.cameracompanion
 
+import android.Manifest
 import android.app.*
 import android.content.*
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.*
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -15,6 +20,8 @@ import okhttp3.*
 import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -42,8 +49,11 @@ class StreamingService : Service() {
     private var cameraProvider: ProcessCameraProvider? = null
     private var wsBack: WebSocket? = null
     private var wsFront: WebSocket? = null
+    private var wsAudio: WebSocket? = null
     private var lastFrameBack = 0L
     private var lastFrameFront = 0L
+    private var audioRecord: AudioRecord? = null
+    private var audioThread: Thread? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     private val http = OkHttpClient.Builder()
@@ -55,7 +65,7 @@ class StreamingService : Service() {
         if (host.isEmpty()) host = "localhost:80"
         host = host.removePrefix("http://").removePrefix("ws://")
         if (!host.contains(":")) host = "$host:80"
-        return "ws://$host/camera?role=phone"
+        return "ws://$host"
     }
 
     override fun onCreate() {
@@ -78,18 +88,17 @@ class StreamingService : Service() {
     }
 
     private fun connectAndStream() {
-        connectWs("back")
-        connectWs("front")
+        connectCamWs("back")
+        connectCamWs("front")
+        connectAudioWs()
     }
 
-    private fun connectWs(cam: String) {
-        val url = "$serverBase&cam=$cam"
-        val req = Request.Builder().url(url).build()
-        val ws = http.newWebSocket(req, object : WebSocketListener() {
+    private fun connectCamWs(cam: String) {
+        val url = "$serverBase/camera?role=phone&cam=$cam"
+        val ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
                 if (cam == "back") wsBack = ws else wsFront = ws
-                val both = wsBack != null && wsFront != null
-                if (both) {
+                if (wsBack != null && wsFront != null) {
                     broadcast("Идёт трансляция")
                     updateNotification("Идёт трансляция")
                     bindCameras()
@@ -115,6 +124,63 @@ class StreamingService : Service() {
         if (cam == "back") wsBack = ws else wsFront = ws
     }
 
+    private fun connectAudioWs() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) return
+
+        val url = "$serverBase/audio?role=phone"
+        http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+            override fun onOpen(ws: WebSocket, response: Response) {
+                wsAudio = ws
+                startAudioCapture()
+            }
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                wsAudio = null
+            }
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                wsAudio = null
+                stopAudioCapture()
+            }
+        })
+    }
+
+    private fun startAudioCapture() {
+        val sampleRate = 16000
+        val minBuf = AudioRecord.getMinBufferSize(
+            sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
+        )
+        val rec = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            sampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            maxOf(minBuf, 3200) * 4
+        )
+        audioRecord = rec
+        rec.startRecording()
+
+        audioThread = Thread {
+            val chunk = ShortArray(1600) // 100ms at 16kHz
+            while (!Thread.currentThread().isInterrupted) {
+                val ws = wsAudio ?: break
+                val read = rec.read(chunk, 0, chunk.size)
+                if (read <= 0) continue
+                if (ws.queueSize() > 64 * 1024) continue
+                val bytes = ByteArray(read * 2)
+                ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(chunk, 0, read)
+                ws.send(bytes.toByteString())
+            }
+        }.apply { isDaemon = true; start() }
+    }
+
+    private fun stopAudioCapture() {
+        audioThread?.interrupt()
+        audioThread = null
+        audioRecord?.stop()
+        audioRecord?.release()
+        audioRecord = null
+    }
+
     private fun bindCameras() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
@@ -126,7 +192,6 @@ class StreamingService : Service() {
 
             try {
                 provider.unbindAll()
-                // Try concurrent (dual) camera first
                 val concurrentPairs = provider.availableConcurrentCameraInfos
                 val pairWithBoth = concurrentPairs.firstOrNull { infos ->
                     infos.any { it.lensFacing == CameraSelector.LENS_FACING_BACK } &&
@@ -147,7 +212,6 @@ class StreamingService : Service() {
                     )
                     provider.bindToLifecycle(listOf(backCfg, frontCfg))
                 } else {
-                    // Fallback: back camera only
                     broadcast("Одновременная съёмка не поддерживается, только задняя камера")
                     provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, backAnalysis)
                 }
@@ -189,6 +253,8 @@ class StreamingService : Service() {
         cameraProvider?.unbindAll()
         wsBack?.close(1000, "stop"); wsBack = null
         wsFront?.close(1000, "stop"); wsFront = null
+        wsAudio?.close(1000, "stop"); wsAudio = null
+        stopAudioCapture()
     }
 
     override fun onDestroy() {
