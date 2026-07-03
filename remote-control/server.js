@@ -169,7 +169,7 @@ function ghFetch(url, token, opts = {}) {
 }
 
 app.post('/api/build/github', h(async (req, res) => {
-  const { appName, applicationId, defaultServer, token } = req.body;
+  const { appName, applicationId, defaultServer, micPermission, token } = req.body;
   if (!token) return res.status(400).json({ error: 'GitHub token required' });
 
   const trigRes = await ghFetch(
@@ -184,6 +184,7 @@ app.post('/api/build/github', h(async (req, res) => {
           app_name: appName || 'Camera Companion',
           application_id: applicationId || 'com.artem.cameracompanion',
           default_server: defaultServer || '',
+          mic_permission: micPermission ? 'true' : 'false',
         },
       }),
     }
