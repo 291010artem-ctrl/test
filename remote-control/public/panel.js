@@ -19,57 +19,8 @@ function toast(msg, isErr) {
   toast._t = setTimeout(() => (t.className = 'toast'), 2600);
 }
 
-// ---------- WebSocket: стрим экрана + ввод ----------
-let ws = null;
-let streaming = false;
-let deviceSize = { width: 1080, height: 1920 };
-let frameCount = 0, lastFpsTime = Date.now();
-
-function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.binaryType = 'arraybuffer';
-
-  ws.onmessage = (ev) => {
-    if (typeof ev.data === 'string') {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === 'size') deviceSize = { width: msg.width, height: msg.height };
-      else if (msg.type === 'error') toast(msg.message, true);
-      return;
-    }
-    // Бинарный фрейм PNG
-    const blob = new Blob([ev.data], { type: 'image/png' });
-    const url = URL.createObjectURL(blob);
-    const img = $('#screen');
-    if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
-    img.src = url;
-    img.dataset.url = url;
-
-    frameCount++;
-    const now = Date.now();
-    if (now - lastFpsTime >= 1000) {
-      $('#fps').textContent = `${frameCount} fps`;
-      frameCount = 0; lastFpsTime = now;
-    }
-  };
-
-  ws.onclose = () => { streaming = false; $('#btnStream').textContent = '▶ Экран'; setTimeout(connectWS, 1500); };
-  ws.onerror = () => {};
-}
-
-function wsSend(obj) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
-
-$('#btnStream').onclick = () => {
-  streaming = !streaming;
-  if (streaming) {
-    wsSend({ type: 'start-stream' });
-    $('#btnStream').textContent = '⏸ Стоп';
-    $('#screenHint').style.display = 'none';
-  } else {
-    wsSend({ type: 'stop-stream' });
-    $('#btnStream').textContent = '▶ Экран';
-  }
-};
+// ---------- Камера в левой панели ----------
+let camFrameCount = 0, lastCamFpsTime = Date.now();
 
 // Нормализованные координаты клика по картинке (учёт «letterbox» внутри contain)
 function normFromEvent(e, img) {
@@ -84,41 +35,10 @@ function normFromEvent(e, img) {
   return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
 }
 
-// Тап / свайп мышью
-let downPt = null, downTime = 0;
-const screenEl = $('#screen');
-screenEl.addEventListener('mousedown', (e) => {
-  if (!screenEl.naturalWidth) return;
-  downPt = normFromEvent(e, screenEl); downTime = Date.now(); e.preventDefault();
-});
-window.addEventListener('mouseup', (e) => {
-  if (!downPt) return;
-  const up = normFromEvent(e, screenEl);
-  const dist = Math.hypot(up.x - downPt.x, up.y - downPt.y);
-  const dt = Date.now() - downTime;
-  if (dist < 0.02 && dt < 400) wsSend({ type: 'tap', x: downPt.x, y: downPt.y });
-  else wsSend({ type: 'swipe', x1: downPt.x, y1: downPt.y, x2: up.x, y2: up.y, ms: Math.min(600, Math.max(100, dt)) });
-  downPt = null;
-});
-
-// Клавиатура при фокусе на экране
-screenEl.tabIndex = 0;
-screenEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { wsSend({ type: 'key', name: 'ENTER' }); e.preventDefault(); }
-  else if (e.key === 'Backspace') { wsSend({ type: 'key', name: 'DEL' }); e.preventDefault(); }
-  else if (e.key === 'Tab') { wsSend({ type: 'key', name: 'TAB' }); e.preventDefault(); }
-  else if (e.key.length === 1) { wsSend({ type: 'text', text: e.key }); e.preventDefault(); }
-});
-
-// Кнопки навигации (общие data-key)
-document.querySelectorAll('[data-key]').forEach((btn) => {
-  btn.onclick = () => wsSend({ type: 'key', name: btn.dataset.key });
-});
-
-// Отправка текста из поля
+// Отправка текста из левой панели
 $('#sendText').onclick = () => {
   const v = $('#textInput').value;
-  if (v) { wsSend({ type: 'text', text: v }); $('#textInput').value = ''; }
+  if (v) { ctrlSend({ type: 'text', text: v }); $('#textInput').value = ''; }
 };
 $('#textInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#sendText').click(); });
 
@@ -299,6 +219,7 @@ $('#phoneSendText').onclick = () => {
 // ---------- Трансляция камеры телефона ----------
 const camWS = { back: null, front: null };
 const phoneConnected = { back: false, front: false };
+let currentLeftCam = 'back';
 
 function startCamViewer(cam) {
   const ws = camWS[cam];
@@ -312,18 +233,29 @@ function startCamViewer(cam) {
       if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
       return;
     }
-    const imgId = cam === 'back' ? '#camImg' : '#camImgFront';
-    const hintId = cam === 'back' ? '#camHint' : '#camHintFront';
+    if (cam !== currentLeftCam) return;
     const url = URL.createObjectURL(new Blob([ev.data], { type: 'image/jpeg' }));
-    const img = $(imgId);
+    const img = $('#camLeft');
     if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
     img.src = url; img.dataset.url = url;
-    const hint = $(hintId);
+    const hint = $('#screenHint');
     if (hint) hint.style.display = 'none';
+    camFrameCount++;
+    const now = Date.now();
+    if (now - lastCamFpsTime >= 1000) {
+      $('#fps').textContent = `${camFrameCount} fps`;
+      camFrameCount = 0; lastCamFpsTime = now;
+    }
   };
   sock.onclose = () => { phoneConnected[cam] = false; updatePhoneStatus(); };
   camWS[cam] = sock;
 }
+
+$('#btnCamSwitch').onclick = () => {
+  currentLeftCam = currentLeftCam === 'back' ? 'front' : 'back';
+  $('#btnCamSwitch').textContent = currentLeftCam === 'back' ? '🤳 Фронт' : '📷 Зад';
+  ctrlSend({ type: 'cam-switch', cam: currentLeftCam });
+};
 
 // ---------- Аудио с телефона ----------
 let audioCtx = null;
@@ -376,17 +308,9 @@ function startCameraView() {
 
 function updatePhoneStatus() {
   const on = phoneConnected.back || phoneConnected.front;
-  const el = $('#camStatus');
-  el.textContent = on ? 'телефон подключён' : 'телефон не подключён';
-  el.classList.toggle('on', !!on);
-  $('#camStart').disabled = !on;
-  $('#camStop').disabled = !on;
+  const hint = $('#screenHint');
+  if (hint && on) hint.style.display = 'none';
 }
-
-$('#camStart').onclick = () =>
-  jpost('camera/command', { cmd: 'start' }).catch((e) => toast(e.message, true));
-$('#camStop').onclick = () =>
-  jpost('camera/command', { cmd: 'stop' }).catch((e) => toast(e.message, true));
 
 // ---------- Билдинг APK ----------
 async function loadBuildTab() {
@@ -622,6 +546,5 @@ $('#postNotif').onclick = () => jpost('notifications/post', { title: $('#notifTi
   .then(() => toast('Отправлено')).catch((e) => toast(e.message, true));
 
 // ---------- Старт ----------
-connectWS();
 loadDashboard();
 showPicker();

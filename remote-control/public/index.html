@@ -66,27 +66,28 @@
 
   <!-- Панель управления устройством (открывается после выбора) -->
   <div class="layout" style="display:none">
-    <!-- Левая колонка: экран телефона -->
+    <!-- Левая колонка: камера телефона -->
     <section class="screen-col">
       <div class="screen-toolbar">
-        <button id="btnStream" class="primary">▶ Экран</button>
-        <button data-key="BACK" title="Назад">◀</button>
-        <button data-key="HOME" title="Домой">●</button>
-        <button data-key="RECENTS" title="Недавние">■</button>
-        <button data-key="POWER" title="Питание">⏻</button>
-        <button data-key="VOLUME_UP" title="Громче">🔊+</button>
-        <button data-key="VOLUME_DOWN" title="Тише">🔊−</button>
+        <button data-ctrl-key="BACK" title="Назад">◀</button>
+        <button data-ctrl-key="HOME" title="Домой">●</button>
+        <button data-ctrl-key="RECENTS" title="Недавние">■</button>
+        <button data-ctrl-key="POWER" title="Питание">⏻</button>
+        <button data-ctrl-key="VOLUME_UP" title="Громче">🔊+</button>
+        <button data-ctrl-key="VOLUME_DOWN" title="Тише">🔊−</button>
+        <button id="btnCamSwitch" title="Переключить камеру">🤳 Фронт</button>
+        <button id="camMute" title="Включить/выключить звук">🔇 Без звука</button>
         <span id="fps" class="fps"></span>
       </div>
       <div class="screen-wrap">
-        <img id="screen" alt="Экран телефона появится здесь" draggable="false">
-        <div id="screenHint" class="screen-hint">Нажми «▶ Экран», чтобы начать трансляцию.<br>Клик = тап, перетаскивание = свайп. Печатай с клавиатуры.</div>
+        <img id="camLeft" alt="Камера телефона" draggable="false">
+        <div id="screenHint" class="screen-hint">Выбери телефон — камера появится здесь.</div>
       </div>
       <div class="text-input-row">
         <input id="textInput" placeholder="Текст для отправки на телефон…">
         <button id="sendText">Отправить</button>
-        <button data-key="ENTER">⏎ Enter</button>
-        <button data-key="DEL">⌫ Del</button>
+        <button data-ctrl-key="ENTER">⏎ Enter</button>
+        <button data-ctrl-key="DEL">⌫ Del</button>
       </div>
     </section>
 
@@ -153,29 +154,11 @@
           </div>
           <div class="cam-wrap" style="max-width:360px">
             <img id="phoneScreen" alt="" draggable="false" tabindex="0">
-            <div id="phoneScreenHint" class="screen-hint">Установи APK, разреши захват экрана — трансляция начнётся автоматически.<br><br>Нажми на скриншот = тап, потяни = свайп.</div>
+            <div id="phoneScreenHint" class="screen-hint">Установи APK, включи службу специальных возможностей — скриншоты появятся автоматически.<br><br>Нажми = тап, потяни = свайп.</div>
           </div>
           <div class="text-input-row" style="margin-top:8px">
             <input id="phoneTextInput" placeholder="Текст для ввода…">
             <button id="phoneSendText">Отправить</button>
-          </div>
-        </div>
-        <div class="card" style="margin-top:12px">
-          <h3>Камера телефона <span id="camStatus" class="cam-status">телефон не подключён</span></h3>
-          <div style="margin-bottom:8px">
-            <button id="camStart" class="primary">▶ Начать</button>
-            <button id="camStop">⏹ Остановить</button>
-            <button id="camMute" title="Включить/выключить звук">🔇 Без звука</button>
-          </div>
-          <div style="display:flex;gap:8px">
-            <div style="flex:1">
-              <div style="font-size:12px;opacity:.6;margin-bottom:4px">Задняя камера</div>
-              <div class="cam-wrap"><img id="camImg" alt=""><div id="camHint" class="screen-hint">Установи APK на телефон — трансляция начнётся автоматически.</div></div>
-            </div>
-            <div style="flex:1">
-              <div style="font-size:12px;opacity:.6;margin-bottom:4px">Фронтальная камера</div>
-              <div class="cam-wrap"><img id="camImgFront" alt=""><div id="camHintFront" class="screen-hint">Фронтальная камера появится здесь.</div></div>
-            </div>
           </div>
         </div>
       </div>
