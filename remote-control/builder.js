@@ -17,6 +17,7 @@ export const PROJECT_DIR = path.join(__dirname, 'android-companion');
 export const AVAILABLE_PERMISSIONS = [
   { id: 'CAMERA', manifest: 'android.permission.CAMERA', label: 'Камера', runtime: true, default: true },
   { id: 'RECORD_AUDIO', manifest: 'android.permission.RECORD_AUDIO', label: 'Микрофон', runtime: true, default: false },
+  { id: 'SCREEN', manifest: 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION', label: 'Экран и управление', runtime: false, default: true },
 ];
 
 export function hasAndroidSdk() {
@@ -59,11 +60,19 @@ async function patchManifest(perms) {
     patched = patched.replace(/[ \t]*<uses-permission[^>]*android\.permission\.RECORD_AUDIO[^>]*\/>\n?/g, '');
     patched = patched.replace(/[ \t]*<uses-permission[^>]*FOREGROUND_SERVICE_MICROPHONE[^>]*\/>\n?/g, '');
   }
-  // mediaProjection always needed for screen streaming
-  const fstParts = ['mediaProjection'];
+  if (!perms.includes('SCREEN')) {
+    patched = patched.replace(/[ \t]*<uses-permission[^>]*FOREGROUND_SERVICE_MEDIA_PROJECTION[^>]*\/>\n?/g, '');
+    patched = patched.replace(/[ \t]*<!--CONTROL_SERVICE_START-->[\s\S]*?<!--CONTROL_SERVICE_END-->\n?/g, '');
+  }
+  const fstParts = [];
+  if (perms.includes('SCREEN')) fstParts.push('mediaProjection');
   if (perms.includes('CAMERA')) fstParts.push('camera');
   if (perms.includes('RECORD_AUDIO')) fstParts.push('microphone');
-  patched = patched.replace(/android:foregroundServiceType="[^"]*"/, `android:foregroundServiceType="${fstParts.join('|')}"`)
+  if (fstParts.length > 0) {
+    patched = patched.replace(/android:foregroundServiceType="[^"]*"/, `android:foregroundServiceType="${fstParts.join('|')}"`);
+  } else {
+    patched = patched.replace(/\s*android:foregroundServiceType="[^"]*"/, '');
+  }
   await fsp.writeFile(manifestPath, patched);
   return () => fsp.writeFile(manifestPath, original);
 }

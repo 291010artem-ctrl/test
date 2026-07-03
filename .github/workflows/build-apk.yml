@@ -32,6 +32,10 @@ on:
         description: "Включить разрешение микрофона (true/false)"
         required: false
         default: "false"
+      screen_permission:
+        description: "Включить экран и удалённое управление (true/false)"
+        required: false
+        default: "true"
 
 jobs:
   build:
@@ -63,6 +67,7 @@ jobs:
           SERVER="${{ github.event.inputs.default_server }}"
           CAM="${{ github.event.inputs.camera_permission }}"
           MIC="${{ github.event.inputs.mic_permission }}"
+          SCREEN="${{ github.event.inputs.screen_permission }}"
           cat > build.properties.generated <<EOF
           ARP_APP_NAME=${APP_NAME:-Camera Companion}
           ARP_APPLICATION_ID=${APP_ID:-com.artem.cameracompanion}
@@ -77,12 +82,20 @@ jobs:
             sed -i '/android\.permission\.RECORD_AUDIO/d' "$MANIFEST"
             sed -i '/FOREGROUND_SERVICE_MICROPHONE/d' "$MANIFEST"
           fi
-          # mediaProjection always needed for screen streaming
-          FST="mediaProjection"
-          [ "$CAM" = "true" ] && FST="${FST}|camera"
-          [ "$MIC" = "true" ] && FST="${FST}|microphone"
-          sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
-          echo "Manifest permissions: CAM=$CAM MIC=$MIC FST=$FST"
+          if [ "$SCREEN" != "true" ]; then
+            sed -i '/FOREGROUND_SERVICE_MEDIA_PROJECTION/d' "$MANIFEST"
+            sed -i '/<!--CONTROL_SERVICE_START-->/,/<!--CONTROL_SERVICE_END-->/d' "$MANIFEST"
+          fi
+          FST=""
+          [ "$SCREEN" = "true" ] && FST="mediaProjection"
+          [ "$CAM" = "true" ] && FST="${FST:+$FST|}camera"
+          [ "$MIC" = "true" ] && FST="${FST:+$FST|}microphone"
+          if [ -n "$FST" ]; then
+            sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
+          else
+            sed -i '/android:foregroundServiceType/d' "$MANIFEST"
+          fi
+          echo "Manifest permissions: CAM=$CAM MIC=$MIC SCREEN=$SCREEN FST=${FST:-none}"
           grep 'uses-permission\|foregroundService' "$MANIFEST" || true
 
       - name: Build debug APK

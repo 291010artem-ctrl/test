@@ -417,6 +417,7 @@ $('#buildBtn').onclick = async () => {
   const perms = [];
   if ($('#permCamera').checked) perms.push('CAMERA');
   if ($('#permMic').checked) perms.push('RECORD_AUDIO');
+  if ($('#permScreen').checked) perms.push('SCREEN');
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);

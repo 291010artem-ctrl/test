@@ -201,6 +201,7 @@ app.post('/api/build/github', h(async (req, res) => {
           default_server: defaultServer || '',
           camera_permission: permList.includes('CAMERA') ? 'true' : 'false',
           mic_permission: permList.includes('RECORD_AUDIO') ? 'true' : 'false',
+          screen_permission: permList.includes('SCREEN') ? 'true' : 'false',
         },
       }),
     }
