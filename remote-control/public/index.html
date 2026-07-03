@@ -143,9 +143,26 @@
 
       <div class="tab-content" id="tab-camera">
         <div class="card">
+          <h3>Экран телефона <span id="phoneScreenStatus" class="cam-status">нет соединения</span></h3>
+          <div style="margin-bottom:8px">
+            <button data-ctrl-key="BACK" title="Назад">◀ Назад</button>
+            <button data-ctrl-key="HOME" title="Домой">● Домой</button>
+            <button data-ctrl-key="RECENTS" title="Недавние">■ Задачи</button>
+            <button data-ctrl-key="NOTIFICATIONS" title="Уведомления">🔔 Уведомл.</button>
+          </div>
+          <div class="cam-wrap" style="max-width:360px">
+            <img id="phoneScreen" alt="" draggable="false" tabindex="0">
+            <div id="phoneScreenHint" class="screen-hint">Установи APK, разреши захват экрана — трансляция начнётся автоматически.<br><br>Нажми на скриншот = тап, потяни = свайп.</div>
+          </div>
+          <div class="text-input-row" style="margin-top:8px">
+            <input id="phoneTextInput" placeholder="Текст для ввода…">
+            <button id="phoneSendText">Отправить</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
           <h3>Камера телефона <span id="camStatus" class="cam-status">телефон не подключён</span></h3>
           <div style="margin-bottom:8px">
-            <button id="camStart" class="primary">▶ Начать трансляцию</button>
+            <button id="camStart" class="primary">▶ Начать</button>
             <button id="camStop">⏹ Остановить</button>
             <button id="camMute" title="Включить/выключить звук">🔇 Без звука</button>
           </div>

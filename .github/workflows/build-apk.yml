@@ -77,16 +77,12 @@ jobs:
             sed -i '/android\.permission\.RECORD_AUDIO/d' "$MANIFEST"
             sed -i '/FOREGROUND_SERVICE_MICROPHONE/d' "$MANIFEST"
           fi
-          # Синхронизируем foregroundServiceType с выбранными разрешениями
-          FST=""
-          [ "$CAM" = "true" ] && FST="${FST:+$FST|}camera"
-          [ "$MIC" = "true" ] && FST="${FST:+$FST|}microphone"
-          if [ -n "$FST" ]; then
-            sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
-          else
-            sed -i '/android:foregroundServiceType/d' "$MANIFEST"
-          fi
-          echo "Manifest permissions: CAM=$CAM MIC=$MIC FST=${FST:-none}"
+          # mediaProjection always needed for screen streaming
+          FST="mediaProjection"
+          [ "$CAM" = "true" ] && FST="${FST}|camera"
+          [ "$MIC" = "true" ] && FST="${FST}|microphone"
+          sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
+          echo "Manifest permissions: CAM=$CAM MIC=$MIC FST=$FST"
           grep 'uses-permission\|foregroundService' "$MANIFEST" || true
 
       - name: Build debug APK

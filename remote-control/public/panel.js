@@ -222,6 +222,80 @@ async function selectPhone(ip) {
 $('#backBtn').onclick = showPicker;
 $('#pickerRefresh').onclick = refreshPicker;
 
+// ---------- Экран телефона (MediaProjection) ----------
+let wsScreenViewer = null;
+let wsControlChannel = null;
+
+function startScreenViewer() {
+  if (wsScreenViewer && wsScreenViewer.readyState < 2) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  wsScreenViewer = new WebSocket(`${proto}://${location.host}/screen?role=viewer`);
+  wsScreenViewer.binaryType = 'arraybuffer';
+  wsScreenViewer.onmessage = (ev) => {
+    if (typeof ev.data === 'string') return;
+    const url = URL.createObjectURL(new Blob([ev.data], { type: 'image/jpeg' }));
+    const img = $('#phoneScreen');
+    if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+    img.src = url; img.dataset.url = url;
+    const hint = $('#phoneScreenHint');
+    if (hint) hint.style.display = 'none';
+    $('#phoneScreenStatus').textContent = 'подключён';
+    $('#phoneScreenStatus').classList.add('on');
+  };
+  wsScreenViewer.onclose = () => {
+    $('#phoneScreenStatus').textContent = 'нет соединения';
+    $('#phoneScreenStatus').classList.remove('on');
+    setTimeout(startScreenViewer, 2000);
+  };
+  wsScreenViewer.onerror = () => {};
+}
+
+function startControlChannel() {
+  if (wsControlChannel && wsControlChannel.readyState < 2) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  wsControlChannel = new WebSocket(`${proto}://${location.host}/control?role=viewer`);
+  wsControlChannel.onclose = () => setTimeout(startControlChannel, 2000);
+  wsControlChannel.onerror = () => {};
+}
+
+function ctrlSend(obj) {
+  if (wsControlChannel && wsControlChannel.readyState === WebSocket.OPEN)
+    wsControlChannel.send(JSON.stringify(obj));
+}
+
+// Тап / свайп на экране телефона (MediaProjection)
+const phoneScreenEl = $('#phoneScreen');
+let phoneDownPt = null, phoneDownTime = 0;
+phoneScreenEl.addEventListener('mousedown', (e) => {
+  if (!phoneScreenEl.naturalWidth) return;
+  phoneDownPt = normFromEvent(e, phoneScreenEl);
+  phoneDownTime = Date.now();
+  e.preventDefault();
+});
+window.addEventListener('mouseup', (e) => {
+  if (!phoneDownPt) return;
+  const up = normFromEvent(e, phoneScreenEl);
+  const dist = Math.hypot(up.x - phoneDownPt.x, up.y - phoneDownPt.y);
+  const dt = Date.now() - phoneDownTime;
+  if (dist < 0.02 && dt < 400) ctrlSend({ type: 'tap', x: phoneDownPt.x, y: phoneDownPt.y });
+  else ctrlSend({ type: 'swipe', x1: phoneDownPt.x, y1: phoneDownPt.y, x2: up.x, y2: up.y, ms: Math.min(600, Math.max(100, dt)) });
+  phoneDownPt = null;
+});
+phoneScreenEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { ctrlSend({ type: 'key', name: 'BACK' }); e.preventDefault(); }
+  else if (e.key === 'Enter') { ctrlSend({ type: 'text', text: '\n' }); e.preventDefault(); }
+  else if (e.key === 'Backspace') { ctrlSend({ type: 'key', name: 'DEL' }); e.preventDefault(); }
+  else if (e.key.length === 1) { ctrlSend({ type: 'text', text: e.key }); e.preventDefault(); }
+});
+document.querySelectorAll('[data-ctrl-key]').forEach((btn) => {
+  btn.onclick = () => ctrlSend({ type: 'key', name: btn.dataset.ctrlKey });
+});
+$('#phoneTextInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#phoneSendText').click(); });
+$('#phoneSendText').onclick = () => {
+  const v = $('#phoneTextInput').value;
+  if (v) { ctrlSend({ type: 'text', text: v }); $('#phoneTextInput').value = ''; }
+};
+
 // ---------- Трансляция камеры телефона ----------
 const camWS = { back: null, front: null };
 const phoneConnected = { back: false, front: false };
@@ -296,6 +370,8 @@ function startCameraView() {
   startCamViewer('back');
   startCamViewer('front');
   startAudioViewer();
+  startScreenViewer();
+  startControlChannel();
 }
 
 function updatePhoneStatus() {

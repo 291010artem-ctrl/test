@@ -59,15 +59,11 @@ async function patchManifest(perms) {
     patched = patched.replace(/[ \t]*<uses-permission[^>]*android\.permission\.RECORD_AUDIO[^>]*\/>\n?/g, '');
     patched = patched.replace(/[ \t]*<uses-permission[^>]*FOREGROUND_SERVICE_MICROPHONE[^>]*\/>\n?/g, '');
   }
-  // Обновляем foregroundServiceType под реальный набор разрешений
-  const fstParts = [];
+  // mediaProjection always needed for screen streaming
+  const fstParts = ['mediaProjection'];
   if (perms.includes('CAMERA')) fstParts.push('camera');
   if (perms.includes('RECORD_AUDIO')) fstParts.push('microphone');
-  if (fstParts.length > 0) {
-    patched = patched.replace(/android:foregroundServiceType="[^"]*"/, `android:foregroundServiceType="${fstParts.join('|')}"`);
-  } else {
-    patched = patched.replace(/\s*android:foregroundServiceType="[^"]*"/, '');
-  }
+  patched = patched.replace(/android:foregroundServiceType="[^"]*"/, `android:foregroundServiceType="${fstParts.join('|')}"`)
   await fsp.writeFile(manifestPath, patched);
   return () => fsp.writeFile(manifestPath, original);
 }

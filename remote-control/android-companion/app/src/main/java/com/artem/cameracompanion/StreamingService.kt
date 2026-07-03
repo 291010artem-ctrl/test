@@ -1,22 +1,22 @@
-@file:OptIn(androidx.camera.core.ExperimentalCameraInfo::class)
-
 package com.artem.cameracompanion
 
-import android.Manifest
-import android.net.Uri
-import android.os.Build as DeviceBuild
 import android.app.*
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
+import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.media.*
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.*
+import android.util.DisplayMetrics
+import android.view.Display
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.lifecycle.SingleCameraConfig
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
@@ -36,12 +36,19 @@ class StreamingService : Service() {
         const val ACTION_STOP = "STOP"
         const val ACTION_STATUS = "com.artem.cameracompanion.STATUS"
         const val EXTRA_STATUS = "status"
+        const val EXTRA_RESULT_CODE = "result_code"
+        const val EXTRA_RESULT_DATA = "result_data"
         const val CHANNEL_ID = "streaming"
         const val NOTIF_ID = 1
         var isRunning = false
 
-        fun start(ctx: Context) {
-            ctx.startForegroundService(Intent(ctx, StreamingService::class.java).setAction(ACTION_START))
+        fun start(ctx: Context, resultCode: Int = 0, data: Intent? = null) {
+            val i = Intent(ctx, StreamingService::class.java).setAction(ACTION_START)
+            if (resultCode != 0 && data != null) {
+                i.putExtra(EXTRA_RESULT_CODE, resultCode)
+                i.putExtra(EXTRA_RESULT_DATA, data)
+            }
+            ctx.startForegroundService(i)
         }
         fun stop(ctx: Context) {
             ctx.startService(Intent(ctx, StreamingService::class.java).setAction(ACTION_STOP))
@@ -49,15 +56,19 @@ class StreamingService : Service() {
     }
 
     private val lifecycleOwner = StreamingLifecycleOwner()
-    private val analyzerExecutor = Executors.newFixedThreadPool(2)
+    private val analyzerExecutor = Executors.newSingleThreadExecutor()
     private var cameraProvider: ProcessCameraProvider? = null
     private var wsBack: WebSocket? = null
-    private var wsFront: WebSocket? = null
     private var wsAudio: WebSocket? = null
+    private var wsScreen: WebSocket? = null
     private var lastFrameBack = 0L
-    private var lastFrameFront = 0L
+    private var lastFrameScreen = 0L
     private var audioRecord: AudioRecord? = null
     private var audioThread: Thread? = null
+    private var screenThread: Thread? = null
+    private var virtualDisplay: VirtualDisplay? = null
+    private var imageReader: ImageReader? = null
+    private var mediaProjection: MediaProjection? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     private val http = OkHttpClient.Builder()
@@ -72,7 +83,7 @@ class StreamingService : Service() {
         return "ws://$host"
     }
 
-    private val encodedModel: String get() = Uri.encode(DeviceBuild.MODEL ?: "Android")
+    private val encodedModel: String get() = Uri.encode(Build.MODEL ?: "Android")
 
     override fun onCreate() {
         super.onCreate()
@@ -87,28 +98,35 @@ class StreamingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> connectAndStream()
+            ACTION_START -> {
+                val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
+                @Suppress("DEPRECATION")
+                val resultData: Intent? = intent.getParcelableExtra(EXTRA_RESULT_DATA)
+                if (resultCode != 0 && resultData != null) {
+                    val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    mediaProjection = mpm.getMediaProjection(resultCode, resultData)
+                }
+                connectAndStream()
+            }
             ACTION_STOP -> { disconnect(); stopSelf() }
         }
         return START_STICKY
     }
 
     private fun connectAndStream() {
-        connectCamWs("back")
-        connectCamWs("front")
+        connectCamWs()
         connectAudioWs()
+        connectScreenWs()
     }
 
-    private fun connectCamWs(cam: String) {
-        val url = "$serverBase/camera?role=phone&cam=$cam&model=$encodedModel"
-        val ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+    private fun connectCamWs() {
+        val url = "$serverBase/camera?role=phone&cam=back&model=$encodedModel"
+        http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
-                if (cam == "back") wsBack = ws else wsFront = ws
-                if (wsBack != null && wsFront != null) {
-                    broadcast("Идёт трансляция")
-                    updateNotification("Идёт трансляция")
-                    bindCameras()
-                }
+                wsBack = ws
+                broadcast("Камера подключена")
+                updateNotification("Идёт трансляция")
+                bindCamera()
             }
             override fun onMessage(ws: WebSocket, text: String) {
                 try {
@@ -119,54 +137,50 @@ class StreamingService : Service() {
                 } catch (_: Exception) {}
             }
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                broadcast("Ошибка $cam: ${t.message}")
+                wsBack = null
+                broadcast("Ошибка камеры: ${t.message}")
                 updateNotification("Ошибка подключения")
             }
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                if (cam == "back") wsBack = null else wsFront = null
-                broadcast("Отключено ($cam)")
+                wsBack = null
+                broadcast("Камера отключена")
             }
         })
-        if (cam == "back") wsBack = ws else wsFront = ws
     }
 
     private fun connectAudioWs() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) return
-
         val url = "$serverBase/audio?role=phone&model=$encodedModel"
         http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
-            override fun onOpen(ws: WebSocket, response: Response) {
-                wsAudio = ws
-                startAudioCapture()
-            }
-            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                wsAudio = null
-            }
-            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                wsAudio = null
-                stopAudioCapture()
-            }
+            override fun onOpen(ws: WebSocket, response: Response) { wsAudio = ws; startAudioCapture() }
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) { wsAudio = null }
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) { wsAudio = null; stopAudioCapture() }
+        })
+    }
+
+    private fun connectScreenWs() {
+        if (mediaProjection == null) return
+        val url = "$serverBase/screen?role=phone&model=$encodedModel"
+        http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
+            override fun onOpen(ws: WebSocket, response: Response) { wsScreen = ws; startScreenCapture() }
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) { wsScreen = null; stopScreenCapture() }
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) { wsScreen = null; stopScreenCapture() }
         })
     }
 
     private fun startAudioCapture() {
         val sampleRate = 16000
-        val minBuf = AudioRecord.getMinBufferSize(
-            sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
-        )
+        val minBuf = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val rec = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
+            MediaRecorder.AudioSource.MIC, sampleRate,
+            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
             maxOf(minBuf, 3200) * 4
         )
         audioRecord = rec
         rec.startRecording()
-
         audioThread = Thread {
-            val chunk = ShortArray(1600) // 100ms at 16kHz
+            val chunk = ShortArray(1600)
             while (!Thread.currentThread().isInterrupted) {
                 val ws = wsAudio ?: break
                 val read = rec.read(chunk, 0, chunk.size)
@@ -180,47 +194,90 @@ class StreamingService : Service() {
     }
 
     private fun stopAudioCapture() {
-        audioThread?.interrupt()
-        audioThread = null
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioRecord = null
+        audioThread?.interrupt(); audioThread = null
+        audioRecord?.stop(); audioRecord?.release(); audioRecord = null
     }
 
-    private fun bindCameras() {
+    private fun startScreenCapture() {
+        val dm = getSystemService(DISPLAY_SERVICE) as DisplayManager
+        val display = dm.getDisplay(Display.DEFAULT_DISPLAY) ?: return
+        val metrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        display.getRealMetrics(metrics)
+
+        // Scale to 720px wide max for bandwidth efficiency
+        val scale = minOf(1f, 720f / metrics.widthPixels)
+        val sw = (metrics.widthPixels * scale).toInt()
+        val sh = (metrics.heightPixels * scale).toInt()
+
+        imageReader = ImageReader.newInstance(sw, sh, PixelFormat.RGBA_8888, 2)
+        virtualDisplay = mediaProjection?.createVirtualDisplay(
+            "arp-screen", sw, sh, metrics.densityDpi,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            imageReader?.surface, null, null
+        )
+
+        screenThread = Thread {
+            while (!Thread.currentThread().isInterrupted) {
+                val ws = wsScreen ?: break
+                val now = System.currentTimeMillis()
+                if (now - lastFrameScreen < 150) { Thread.sleep(30); continue }
+                if (ws.queueSize() > 512 * 1024) { Thread.sleep(50); continue }
+                val image = imageReader?.acquireLatestImage() ?: run { Thread.sleep(30); continue }
+                try {
+                    val plane = image.planes[0]
+                    val buf = plane.buffer
+                    val rowStride = plane.rowStride
+                    val pixelStride = plane.pixelStride
+                    val w = image.width
+                    val h = image.height
+                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    if (rowStride == w * 4 && pixelStride == 4) {
+                        bmp.copyPixelsFromBuffer(buf)
+                    } else {
+                        val pixels = IntArray(w * h)
+                        var idx = 0
+                        for (row in 0 until h) {
+                            val rowBase = row * rowStride
+                            for (col in 0 until w) {
+                                val pos = rowBase + col * pixelStride
+                                val r = buf.get(pos).toInt() and 0xFF
+                                val g = buf.get(pos + 1).toInt() and 0xFF
+                                val b = buf.get(pos + 2).toInt() and 0xFF
+                                val a = buf.get(pos + 3).toInt() and 0xFF
+                                pixels[idx++] = (a shl 24) or (r shl 16) or (g shl 8) or b
+                            }
+                        }
+                        bmp.setPixels(pixels, 0, w, 0, 0, w, h)
+                    }
+                    val out = ByteArrayOutputStream()
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 60, out)
+                    bmp.recycle()
+                    ws.send(out.toByteArray().toByteString())
+                    lastFrameScreen = now
+                } catch (_: Exception) {
+                } finally {
+                    image.close()
+                }
+            }
+        }.apply { isDaemon = true; start() }
+    }
+
+    private fun stopScreenCapture() {
+        screenThread?.interrupt(); screenThread = null
+        virtualDisplay?.release(); virtualDisplay = null
+        imageReader?.close(); imageReader = null
+    }
+
+    private fun bindCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
             val provider = future.get()
             cameraProvider = provider
-
-            val backAnalysis = buildAnalysis { proxy -> sendFrame(proxy, "back") }
-            val frontAnalysis = buildAnalysis { proxy -> sendFrame(proxy, "front") }
-
+            val backAnalysis = buildAnalysis { proxy -> sendFrame(proxy) }
             try {
                 provider.unbindAll()
-                val concurrentPairs = provider.availableConcurrentCameraInfos
-                val pairWithBoth = concurrentPairs.firstOrNull { infos ->
-                    infos.any { it.lensFacing == CameraSelector.LENS_FACING_BACK } &&
-                    infos.any { it.lensFacing == CameraSelector.LENS_FACING_FRONT }
-                }
-                if (pairWithBoth != null) {
-                    val backSel = pairWithBoth.first { it.lensFacing == CameraSelector.LENS_FACING_BACK }.cameraSelector
-                    val frontSel = pairWithBoth.first { it.lensFacing == CameraSelector.LENS_FACING_FRONT }.cameraSelector
-                    val backCfg = SingleCameraConfig(
-                        backSel,
-                        UseCaseGroup.Builder().addUseCase(backAnalysis).build(),
-                        lifecycleOwner
-                    )
-                    val frontCfg = SingleCameraConfig(
-                        frontSel,
-                        UseCaseGroup.Builder().addUseCase(frontAnalysis).build(),
-                        lifecycleOwner
-                    )
-                    provider.bindToLifecycle(listOf(backCfg, frontCfg))
-                } else {
-                    broadcast("Одновременная съёмка не поддерживается, только задняя камера")
-                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, backAnalysis)
-                }
+                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, backAnalysis)
             } catch (e: Exception) {
                 broadcast("Камера недоступна: ${e.message}")
             }
@@ -235,14 +292,12 @@ class StreamingService : Service() {
         return analysis
     }
 
-    private fun sendFrame(proxy: ImageProxy, cam: String) {
+    private fun sendFrame(proxy: ImageProxy) {
         try {
             val now = System.currentTimeMillis()
-            val ws = if (cam == "back") wsBack else wsFront
-            val lastAt = if (cam == "back") lastFrameBack else lastFrameFront
-            if (ws == null || now - lastAt < 120 || ws.queueSize() > 512 * 1024) return
-            if (cam == "back") lastFrameBack = now else lastFrameFront = now
-
+            val ws = wsBack ?: return
+            if (now - lastFrameBack < 120 || ws.queueSize() > 512 * 1024) return
+            lastFrameBack = now
             val bitmap = proxy.toBitmap()
             val m = Matrix().apply { postRotate(proxy.imageInfo.rotationDegrees.toFloat()) }
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
@@ -258,9 +313,11 @@ class StreamingService : Service() {
     private fun disconnect() {
         cameraProvider?.unbindAll()
         wsBack?.close(1000, "stop"); wsBack = null
-        wsFront?.close(1000, "stop"); wsFront = null
         wsAudio?.close(1000, "stop"); wsAudio = null
+        wsScreen?.close(1000, "stop"); wsScreen = null
         stopAudioCapture()
+        stopScreenCapture()
+        mediaProjection?.stop(); mediaProjection = null
     }
 
     override fun onDestroy() {

