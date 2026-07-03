@@ -223,7 +223,8 @@ class StreamingService : Service() {
                 val now = System.currentTimeMillis()
                 if (now - lastFrameScreen < 150) { Thread.sleep(30); continue }
                 if (ws.queueSize() > 512 * 1024) { Thread.sleep(50); continue }
-                val image = imageReader?.acquireLatestImage() ?: run { Thread.sleep(30); continue }
+                val image = imageReader?.acquireLatestImage()
+                if (image == null) { Thread.sleep(30); continue }
                 try {
                     val plane = image.planes[0]
                     val buf = plane.buffer
