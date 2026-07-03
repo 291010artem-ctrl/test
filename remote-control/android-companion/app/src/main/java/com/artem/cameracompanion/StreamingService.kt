@@ -1,3 +1,5 @@
+@file:OptIn(androidx.camera.core.ExperimentalCameraInfo::class)
+
 package com.artem.cameracompanion
 
 import android.Manifest
