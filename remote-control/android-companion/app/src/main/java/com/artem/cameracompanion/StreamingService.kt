@@ -1,6 +1,8 @@
 package com.artem.cameracompanion
 
 import android.Manifest
+import android.net.Uri
+import android.os.Build as DeviceBuild
 import android.app.*
 import android.content.*
 import android.content.pm.PackageManager
@@ -68,6 +70,8 @@ class StreamingService : Service() {
         return "ws://$host"
     }
 
+    private val encodedModel: String get() = Uri.encode(DeviceBuild.MODEL ?: "Android")
+
     override fun onCreate() {
         super.onCreate()
         isRunning = true
@@ -94,7 +98,7 @@ class StreamingService : Service() {
     }
 
     private fun connectCamWs(cam: String) {
-        val url = "$serverBase/camera?role=phone&cam=$cam"
+        val url = "$serverBase/camera?role=phone&cam=$cam&model=$encodedModel"
         val ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
                 if (cam == "back") wsBack = ws else wsFront = ws
@@ -128,7 +132,7 @@ class StreamingService : Service() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) return
 
-        val url = "$serverBase/audio?role=phone"
+        val url = "$serverBase/audio?role=phone&model=$encodedModel"
         http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
                 wsAudio = ws

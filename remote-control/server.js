@@ -273,17 +273,40 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-// Реестр телефонов: ключ — IP-адрес, значение — { back, front, audio }.
-// Телефоны группируются по IP, активный определяет, чей стрим показывать.
-const phones = new Map(); // ip -> { back: ws|null, front: ws|null, audio: ws|null }
+// Реестр телефонов: ключ — IP-адрес, значение — { back, front, audio, model, country, countryCode, city }.
+const phones = new Map();
 let activePhoneIp = null;
 const viewerSets = { back: new Set(), front: new Set() };
 const audioViewers = new Set();
 
 function phoneLabel(ip) { return ip.replace('::ffff:', ''); }
 
-function getPhone(ip) {
-  if (!phones.has(ip)) phones.set(ip, { back: null, front: null, audio: null });
+// ---- Геолокация по IP (ip-api.com, бесплатно, без ключа) ----
+const geoCache = new Map();
+async function fetchGeo(rawIp) {
+  const ip = rawIp.replace('::ffff:', '');
+  if (geoCache.has(ip)) return geoCache.get(ip);
+  const isPrivate = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|::1$|localhost)/.test(ip);
+  if (isPrivate) {
+    const g = { country: '', countryCode: '', city: 'Локальная сеть' };
+    geoCache.set(ip, g); return g;
+  }
+  try {
+    const r = await fetch(`http://ip-api.com/json/${ip}?fields=country,countryCode,city&lang=ru`);
+    if (r.ok) { const g = await r.json(); geoCache.set(ip, g); return g; }
+  } catch (e) { console.warn('[GEO]', e.message); }
+  const g = { country: '', countryCode: '', city: '' };
+  geoCache.set(ip, g); return g;
+}
+
+function getPhone(ip, model) {
+  if (!phones.has(ip)) {
+    const entry = { back: null, front: null, audio: null, model: model || 'Android', country: '', countryCode: '', city: '' };
+    phones.set(ip, entry);
+    fetchGeo(ip).then(g => { const p = phones.get(ip); if (p) Object.assign(p, g); }).catch(() => {});
+  } else if (model) {
+    phones.get(ip).model = model;
+  }
   return phones.get(ip);
 }
 
@@ -302,6 +325,10 @@ function phoneListJson() {
     ip,
     label: phoneLabel(ip),
     active: ip === activePhoneIp,
+    model: p.model || 'Android',
+    country: p.country || '',
+    countryCode: p.countryCode || '',
+    city: p.city || '',
     cams: { back: !!p.back, front: !!p.front, audio: !!p.audio },
   }));
 }
@@ -327,11 +354,12 @@ wssCamera.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
   const cam = params.get('cam') || 'back';
+  const model = params.get('model') || '';
   const ip = req.socket.remoteAddress;
   console.log(`[CAM] connected: role=${role} cam=${cam} from ${ip}`);
 
   if (role === 'phone') {
-    const phone = getPhone(ip);
+    const phone = getPhone(ip, model);
     phone[cam] = ws;
     if (!activePhoneIp) activePhoneIp = ip;
     notifyPhoneList();
@@ -356,12 +384,14 @@ wssCamera.on('connection', (ws, req) => {
 });
 
 wssAudio.on('connection', (ws, req) => {
-  const role = new URL(req.url, 'http://localhost').searchParams.get('role') || 'viewer';
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const role = params.get('role') || 'viewer';
+  const model = params.get('model') || '';
   const ip = req.socket.remoteAddress;
   console.log(`[AUDIO] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
-    const phone = getPhone(ip);
+    const phone = getPhone(ip, model);
     phone.audio = ws;
     if (!activePhoneIp) activePhoneIp = ip;
     notifyPhoneList();

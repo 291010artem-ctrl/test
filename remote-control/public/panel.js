@@ -202,28 +202,40 @@ async function refreshPicker() {
   } catch { /* ignore network errors while waiting */ }
 }
 
+function countryFlag(code) {
+  if (!code || code.length !== 2) return '🌐';
+  return String.fromCodePoint(
+    code.toUpperCase().charCodeAt(0) - 65 + 0x1F1E6,
+    code.toUpperCase().charCodeAt(1) - 65 + 0x1F1E6
+  );
+}
+
 function renderPickerPhones(phones, activeIp) {
-  const grid = $('#phoneGrid');
+  const list = $('#phoneGrid');
   const status = $('#pickerStatus');
-  grid.innerHTML = '';
+  list.innerHTML = '';
   if (!phones.length) {
     status.style.display = '';
     return;
   }
   status.style.display = 'none';
   for (const p of phones) {
-    const card = document.createElement('div');
-    card.className = 'phone-card';
-    const camOk = p.cams.back || p.cams.front;
-    card.innerHTML = `
-      <div class="phone-card-icon">📱</div>
-      <div class="phone-card-label">${p.label}</div>
-      <div class="phone-card-status">
-        <span class="${camOk ? 'ok' : 'off'}">${camOk ? '🎥 камера' : '🎥 нет камеры'}</span>
-        <span class="${p.cams.audio ? 'ok' : 'off'}">${p.cams.audio ? '🎤 микрофон' : '🎤 нет звука'}</span>
-      </div>`;
-    card.onclick = () => selectPhone(p.ip);
-    grid.appendChild(card);
+    const strip = document.createElement('div');
+    strip.className = 'phone-strip';
+    const flag = countryFlag(p.countryCode);
+    const city = p.city || '';
+    strip.innerHTML = `
+      <span class="ps-flag">${flag}</span>
+      <span class="ps-info">
+        <span class="ps-model">${p.model || 'Android'}</span>
+        <span class="ps-sub">
+          <span class="ps-ip">${p.label}</span>
+          ${city ? `<span class="ps-city">${city}</span>` : ''}
+        </span>
+      </span>
+      <span class="ps-arrow">›</span>`;
+    strip.onclick = () => selectPhone(p.ip);
+    list.appendChild(strip);
   }
 }
 

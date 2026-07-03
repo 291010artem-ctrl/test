@@ -203,55 +203,60 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .picker {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   flex: 1;
-  padding: 32px 16px;
   min-height: 0;
+  overflow: hidden;
 }
 
-.picker-title {
-  margin: 0 0 28px;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.phone-grid {
+.picker-top {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  justify-content: center;
-  max-width: 800px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
-.phone-card {
-  width: 180px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 16px;
+.picker-title { font-size: 17px; font-weight: 600; }
+
+/* Список полос, растёт снизу вверх */
+.phone-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse; /* первый элемент внизу, последний вверху */
+  justify-content: flex-start;
+}
+
+.phone-strip {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 24px;
+  border-top: 1px solid var(--border);
   cursor: pointer;
-  text-align: center;
-  transition: border-color .15s, transform .1s;
+  transition: background .12s;
+  flex-shrink: 0;
   user-select: none;
 }
-.phone-card:hover { border-color: var(--accent2); transform: translateY(-2px); }
-.phone-card:active { transform: translateY(0); }
+.phone-strip:hover { background: var(--panel); }
+.phone-strip:active { background: var(--panel2); }
 
-.phone-card-icon { font-size: 40px; margin-bottom: 10px; }
-.phone-card-label {
+.ps-flag { font-size: 28px; width: 36px; text-align: center; flex-shrink: 0; }
+.ps-info { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.ps-model { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-sub { display: flex; gap: 10px; font-size: 12px; color: var(--muted); }
+.ps-ip { font-family: monospace; }
+.ps-city {}
+.ps-arrow { font-size: 20px; color: var(--muted); flex-shrink: 0; }
+
+.picker-status {
+  color: var(--muted);
   font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 10px;
-  word-break: break-all;
+  text-align: center;
+  padding: 40px 24px;
+  flex-shrink: 0;
 }
-.phone-card-status { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
-.phone-card-status .ok { color: var(--accent); }
-.phone-card-status .off { color: var(--danger); }
-
-.picker-status { color: var(--muted); font-size: 14px; margin: 16px 0 0; }
 
 .toast {
   position: fixed;

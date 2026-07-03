@@ -23,10 +23,12 @@
 
   <!-- Экран выбора устройства (companion-app телефоны) -->
   <div id="picker" class="picker">
-    <h2 class="picker-title">Выбери устройство</h2>
-    <div id="phoneGrid" class="phone-grid"></div>
+    <div class="picker-top">
+      <span class="picker-title">Выбери устройство</span>
+      <button id="pickerRefresh" class="sm">⟳ Обновить</button>
+    </div>
+    <div id="phoneGrid" class="phone-list"></div>
     <p id="pickerStatus" class="picker-status">Ожидание подключения телефонов…</p>
-    <button id="pickerRefresh" class="sm" style="margin-top:8px">⟳ Обновить</button>
   </div>
 
   <div class="layout" style="display:none">
