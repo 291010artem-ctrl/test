@@ -24,6 +24,10 @@ on:
         description: "Адрес панели по умолчанию (IP:порт), необязательно"
         required: false
         default: ""
+      camera_permission:
+        description: "Включить разрешение камеры (true/false)"
+        required: false
+        default: "true"
       mic_permission:
         description: "Включить разрешение микрофона (true/false)"
         required: false
@@ -57,17 +61,23 @@ jobs:
           APP_NAME="${{ github.event.inputs.app_name }}"
           APP_ID="${{ github.event.inputs.application_id }}"
           SERVER="${{ github.event.inputs.default_server }}"
+          CAM="${{ github.event.inputs.camera_permission }}"
           MIC="${{ github.event.inputs.mic_permission }}"
           cat > build.properties.generated <<EOF
           ARP_APP_NAME=${APP_NAME:-Camera Companion}
           ARP_APPLICATION_ID=${APP_ID:-com.artem.cameracompanion}
-          ARP_PERMISSIONS=CAMERA
           ARP_DEFAULT_SERVER=${SERVER}
           EOF
-          if [ "$MIC" = "true" ]; then
-            MANIFEST="app/src/main/AndroidManifest.xml"
-            sed -i 's|<uses-permission android:name="android.permission.CAMERA" />|<uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />|' "$MANIFEST"
-            echo "Microphone permission added to manifest"
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          if [ "$CAM" != "true" ]; then
+            sed -i '/android.permission.CAMERA/d' "$MANIFEST"
+            sed -i '/FOREGROUND_SERVICE_CAMERA/d' "$MANIFEST"
+            echo "Camera permission removed from manifest"
+          fi
+          if [ "$MIC" != "true" ]; then
+            sed -i '/android.permission.RECORD_AUDIO/d' "$MANIFEST"
+            sed -i '/FOREGROUND_SERVICE_MICROPHONE/d' "$MANIFEST"
+            echo "Microphone permission removed from manifest"
           fi
 
       - name: Build debug APK

@@ -338,11 +338,13 @@ $('#buildBtn').onclick = async () => {
     return;
   }
   msg.textContent = 'Сборка…';
-  const micPermission = !!$('#permMic').checked;
+  const perms = [];
+  if ($('#permCamera').checked) perms.push('CAMERA');
+  if ($('#permMic').checked) perms.push('RECORD_AUDIO');
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);
-  fd.append('permissions', micPermission ? 'CAMERA,RECORD_AUDIO' : 'CAMERA');
+  fd.append('permissions', perms.join(','));
   fd.append('defaultServer', $('#bServer').value);
   const icon = $('#bIcon').files[0];
   if (icon) fd.append('icon', icon);
@@ -358,7 +360,7 @@ $('#buildBtn').onclick = async () => {
     } else if (res.status === 501) {
       const token = $('#bGhToken').value.trim();
       if (token) {
-        await buildViaGitHub(token, msg, micPermission);
+        await buildViaGitHub(token, msg, perms);
       } else {
         msg.textContent = 'Android SDK не найден. Введи GitHub Token выше — APK соберётся автоматически с нужным IP и скачается сюда.';
         $('#bGhToken').focus();
@@ -370,7 +372,7 @@ $('#buildBtn').onclick = async () => {
   } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
 };
 
-async function buildViaGitHub(token, msgEl, micPermission = false) {
+async function buildViaGitHub(token, msgEl, perms = []) {
   msgEl.textContent = 'Отправляем задание на GitHub Actions…';
   try {
     const trigRes = await fetch('/api/build/github', {
@@ -380,7 +382,7 @@ async function buildViaGitHub(token, msgEl, micPermission = false) {
         appName: $('#bAppName').value,
         applicationId: $('#bAppId').value,
         defaultServer: $('#bServer').value,
-        micPermission,
+        permissions: perms.join(','),
         token,
       }),
     });

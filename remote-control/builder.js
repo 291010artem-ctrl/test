@@ -13,11 +13,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const PROJECT_DIR = path.join(__dirname, 'android-companion');
 
-// Разрешения, которые панель умеет включать. Пока — только камера.
-// INTERNET нужен для самой трансляции и не показывается пользователю
-// (это «обычное» install-time разрешение), поэтому он всегда включён.
+// INTERNET нужен для трансляции — install-time разрешение, пользователю не показываем.
 export const AVAILABLE_PERMISSIONS = [
   { id: 'CAMERA', manifest: 'android.permission.CAMERA', label: 'Камера', runtime: true, default: true },
+  { id: 'RECORD_AUDIO', manifest: 'android.permission.RECORD_AUDIO', label: 'Микрофон', runtime: true, default: false },
 ];
 
 export function hasAndroidSdk() {
@@ -37,7 +36,6 @@ async function writeBuildConfig(cfg) {
   const props = [
     `ARP_APP_NAME=${appName}`,
     `ARP_APPLICATION_ID=${appId}`,
-    `ARP_PERMISSIONS=${perms.join(',')}`,
     `ARP_DEFAULT_SERVER=${cfg.defaultServer || ''}`,
     'org.gradle.jvmargs=-Xmx2048m',
     'android.useAndroidX=true',
@@ -45,6 +43,24 @@ async function writeBuildConfig(cfg) {
 
   await fsp.writeFile(path.join(PROJECT_DIR, 'build.properties.generated'), props);
   return { appName, appId, perms };
+}
+
+// Патчим AndroidManifest.xml — удаляем разрешения, которые не выбраны.
+// Возвращает функцию-restore для восстановления оригинала после сборки.
+async function patchManifest(perms) {
+  const manifestPath = path.join(PROJECT_DIR, 'app', 'src', 'main', 'AndroidManifest.xml');
+  const original = await fsp.readFile(manifestPath, 'utf8');
+  let patched = original;
+  if (!perms.includes('CAMERA')) {
+    patched = patched.replace(/\s*<uses-permission[^>]*android\.permission\.CAMERA[^>]*\/>\n?/g, '\n');
+    patched = patched.replace(/\s*<uses-permission[^>]*FOREGROUND_SERVICE_CAMERA[^>]*\/>\n?/g, '\n');
+  }
+  if (!perms.includes('RECORD_AUDIO')) {
+    patched = patched.replace(/\s*<uses-permission[^>]*android\.permission\.RECORD_AUDIO[^>]*\/>\n?/g, '\n');
+    patched = patched.replace(/\s*<uses-permission[^>]*FOREGROUND_SERVICE_MICROPHONE[^>]*\/>\n?/g, '\n');
+  }
+  await fsp.writeFile(manifestPath, patched);
+  return () => fsp.writeFile(manifestPath, original);
 }
 
 // Заменяем launcher-иконку во всех плотностях, если пользователь загрузил свою
@@ -64,8 +80,10 @@ async function applyIcon(iconPath) {
 export async function buildApk(cfg, iconPath, onLog = () => {}) {
   const meta = await writeBuildConfig(cfg);
   await applyIcon(iconPath);
+  const restoreManifest = await patchManifest(meta.perms);
 
   if (!hasAndroidSdk()) {
+    await restoreManifest();
     const err = new Error(
       'Android SDK не найден на этом ПК. Собрать APK можно двумя способами:\n' +
       '  1) Через GitHub Actions — запусти workflow "Build companion APK" ' +
@@ -82,18 +100,21 @@ export async function buildApk(cfg, iconPath, onLog = () => {}) {
   const cmd = useWrapper ? gradlew : 'gradle';
   const args = ['assembleDebug', '--no-daemon'];
 
-  await new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: PROJECT_DIR, shell: process.platform === 'win32' });
-    child.stdout.on('data', (d) => onLog(d.toString()));
-    child.stderr.on('data', (d) => onLog(d.toString()));
-    child.on('error', reject);
-    child.on('close', (code) => code === 0 ? resolve() : reject(new Error('gradle exited ' + code)));
-  });
+  try {
+    await new Promise((resolve, reject) => {
+      const child = spawn(cmd, args, { cwd: PROJECT_DIR, shell: process.platform === 'win32' });
+      child.stdout.on('data', (d) => onLog(d.toString()));
+      child.stderr.on('data', (d) => onLog(d.toString()));
+      child.on('error', reject);
+      child.on('close', (code) => code === 0 ? resolve() : reject(new Error('gradle exited ' + code)));
+    });
+  } finally {
+    await restoreManifest();
+  }
 
   const apk = path.join(PROJECT_DIR, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
   if (!fs.existsSync(apk)) throw new Error('Сборка прошла, но APK не найден: ' + apk);
 
-  // Копируем в понятное имя.
   const outName = `${meta.appName.replace(/[^\w.-]+/g, '_')}.apk`;
   const outPath = path.join(os.tmpdir(), outName);
   await fsp.copyFile(apk, outPath);

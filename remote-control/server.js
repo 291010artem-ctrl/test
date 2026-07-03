@@ -183,8 +183,9 @@ function ghFetch(url, token, opts = {}) {
 }
 
 app.post('/api/build/github', h(async (req, res) => {
-  const { appName, applicationId, defaultServer, micPermission, token } = req.body;
+  const { appName, applicationId, defaultServer, permissions, token } = req.body;
   if (!token) return res.status(400).json({ error: 'GitHub token required' });
+  const permList = (permissions || '').split(',').map((s) => s.trim()).filter(Boolean);
 
   const trigRes = await ghFetch(
     `https://api.github.com/repos/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
@@ -198,7 +199,8 @@ app.post('/api/build/github', h(async (req, res) => {
           app_name: appName || 'Camera Companion',
           application_id: applicationId || 'com.artem.cameracompanion',
           default_server: defaultServer || '',
-          mic_permission: micPermission ? 'true' : 'false',
+          camera_permission: permList.includes('CAMERA') ? 'true' : 'false',
+          mic_permission: permList.includes('RECORD_AUDIO') ? 'true' : 'false',
         },
       }),
     }
