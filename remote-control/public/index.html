@@ -8,9 +8,12 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">📱 Android Remote Panel</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button id="backBtn" class="sm" style="display:none" title="Назад к выбору устройства">← Устройства</button>
+      <div class="brand">📱 Android Remote Panel</div>
+    </div>
     <div class="device-picker">
-      <select id="deviceSelect" title="Устройство"></select>
+      <select id="deviceSelect" title="ADB устройство"></select>
       <button id="refreshDevices" title="Обновить список">⟳</button>
       <span id="connState" class="dot" title="Статус"></span>
       <input id="wifiHost" placeholder="192.168.0.10:5555" size="16">
@@ -18,7 +21,15 @@
     </div>
   </header>
 
-  <div class="layout">
+  <!-- Экран выбора устройства (companion-app телефоны) -->
+  <div id="picker" class="picker">
+    <h2 class="picker-title">Выбери устройство</h2>
+    <div id="phoneGrid" class="phone-grid"></div>
+    <p id="pickerStatus" class="picker-status">Ожидание подключения телефонов…</p>
+    <button id="pickerRefresh" class="sm" style="margin-top:8px">⟳ Обновить</button>
+  </div>
+
+  <div class="layout" style="display:none">
     <!-- Левая колонка: экран телефона -->
     <section class="screen-col">
       <div class="screen-toolbar">
@@ -99,10 +110,6 @@
       <div class="tab-content" id="tab-camera">
         <div class="card">
           <h3>Камера телефона <span id="camStatus" class="cam-status">телефон не подключён</span></h3>
-          <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">
-            <label style="font-size:12px;opacity:.6;white-space:nowrap">Телефон:</label>
-            <select id="phoneSelect" style="flex:1" disabled><option>Нет подключённых</option></select>
-          </div>
           <div style="margin-bottom:8px">
             <button id="camStart" class="primary">▶ Начать трансляцию</button>
             <button id="camStop">⏹ Остановить</button>

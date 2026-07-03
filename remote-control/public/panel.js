@@ -176,6 +176,68 @@ document.querySelectorAll('.tab').forEach((tab) => {
   };
 });
 
+// ---------- Экран выбора устройства ----------
+let pickerTimer = null;
+
+function showPicker() {
+  $('#picker').style.display = 'flex';
+  $('.layout').style.display = 'none';
+  $('#backBtn').style.display = 'none';
+  refreshPicker();
+  pickerTimer = setInterval(refreshPicker, 2000);
+}
+
+function hidePicker(selectedIp) {
+  clearInterval(pickerTimer);
+  pickerTimer = null;
+  $('#picker').style.display = 'none';
+  $('.layout').style.display = 'flex';
+  $('#backBtn').style.display = '';
+}
+
+async function refreshPicker() {
+  try {
+    const data = await api('phones');
+    renderPickerPhones(data.phones || [], data.activeIp);
+  } catch { /* ignore network errors while waiting */ }
+}
+
+function renderPickerPhones(phones, activeIp) {
+  const grid = $('#phoneGrid');
+  const status = $('#pickerStatus');
+  grid.innerHTML = '';
+  if (!phones.length) {
+    status.style.display = '';
+    return;
+  }
+  status.style.display = 'none';
+  for (const p of phones) {
+    const card = document.createElement('div');
+    card.className = 'phone-card';
+    const camOk = p.cams.back || p.cams.front;
+    card.innerHTML = `
+      <div class="phone-card-icon">📱</div>
+      <div class="phone-card-label">${p.label}</div>
+      <div class="phone-card-status">
+        <span class="${camOk ? 'ok' : 'off'}">${camOk ? '🎥 камера' : '🎥 нет камеры'}</span>
+        <span class="${p.cams.audio ? 'ok' : 'off'}">${p.cams.audio ? '🎤 микрофон' : '🎤 нет звука'}</span>
+      </div>`;
+    card.onclick = () => selectPhone(p.ip);
+    grid.appendChild(card);
+  }
+}
+
+async function selectPhone(ip) {
+  try {
+    await jpost('phones/select', { ip });
+    hidePicker();
+    startCameraView();
+  } catch (e) { toast(e.message, true); }
+}
+
+$('#backBtn').onclick = showPicker;
+$('#pickerRefresh').onclick = refreshPicker;
+
 // ---------- Трансляция камеры телефона ----------
 const camWS = { back: null, front: null };
 const phoneConnected = { back: false, front: false };
@@ -190,7 +252,6 @@ function startCamViewer(cam) {
     if (typeof ev.data === 'string') {
       const m = JSON.parse(ev.data);
       if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
-      else if (m.type === 'phones') updatePhoneSelector(m.list, m.activeIp);
       return;
     }
     const imgId = cam === 'back' ? '#camImg' : '#camImgFront';
@@ -209,7 +270,7 @@ function startCamViewer(cam) {
 // ---------- Аудио с телефона ----------
 let audioCtx = null;
 let audioWs = null;
-let audioMuted = true; // по умолчанию без звука
+let audioMuted = true;
 let nextAudioTime = 0;
 const AUDIO_SAMPLE_RATE = 16000;
 
@@ -261,31 +322,6 @@ function updatePhoneStatus() {
   $('#camStart').disabled = !on;
   $('#camStop').disabled = !on;
 }
-
-function updatePhoneSelector(list, activeIp) {
-  const sel = $('#phoneSelect');
-  if (!sel) return;
-  const prev = sel.value;
-  sel.innerHTML = '';
-  if (!list || !list.length) {
-    sel.innerHTML = '<option value="">Нет подключённых</option>';
-    sel.disabled = true;
-    return;
-  }
-  sel.disabled = list.length <= 1;
-  for (const p of list) {
-    const opt = document.createElement('option');
-    opt.value = p.ip;
-    opt.textContent = p.label + (p.cams.back || p.cams.front ? '' : ' (нет камеры)');
-    if (p.ip === activeIp) opt.selected = true;
-    sel.appendChild(opt);
-  }
-}
-
-$('#phoneSelect').onchange = () => {
-  const ip = $('#phoneSelect').value;
-  if (ip) jpost('phones/select', { ip }).catch((e) => toast(e.message, true));
-};
 
 $('#camStart').onclick = () =>
   jpost('camera/command', { cmd: 'start' }).catch((e) => toast(e.message, true));
@@ -527,3 +563,4 @@ connectWS();
 loadDevices();
 loadDashboard();
 setInterval(loadDevices, 8000);
+showPicker();

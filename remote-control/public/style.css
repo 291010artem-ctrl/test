@@ -199,6 +199,60 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .build-msg { margin-top: 10px; font-size: 13px; white-space: pre-wrap; }
 .build-msg a { color: var(--accent2); }
 
+/* ----- Экран выбора устройства ----- */
+.picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 32px 16px;
+  min-height: 0;
+}
+
+.picker-title {
+  margin: 0 0 28px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.phone-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  max-width: 800px;
+}
+
+.phone-card {
+  width: 180px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 16px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .15s, transform .1s;
+  user-select: none;
+}
+.phone-card:hover { border-color: var(--accent2); transform: translateY(-2px); }
+.phone-card:active { transform: translateY(0); }
+
+.phone-card-icon { font-size: 40px; margin-bottom: 10px; }
+.phone-card-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+  word-break: break-all;
+}
+.phone-card-status { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.phone-card-status .ok { color: var(--accent); }
+.phone-card-status .off { color: var(--danger); }
+
+.picker-status { color: var(--muted); font-size: 14px; margin: 16px 0 0; }
+
 .toast {
   position: fixed;
   bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px);
