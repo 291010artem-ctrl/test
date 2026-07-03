@@ -113,7 +113,7 @@ class ControlService : AccessibilityService() {
         if (ws.queueSize() > 512 * 1024) { screenHandler.postDelayed({ scheduleScreenshot() }, 100); return }
 
         takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
-            override fun onSuccess(screenshot: AccessibilityService.ScreenCapture) {
+            override fun onSuccess(screenshot: android.accessibilityservice.AccessibilityService.ScreenCapture) {
                 try {
                     val hw = screenshot.hardwareBitmap
                     val scale = minOf(1f, 720f / hw.width)
