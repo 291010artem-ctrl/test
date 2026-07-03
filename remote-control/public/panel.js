@@ -190,6 +190,7 @@ function startCamViewer(cam) {
     if (typeof ev.data === 'string') {
       const m = JSON.parse(ev.data);
       if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
+      else if (m.type === 'phones') updatePhoneSelector(m.list, m.activeIp);
       return;
     }
     const imgId = cam === 'back' ? '#camImg' : '#camImgFront';
@@ -260,6 +261,31 @@ function updatePhoneStatus() {
   $('#camStart').disabled = !on;
   $('#camStop').disabled = !on;
 }
+
+function updatePhoneSelector(list, activeIp) {
+  const sel = $('#phoneSelect');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '';
+  if (!list || !list.length) {
+    sel.innerHTML = '<option value="">Нет подключённых</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = list.length <= 1;
+  for (const p of list) {
+    const opt = document.createElement('option');
+    opt.value = p.ip;
+    opt.textContent = p.label + (p.cams.back || p.cams.front ? '' : ' (нет камеры)');
+    if (p.ip === activeIp) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+$('#phoneSelect').onchange = () => {
+  const ip = $('#phoneSelect').value;
+  if (ip) jpost('phones/select', { ip }).catch((e) => toast(e.message, true));
+};
 
 $('#camStart').onclick = () =>
   jpost('camera/command', { cmd: 'start' }).catch((e) => toast(e.message, true));

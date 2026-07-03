@@ -99,6 +99,10 @@
       <div class="tab-content" id="tab-camera">
         <div class="card">
           <h3>Камера телефона <span id="camStatus" class="cam-status">телефон не подключён</span></h3>
+          <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;opacity:.6;white-space:nowrap">Телефон:</label>
+            <select id="phoneSelect" style="flex:1" disabled><option>Нет подключённых</option></select>
+          </div>
           <div style="margin-bottom:8px">
             <button id="camStart" class="primary">▶ Начать трансляцию</button>
             <button id="camStop">⏹ Остановить</button>

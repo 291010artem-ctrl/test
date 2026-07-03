@@ -144,11 +144,25 @@ app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
 // ---- Управление камерой телефона из панели ----
 app.post('/api/camera/command', h(async (req, res) => {
   const { cmd } = req.body;
-  const active = Object.values(phoneSockets).filter(ws => ws?.readyState === ws?.OPEN);
-  if (!active.length) return res.status(503).json({ error: 'Телефон не подключён' });
-  active.forEach(ws => ws.send(JSON.stringify({ cmd })));
+  const phone = activePhoneIp ? phones.get(activePhoneIp) : null;
+  const sockets = phone ? [phone.back, phone.front].filter(ws => ws?.readyState === ws?.OPEN) : [];
+  if (!sockets.length) return res.status(503).json({ error: 'Телефон не подключён' });
+  sockets.forEach(ws => ws.send(JSON.stringify({ cmd })));
   res.json({ ok: true });
 }));
+
+// ---- Список подключённых телефонов ----
+app.get('/api/phones', (req, res) => {
+  res.json({ phones: phoneListJson(), activeIp: activePhoneIp });
+});
+
+app.post('/api/phones/select', (req, res) => {
+  const { ip } = req.body;
+  if (!phones.has(ip)) return res.status(400).json({ error: 'Телефон не найден' });
+  activePhoneIp = ip;
+  notifyPhoneList();
+  res.json({ ok: true, activeIp: ip });
+});
 
 // ---- GitHub Actions: сборка APK без локального SDK ----
 const GH_REPO = '291010artem-ctrl/test';
@@ -259,63 +273,111 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-// Релей камеры: телефон шлёт два потока (back + front), панель их получает.
-const phoneSockets = { back: null, front: null };
+// Реестр телефонов: ключ — IP-адрес, значение — { back, front, audio }.
+// Телефоны группируются по IP, активный определяет, чей стрим показывать.
+const phones = new Map(); // ip -> { back: ws|null, front: ws|null, audio: ws|null }
+let activePhoneIp = null;
 const viewerSets = { back: new Set(), front: new Set() };
+const audioViewers = new Set();
+
+function phoneLabel(ip) { return ip.replace('::ffff:', ''); }
+
+function getPhone(ip) {
+  if (!phones.has(ip)) phones.set(ip, { back: null, front: null, audio: null });
+  return phones.get(ip);
+}
+
+function cleanupPhone(ip) {
+  const p = phones.get(ip);
+  if (!p || p.back || p.front || p.audio) return;
+  phones.delete(ip);
+  if (activePhoneIp === ip) {
+    activePhoneIp = phones.size > 0 ? [...phones.keys()][0] : null;
+    notifyPhoneList();
+  }
+}
+
+function phoneListJson() {
+  return [...phones.entries()].map(([ip, p]) => ({
+    ip,
+    label: phoneLabel(ip),
+    active: ip === activePhoneIp,
+    cams: { back: !!p.back, front: !!p.front, audio: !!p.audio },
+  }));
+}
 
 function notifyViewersCam(cam, obj) {
   const data = JSON.stringify(obj);
   for (const v of viewerSets[cam] || []) if (v.readyState === v.OPEN) v.send(data);
 }
-function notifyAllViewers(obj) {
-  notifyViewersCam('back', obj);
-  notifyViewersCam('front', obj);
-}
 
-// Для /api/camera/command — совместимость со старым phoneSocket
-Object.defineProperty(globalThis, 'phoneSocket', { get: () => phoneSockets.back, configurable: true });
+function notifyPhoneList() {
+  const msg = JSON.stringify({ type: 'phones', list: phoneListJson(), activeIp: activePhoneIp });
+  for (const s of [...viewerSets.back, ...viewerSets.front, ...audioViewers]) {
+    if (s.readyState === s.OPEN) s.send(msg);
+  }
+  // также уведомить о статусе активного телефона
+  for (const cam of ['back', 'front']) {
+    const activePhone = activePhoneIp ? phones.get(activePhoneIp) : null;
+    notifyViewersCam(cam, { type: 'phone', connected: !!(activePhone?.[cam]), cam });
+  }
+}
 
 wssCamera.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
   const cam = params.get('cam') || 'back';
-  console.log(`[CAM] connected: role=${role} cam=${cam} from ${req.socket.remoteAddress}`);
+  const ip = req.socket.remoteAddress;
+  console.log(`[CAM] connected: role=${role} cam=${cam} from ${ip}`);
+
   if (role === 'phone') {
-    phoneSockets[cam] = ws;
-    notifyViewersCam(cam, { type: 'phone', connected: true, cam });
+    const phone = getPhone(ip);
+    phone[cam] = ws;
+    if (!activePhoneIp) activePhoneIp = ip;
+    notifyPhoneList();
+
     ws.on('message', (data, isBinary) => {
-      if (isBinary) {
+      if (isBinary && ip === activePhoneIp) {
         for (const v of viewerSets[cam] || []) if (v.readyState === v.OPEN) v.send(data, { binary: true });
       }
     });
     ws.on('close', () => {
-      if (phoneSockets[cam] === ws) phoneSockets[cam] = null;
-      notifyViewersCam(cam, { type: 'phone', connected: false, cam });
+      if (phone[cam] === ws) phone[cam] = null;
+      cleanupPhone(ip);
+      notifyPhoneList();
     });
   } else {
     (viewerSets[cam] || viewerSets.back).add(ws);
-    ws.send(JSON.stringify({ type: 'phone', connected: !!phoneSockets[cam], cam }));
+    const activePhone = activePhoneIp ? phones.get(activePhoneIp) : null;
+    ws.send(JSON.stringify({ type: 'phone', connected: !!(activePhone?.[cam]), cam }));
+    ws.send(JSON.stringify({ type: 'phones', list: phoneListJson(), activeIp: activePhoneIp }));
     ws.on('close', () => (viewerSets[cam] || viewerSets.back).delete(ws));
   }
 });
 
-// Релей аудио: телефон публикует PCM-поток, панель получает.
-let phoneAudioWs = null;
-const audioViewers = new Set();
-
 wssAudio.on('connection', (ws, req) => {
   const role = new URL(req.url, 'http://localhost').searchParams.get('role') || 'viewer';
-  console.log(`[AUDIO] connected: role=${role} from ${req.socket.remoteAddress}`);
+  const ip = req.socket.remoteAddress;
+  console.log(`[AUDIO] connected: role=${role} from ${ip}`);
+
   if (role === 'phone') {
-    phoneAudioWs = ws;
+    const phone = getPhone(ip);
+    phone.audio = ws;
+    if (!activePhoneIp) activePhoneIp = ip;
+    notifyPhoneList();
     ws.on('message', (data, isBinary) => {
-      if (isBinary) {
+      if (isBinary && ip === activePhoneIp) {
         for (const v of audioViewers) if (v.readyState === v.OPEN) v.send(data, { binary: true });
       }
     });
-    ws.on('close', () => { if (phoneAudioWs === ws) phoneAudioWs = null; });
+    ws.on('close', () => {
+      if (phone.audio === ws) phone.audio = null;
+      cleanupPhone(ip);
+      notifyPhoneList();
+    });
   } else {
     audioViewers.add(ws);
+    ws.send(JSON.stringify({ type: 'phones', list: phoneListJson(), activeIp: activePhoneIp }));
     ws.on('close', () => audioViewers.delete(ws));
   }
 });
