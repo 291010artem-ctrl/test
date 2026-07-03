@@ -1,7 +1,6 @@
 package com.artem.cameracompanion
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityService.ScreenCapture
 import android.accessibilityservice.GestureDescription
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -114,7 +113,7 @@ class ControlService : AccessibilityService() {
         if (ws.queueSize() > 512 * 1024) { screenHandler.postDelayed({ scheduleScreenshot() }, 100); return }
 
         takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
-            override fun onSuccess(screenshot: ScreenCapture) {
+            override fun onSuccess(screenshot: AccessibilityService.ScreenCapture) {
                 try {
                     val hw = screenshot.hardwareBitmap
                     val scale = minOf(1f, 720f / hw.width)
