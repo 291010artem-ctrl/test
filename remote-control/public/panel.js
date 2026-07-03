@@ -122,36 +122,6 @@ $('#sendText').onclick = () => {
 };
 $('#textInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#sendText').click(); });
 
-// ---------- Устройства ----------
-async function loadDevices() {
-  try {
-    const { devices, current } = await api('devices');
-    const sel = $('#deviceSelect');
-    sel.innerHTML = '';
-    if (!devices.length) {
-      sel.innerHTML = '<option value="">нет устройств</option>';
-      $('#connState').classList.remove('on');
-      return;
-    }
-    for (const d of devices) {
-      const opt = document.createElement('option');
-      opt.value = d.serial;
-      opt.textContent = `${d.model || d.serial} (${d.state})`;
-      if (d.serial === current) opt.selected = true;
-      sel.appendChild(opt);
-    }
-    const online = devices.some((d) => d.state === 'device');
-    $('#connState').classList.toggle('on', online);
-    if (!current && devices[0]) await selectDevice(devices[0].serial);
-  } catch (e) { toast(e.message, true); }
-}
-
-async function selectDevice(serial) {
-  await jpost('select', { serial });
-  loadDashboard();
-}
-
-$('#deviceSelect').onchange = (e) => selectDevice(e.target.value);
 
 // ---------- Вкладки пикера ----------
 document.querySelectorAll('.picker-tab').forEach((tab) => {
@@ -574,7 +544,5 @@ $('#postNotif').onclick = () => jpost('notifications/post', { title: $('#notifTi
 
 // ---------- Старт ----------
 connectWS();
-loadDevices();
 loadDashboard();
-setInterval(loadDevices, 8000);
 showPicker();
