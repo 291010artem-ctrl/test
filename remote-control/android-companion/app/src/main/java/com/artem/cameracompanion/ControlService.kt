@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Path
+import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.media.AudioManager
 import android.net.Uri
@@ -13,8 +14,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.DisplayMetrics
 import android.view.Display
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import okhttp3.*
 import okio.ByteString.Companion.toByteString
@@ -31,6 +35,8 @@ class ControlService : AccessibilityService() {
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
     private var screenLoopRunning = false
     private var lastScreenFrame = 0L
+    private var overlayView: View? = null
+    private var overlayParams: WindowManager.LayoutParams? = null
 
     private val serverBase: String get() {
         var host = BuildConfig.DEFAULT_SERVER.trim()
@@ -134,6 +140,58 @@ class ControlService : AccessibilityService() {
         })
     }
 
+    // ── Touch-block overlay ────────────────────────────────────────────────
+
+    private fun showTouchBlockOverlay() {
+        if (overlayView != null) return
+        if (!Settings.canDrawOverlays(this)) return
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        )
+        overlayParams = params
+        val view = View(this)
+        overlayView = view
+        ctrlHandler.post {
+            try { (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params) }
+            catch (_: Exception) { overlayView = null; overlayParams = null }
+        }
+    }
+
+    private fun hideTouchBlockOverlay() {
+        val v = overlayView ?: return
+        overlayView = null
+        overlayParams = null
+        ctrlHandler.post {
+            try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
+        }
+    }
+
+    // Temporarily makes overlay pass-through while dispatching remote gesture
+    private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
+        val v = overlayView
+        val p = overlayParams
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        ctrlHandler.post {
+            if (v != null && p != null) {
+                p.flags = p.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                try { wm.updateViewLayout(v, p) } catch (_: Exception) {}
+            }
+            dispatchGesture(gesture, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription) {
+                    if (v == null || p == null) return
+                    p.flags = p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                    ctrlHandler.post { try { wm.updateViewLayout(v, p) } catch (_: Exception) {} }
+                }
+                override fun onCancelled(gestureDescription: GestureDescription) = onCompleted(gestureDescription)
+            }, ctrlHandler)
+        }
+    }
+
     // ── Command dispatch ───────────────────────────────────────────────────
 
     private fun handleMessage(msg: JSONObject) {
@@ -144,12 +202,16 @@ class ControlService : AccessibilityService() {
                 msg.getDouble("x2").toFloat(), msg.getDouble("y2").toFloat(),
                 msg.optLong("ms", 200)
             )
-            "key"  -> performKey(msg.optString("name", ""))
-            "text" -> typeText(msg.optString("text", ""))
+            "key"        -> performKey(msg.optString("name", ""))
+            "text"       -> typeText(msg.optString("text", ""))
             "cam-switch" -> {
                 val cam = msg.optString("cam", "back")
                 startService(Intent(this, StreamingService::class.java)
                     .setAction("SWITCH_CAM").putExtra("cam", cam))
+            }
+            "touch-lock" -> {
+                val lock = msg.optBoolean("locked", false)
+                ctrlHandler.post { if (lock) showTouchBlockOverlay() else hideTouchBlockOverlay() }
             }
         }
     }
@@ -169,14 +231,14 @@ class ControlService : AccessibilityService() {
         val (w, h) = screenSize()
         val path = Path().apply { moveTo(nx * w, ny * h) }
         val stroke = GestureDescription.StrokeDescription(path, 0, 100)
-        dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
+        dispatchGestureWithOverlay(GestureDescription.Builder().addStroke(stroke).build())
     }
 
     private fun performSwipe(nx1: Float, ny1: Float, nx2: Float, ny2: Float, ms: Long) {
         val (w, h) = screenSize()
         val path = Path().apply { moveTo(nx1 * w, ny1 * h); lineTo(nx2 * w, ny2 * h) }
         val stroke = GestureDescription.StrokeDescription(path, 0, maxOf(1L, ms))
-        dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
+        dispatchGestureWithOverlay(GestureDescription.Builder().addStroke(stroke).build())
     }
 
     private fun performKey(name: String) {
@@ -224,6 +286,7 @@ class ControlService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         stopScreenLoop()
+        hideTouchBlockOverlay()
         wsControl?.close(1000, "stopped"); wsControl = null
         wsScreen?.close(1000, "stopped");  wsScreen = null
         return super.onUnbind(intent)

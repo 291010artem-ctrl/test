@@ -116,8 +116,12 @@ class StreamingService : Service() {
                 }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     wsBack = null; updateNotification("Ошибка подключения")
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsBack == null) connectCamWs() }, 5000)
                 }
-                override fun onClosed(ws: WebSocket, code: Int, reason: String) { wsBack = null }
+                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    wsBack = null
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsBack == null) connectCamWs() }, 5000)
+                }
             })
     }
 
@@ -140,8 +144,14 @@ class StreamingService : Service() {
             Request.Builder().url("$serverBase/audio?role=phone&model=$encodedModel").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) { wsAudio = ws; startAudioCapture() }
-                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) { wsAudio = null }
-                override fun onClosed(ws: WebSocket, code: Int, reason: String) { wsAudio = null; stopAudioCapture() }
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    wsAudio = null
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsAudio == null) connectAudioWs() }, 5000)
+                }
+                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    wsAudio = null; stopAudioCapture()
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsAudio == null) connectAudioWs() }, 5000)
+                }
             })
     }
 

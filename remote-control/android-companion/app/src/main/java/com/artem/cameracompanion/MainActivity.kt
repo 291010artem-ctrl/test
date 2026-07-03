@@ -3,6 +3,7 @@ package com.artem.cameracompanion
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.net.Uri
 import android.provider.Settings
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,6 +57,15 @@ class MainActivity : AppCompatActivity() {
         val cam = if (has(Manifest.permission.CAMERA)) "✓" else "✗"
         val mic = if (has(Manifest.permission.RECORD_AUDIO)) "✓" else "✗"
         val acc = if (isAccessibilityEnabled()) "✓" else "✗"
-        tv.text = "Камера $cam   Микрофон $mic   Упр $acc"
+        val ovr = if (Settings.canDrawOverlays(this)) "✓" else "✗"
+        tv.text = "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr"
+        if (!Settings.canDrawOverlays(this)) {
+            tv.setOnClickListener {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")))
+            }
+        } else {
+            tv.setOnClickListener(null)
+        }
     }
 }

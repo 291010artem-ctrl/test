@@ -295,7 +295,14 @@ $('#camMute').onclick = () => {
   }
   if (audioCtx.state === 'suspended') audioCtx.resume();
   audioMuted = !audioMuted;
-  $('#camMute').textContent = audioMuted ? '🔇 Без звука' : '🔊 Со звуком';
+  $('#camMute').textContent = audioMuted ? '🔇 Тихо' : '🔊 Звук';
+};
+
+let touchLocked = false;
+$('#btnTouchLock').onclick = () => {
+  touchLocked = !touchLocked;
+  $('#btnTouchLock').textContent = touchLocked ? '🔒 Касания' : '🔓 Касания';
+  ctrlSend({ type: 'touch-lock', locked: touchLocked });
 };
 
 function startCameraView() {
