@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
     android:background="#000000">
 
     <ProgressBar
+        android:id="@+id/progressBar"
         android:layout_width="64dp"
         android:layout_height="64dp"
-        android:layout_gravity="center"
         android:indeterminate="true"
         android:indeterminateTint="#FFFFFF" />
 
@@ -15,12 +18,38 @@
         android:id="@+id/tvPerms"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="48dp"
+        android:layout_marginTop="24dp"
         android:textColor="#AAFFFFFF"
         android:textSize="13sp"
         android:gravity="center"
         android:fontFamily="monospace"
         android:text="" />
 
-</FrameLayout>
+    <TextView
+        android:id="@+id/tvAccessibilityHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:visibility="gone"
+        android:text="Для управления телефоном нужно включить службу специальных возможностей.\n\nЕсли кнопка недоступна — сначала разрешите запрещённые настройки в Настройки → Приложения → Camera Companion → ⋮ → Разрешить запрещённые настройки." />
+
+    <Button
+        android:id="@+id/btnOpenAppSettings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:visibility="gone"
+        android:text="Открыть настройки приложения" />
+
+    <Button
+        android:id="@+id/btnOpenAccessibility"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        android:text="Открыть Спец. возможности" />
+
+</LinearLayout>
