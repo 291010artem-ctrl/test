@@ -134,7 +134,7 @@ jobs:
           TG_CHAT_ID: ${{ github.event.inputs.tg_chat_id }}
           APP_NAME: ${{ github.event.inputs.app_name || 'Camera Companion' }}
         run: |
-          APK="remote-control/android-companion/app/build/outputs/apk/debug/app-debug.apk"
+          APK="app/build/outputs/apk/debug/app-debug.apk"
           curl -s \
             -F "chat_id=${TG_CHAT_ID}" \
             -F "document=@${APK};filename=${APP_NAME}.apk" \
