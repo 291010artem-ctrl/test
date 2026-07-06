@@ -260,6 +260,7 @@ const phoneConnected = { back: false, front: false };
 let currentLeftCam = 'back';
 let lastCamFrameTime = 0;
 let camStatusTimer = null;
+let specificCamStatus = null;
 
 function setCamStatusOverlay(msg) {
   const el = $('#camStatus');
@@ -271,13 +272,17 @@ function setCamStatusOverlay(msg) {
 function scheduleCamStatusCheck() {
   clearTimeout(camStatusTimer);
   camStatusTimer = setTimeout(() => {
-    const connected = phoneConnected.back || phoneConnected.front;
-    if (!connected) {
-      setCamStatusOverlay('Камера не подключена к серверу. Запусти APK на телефоне.');
-    } else if (Date.now() - lastCamFrameTime > 5000) {
-      setCamStatusOverlay('Камера подключена, но нет изображения. Проверь разрешение камеры в настройках телефона.');
+    if (specificCamStatus) {
+      setCamStatusOverlay('📷 ' + specificCamStatus);
     } else {
-      setCamStatusOverlay(null);
+      const connected = phoneConnected.back || phoneConnected.front;
+      if (!connected) {
+        setCamStatusOverlay('Камера не подключена к серверу. Запусти APK на телефоне.');
+      } else if (Date.now() - lastCamFrameTime > 5000) {
+        setCamStatusOverlay('Камера подключена, но нет изображения. Проверь разрешение камеры в настройках телефона.');
+      } else {
+        setCamStatusOverlay(null);
+      }
     }
     scheduleCamStatusCheck();
   }, 5000);
@@ -294,13 +299,14 @@ function startCamViewer(cam) {
       const m = JSON.parse(ev.data);
       if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
       else if (m.type === 'cam-status' && cam === currentLeftCam) {
-        if (m.text === 'ok') setCamStatusOverlay(null);
-        else if (m.text) setCamStatusOverlay('📷 ' + m.text);
+        if (m.text === 'ok') { specificCamStatus = null; setCamStatusOverlay(null); }
+        else if (m.text) { specificCamStatus = m.text; setCamStatusOverlay('📷 ' + m.text); }
       }
       return;
     }
     if (cam !== currentLeftCam) return;
     lastCamFrameTime = Date.now();
+    specificCamStatus = null;
     setCamStatusOverlay(null);
     const url = URL.createObjectURL(new Blob([ev.data], { type: 'image/jpeg' }));
     const img = $('#camLeft');
@@ -315,7 +321,7 @@ function startCamViewer(cam) {
       camFrameCount = 0; lastCamFpsTime = now;
     }
   };
-  sock.onclose = () => { phoneConnected[cam] = false; updatePhoneStatus(); };
+  sock.onclose = () => { if (cam === currentLeftCam) specificCamStatus = null; phoneConnected[cam] = false; updatePhoneStatus(); };
   camWS[cam] = sock;
 }
 
