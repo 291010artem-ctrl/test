@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Bundle
 import android.net.Uri
 import android.provider.Settings
@@ -61,6 +62,8 @@ class MainActivity : AppCompatActivity() {
         val needed = buildList {
             if (!has(Manifest.permission.CAMERA)) add(Manifest.permission.CAMERA)
             if (!has(Manifest.permission.RECORD_AUDIO)) add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !has(Manifest.permission.POST_NOTIFICATIONS)) add(Manifest.permission.POST_NOTIFICATIONS)
         }
         if (needed.isNotEmpty()) requestPermissions.launch(needed.toTypedArray())
     }
