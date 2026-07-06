@@ -224,6 +224,12 @@ phoneScreenEl.addEventListener('keydown', (e) => {
 document.querySelectorAll('[data-ctrl-key]').forEach((btn) => {
   btn.onclick = () => ctrlSend({ type: 'key', name: btn.dataset.ctrlKey });
 });
+$('#screenQuality').addEventListener('input', (e) => {
+  const q = parseInt(e.target.value);
+  $('#screenQualityVal').textContent = q + '%';
+  ctrlSend({ type: 'screen-quality', quality: q });
+});
+
 $('#phoneTextInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#phoneSendText').click(); });
 $('#phoneSendText').onclick = () => {
   const v = $('#phoneTextInput').value;

