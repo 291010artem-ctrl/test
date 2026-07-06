@@ -403,6 +403,7 @@ wssCamera.on('connection', (ws, req) => {
         }
       } else {
         const str = data.toString();
+        console.log(`[CAM-STATUS] cam=${cam} ip=${ip}: ${str}`);
         for (const v of viewerSets[cam] || []) {
           if (v.readyState === v.OPEN) v.send(str);
         }
