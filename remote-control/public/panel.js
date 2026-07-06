@@ -293,6 +293,10 @@ function startCamViewer(cam) {
     if (typeof ev.data === 'string') {
       const m = JSON.parse(ev.data);
       if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
+      else if (m.type === 'cam-status' && cam === currentLeftCam) {
+        if (m.text === 'ok') setCamStatusOverlay(null);
+        else if (m.text) setCamStatusOverlay('📷 ' + m.text);
+      }
       return;
     }
     if (cam !== currentLeftCam) return;

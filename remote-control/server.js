@@ -393,12 +393,18 @@ wssCamera.on('connection', (ws, req) => {
     notifyPhoneList();
 
     ws.on('message', (data, isBinary) => {
-      if (isBinary && phone === phones.get(activePhoneIp)) {
+      if (phone !== phones.get(activePhoneIp)) return;
+      if (isBinary) {
         for (const v of viewerSets[cam] || []) {
           if (v.readyState === v.OPEN && !busyViewers[cam].has(v)) {
             busyViewers[cam].add(v);
             v.send(data, { binary: true }, () => busyViewers[cam].delete(v));
           }
+        }
+      } else {
+        const str = data.toString();
+        for (const v of viewerSets[cam] || []) {
+          if (v.readyState === v.OPEN) v.send(str);
         }
       }
     });

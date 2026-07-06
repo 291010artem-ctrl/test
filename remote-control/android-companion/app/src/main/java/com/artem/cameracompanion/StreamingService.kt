@@ -5,8 +5,9 @@ import android.app.*
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.Matrix
+import android.graphics.ImageFormat
 import android.graphics.PixelFormat
+import android.hardware.camera2.*
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.*
@@ -15,28 +16,24 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.*
 import android.util.DisplayMetrics
+import android.util.Size
 import android.view.Display
-import androidx.camera.core.*
-import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.*
 import okhttp3.*
 import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 class StreamingService : Service() {
 
     companion object {
         const val ACTION_START = "START"
         const val ACTION_STOP  = "STOP"
-        const val ACTION_STATUS = "com.artem.cameracompanion.STATUS"
-        const val EXTRA_STATUS = "status"
         const val CHANNEL_ID = "streaming"
         const val NOTIF_ID = 1
         var isRunning = false
@@ -56,9 +53,6 @@ class StreamingService : Service() {
         }
     }
 
-    private val lifecycleOwner = StreamingLifecycleOwner()
-    private val analyzerExecutor = Executors.newSingleThreadExecutor()
-    private var cameraProvider: ProcessCameraProvider? = null
     private var wsBack: WebSocket? = null
     private var wsFront: WebSocket? = null
     private var wsAudio: WebSocket? = null
@@ -76,6 +70,13 @@ class StreamingService : Service() {
     private var screenHandlerThread: HandlerThread? = null
     private var screenHandler: Handler? = null
 
+    // Camera2
+    private var cameraDevice: CameraDevice? = null
+    private var captureSession: CameraCaptureSession? = null
+    private var cameraImageReader: ImageReader? = null
+    private var cameraHandlerThread: HandlerThread? = null
+    private var cameraHandler: Handler? = null
+
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
 
     private val serverBase: String get() {
@@ -92,7 +93,6 @@ class StreamingService : Service() {
         isRunning = true
         createNotificationChannel()
         startForeground(NOTIF_ID, buildNotification("Подключение…"))
-        lifecycleOwner.start()
         wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "arp:streaming")
         wakeLock?.acquire(12 * 60 * 60 * 1000L)
@@ -129,7 +129,7 @@ class StreamingService : Service() {
                     wsBack = ws
                     updateNotification("Идёт трансляция")
                     connectFrontCamWs()
-                    bindCamera()
+                    openCamera("back")
                 }
                 override fun onMessage(ws: WebSocket, text: String) {
                     try {
@@ -220,9 +220,7 @@ class StreamingService : Service() {
         http.newWebSocket(
             Request.Builder().url("$serverBase/screen?role=phone&model=$encodedModel").build(),
             object : WebSocketListener() {
-                override fun onOpen(ws: WebSocket, response: Response) {
-                    wsScreen = ws; startVirtualDisplay()
-                }
+                override fun onOpen(ws: WebSocket, response: Response) { wsScreen = ws; startVirtualDisplay() }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     wsScreen = null; releaseVirtualDisplay()
                     if (isRunning && mediaProjection != null)
@@ -246,10 +244,8 @@ class StreamingService : Service() {
         val w = (metrics.widthPixels / 2).coerceAtLeast(360)
         val h = (metrics.heightPixels / 2).coerceAtLeast(640)
         val dpi = metrics.densityDpi / 2
-
         val ht = HandlerThread("arp_screen_reader").also { it.start(); screenHandlerThread = it }
         val handler = Handler(ht.looper).also { screenHandler = it }
-
         val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
         screenImageReader = reader
         reader.setOnImageAvailableListener({ r ->
@@ -261,9 +257,7 @@ class StreamingService : Service() {
                 if (now - lastScreenFrameTime < 80) return@setOnImageAvailableListener
                 lastScreenFrameTime = now
                 val plane = img.planes[0]
-                val rowStride = plane.rowStride
-                val pixelStride = plane.pixelStride
-                val rowW = rowStride / pixelStride
+                val rowW = plane.rowStride / plane.pixelStride
                 val bmp = Bitmap.createBitmap(rowW, h, Bitmap.Config.ARGB_8888)
                 bmp.copyPixelsFromBuffer(plane.buffer)
                 val cropped = if (rowW > w) Bitmap.createBitmap(bmp, 0, 0, w, h).also { bmp.recycle() } else bmp
@@ -271,16 +265,10 @@ class StreamingService : Service() {
                 cropped.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
                 cropped.recycle()
                 ws.send(out.toByteArray().toByteString())
-            } finally {
-                img.close()
-            }
+            } finally { img.close() }
         }, handler)
-
-        virtualDisplay = mp.createVirtualDisplay(
-            "arp_screen", w, h, dpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            reader.surface, null, null
-        )
+        virtualDisplay = mp.createVirtualDisplay("arp_screen", w, h, dpi,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.surface, null, null)
     }
 
     private fun releaseVirtualDisplay() {
@@ -289,85 +277,121 @@ class StreamingService : Service() {
         screenHandlerThread?.quitSafely(); screenHandlerThread = null; screenHandler = null
     }
 
-    // ── Camera binding & switching ─────────────────────────────────────────
+    // ── Camera2 ────────────────────────────────────────────────────────────
 
-    private fun bindCamera() {
+    private fun sendCamStatus(text: String) {
+        wsBack?.send(JSONObject().put("type", "cam-status").put("text", text).toString())
+    }
+
+    private fun openCamera(cam: String) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             updateNotification("Нет разрешения камеры")
+            sendCamStatus("Нет разрешения камеры — выдай его в Настройки → Приложения")
             return
         }
-        val future = ProcessCameraProvider.getInstance(this)
-        future.addListener({
-            try {
-                val provider = future.get()
-                cameraProvider = provider
-                bindCameraInternal(provider)
-            } catch (e: Exception) {
-                updateNotification("Провайдер камеры: ${e.message?.take(40)}")
+        closeCamera()
+        currentCam = cam
+        try {
+            val mgr = getSystemService(CAMERA_SERVICE) as CameraManager
+            val facing = if (cam == "front") CameraCharacteristics.LENS_FACING_FRONT
+                         else CameraCharacteristics.LENS_FACING_BACK
+            val cameraId = mgr.cameraIdList.firstOrNull { id ->
+                mgr.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) == facing
+            } ?: run {
+                sendCamStatus("Камера ($cam) не найдена на устройстве"); return
             }
-        }, ContextCompat.getMainExecutor(this))
+            val map = mgr.getCameraCharacteristics(cameraId)
+                .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
+            val sizes = map.getOutputSizes(ImageFormat.JPEG) ?: emptyArray()
+            val size = sizes.minByOrNull { abs(it.width - 1280) + abs(it.height - 720) } ?: Size(640, 480)
+
+            val ht = HandlerThread("arp_cam").also { it.start(); cameraHandlerThread = it }
+            cameraHandler = Handler(ht.looper)
+
+            val reader = ImageReader.newInstance(size.width, size.height, ImageFormat.JPEG, 2)
+            cameraImageReader = reader
+            reader.setOnImageAvailableListener({ r ->
+                val img = r.acquireLatestImage() ?: return@setOnImageAvailableListener
+                try {
+                    val ws = if (currentCam == "front") wsFront else wsBack
+                    val arr = if (currentCam == "front") lastFrameFrontArr else lastFrameBackArr
+                    val now = System.currentTimeMillis()
+                    if (ws == null || now - arr[0] < 33 || ws.queueSize() > 512 * 1024) return@setOnImageAvailableListener
+                    arr[0] = now
+                    val plane = img.planes[0]
+                    val bytes = ByteArray(plane.buffer.remaining())
+                    plane.buffer.get(bytes)
+                    ws.send(bytes.toByteString())
+                } finally { img.close() }
+            }, cameraHandler)
+
+            updateNotification("Открытие камеры…")
+            sendCamStatus("Открытие камеры…")
+
+            mgr.openCamera(cameraId, object : CameraDevice.StateCallback() {
+                override fun onOpened(device: CameraDevice) {
+                    cameraDevice = device
+                    device.createCaptureSession(listOf(reader.surface),
+                        object : CameraCaptureSession.StateCallback() {
+                            override fun onConfigured(session: CameraCaptureSession) {
+                                captureSession = session
+                                val req = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                                    addTarget(reader.surface)
+                                    set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+                                    set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                                }.build()
+                                session.setRepeatingRequest(req, null, cameraHandler)
+                                updateNotification("Идёт трансляция")
+                                sendCamStatus("ok")
+                            }
+                            override fun onConfigureFailed(session: CameraCaptureSession) {
+                                updateNotification("Ошибка сессии камеры")
+                                sendCamStatus("Не удалось создать сессию камеры")
+                            }
+                        }, cameraHandler)
+                }
+                override fun onDisconnected(device: CameraDevice) {
+                    device.close(); cameraDevice = null
+                    sendCamStatus("Камера отключена")
+                }
+                override fun onError(device: CameraDevice, error: Int) {
+                    device.close(); cameraDevice = null
+                    val msg = when (error) {
+                        CameraDevice.StateCallback.ERROR_CAMERA_IN_USE -> "Камера занята другим приложением — закрой его"
+                        CameraDevice.StateCallback.ERROR_MAX_CAMERAS_IN_USE -> "Слишком много камер открыто"
+                        CameraDevice.StateCallback.ERROR_CAMERA_DISABLED -> "Камера отключена политикой устройства"
+                        CameraDevice.StateCallback.ERROR_CAMERA_DEVICE -> "Аппаратная ошибка камеры"
+                        CameraDevice.StateCallback.ERROR_CAMERA_SERVICE -> "Ошибка службы камеры Android"
+                        else -> "Ошибка камеры #$error"
+                    }
+                    updateNotification(msg); sendCamStatus(msg)
+                }
+            }, cameraHandler)
+        } catch (e: Exception) {
+            val msg = "Исключение: ${e.message?.take(80)}"
+            updateNotification("Ошибка: ${e.message?.take(40)}")
+            sendCamStatus(msg)
+        }
     }
 
-    private fun bindCameraInternal(provider: ProcessCameraProvider) {
-        try {
-            provider.unbindAll()
-            updateNotification("Подключение камеры…")
-            val isFront = currentCam == "front"
-            val selector = if (isFront) CameraSelector.DEFAULT_FRONT_CAMERA
-                           else CameraSelector.DEFAULT_BACK_CAMERA
-            val analysis = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-            val camRef = currentCam
-            analysis.setAnalyzer(analyzerExecutor) { proxy ->
-                sendFrame(proxy,
-                    if (camRef == "front") wsFront else wsBack,
-                    if (camRef == "front") lastFrameFrontArr else lastFrameBackArr)
-            }
-            provider.bindToLifecycle(lifecycleOwner, selector, analysis)
-            updateNotification("Идёт трансляция")
-        } catch (e: Exception) {
-            updateNotification("Ошибка камеры: ${e.message?.take(40)}")
-        }
+    private fun closeCamera() {
+        captureSession?.close(); captureSession = null
+        cameraDevice?.close(); cameraDevice = null
+        cameraImageReader?.close(); cameraImageReader = null
+        cameraHandlerThread?.quitSafely(); cameraHandlerThread = null; cameraHandler = null
     }
 
     private fun switchCamera(cam: String) {
-        currentCam = cam
-        val provider = cameraProvider ?: return
-        ContextCompat.getMainExecutor(this).execute { bindCameraInternal(provider) }
-    }
-
-    // ── Frame helpers ──────────────────────────────────────────────────────
-
-    private fun sendFrame(proxy: ImageProxy, target: WebSocket?, lastArr: LongArray) {
-        try {
-            val now = System.currentTimeMillis()
-            val ws = target ?: return
-            if (now - lastArr[0] < 33 || ws.queueSize() > 512 * 1024) return
-            lastArr[0] = now
-            val bitmap = proxy.toBitmap()
-            val m = Matrix().apply { postRotate(proxy.imageInfo.rotationDegrees.toFloat()) }
-            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
-            bitmap.recycle()
-            val scale = minOf(1f, 720f / maxOf(rotated.width, rotated.height))
-            val final = if (scale < 1f)
-                Bitmap.createScaledBitmap(rotated, (rotated.width * scale).toInt(), (rotated.height * scale).toInt(), true).also { rotated.recycle() }
-            else rotated
-            val out = ByteArrayOutputStream()
-            final.compress(Bitmap.CompressFormat.JPEG, 55, out)
-            final.recycle()
-            ws.send(out.toByteArray().toByteString())
-        } catch (_: Exception) {
-        } finally {
-            proxy.close()
-        }
+        if (cam == currentCam) return
+        closeCamera()
+        openCamera(cam)
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
     private fun disconnect() {
-        cameraProvider?.unbindAll()
+        closeCamera()
         wsBack?.close(1000, "stop");   wsBack = null
         wsFront?.close(1000, "stop");  wsFront = null
         wsAudio?.close(1000, "stop");  wsAudio = null
@@ -382,16 +406,10 @@ class StreamingService : Service() {
         super.onDestroy()
         isRunning = false
         disconnect()
-        lifecycleOwner.stop()
-        analyzerExecutor.shutdown()
         wakeLock?.release()
     }
 
     override fun onBind(intent: Intent?) = null
-
-    private fun broadcast(status: String) {
-        sendBroadcast(Intent(ACTION_STATUS).putExtra(EXTRA_STATUS, status))
-    }
 
     private fun createNotificationChannel() {
         val ch = NotificationChannel(CHANNEL_ID, "Трансляция камеры", NotificationManager.IMPORTANCE_LOW)
@@ -412,24 +430,5 @@ class StreamingService : Service() {
 
     private fun updateNotification(text: String) {
         getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification(text))
-    }
-}
-
-class StreamingLifecycleOwner : LifecycleOwner {
-    private val registry = LifecycleRegistry(this)
-    override val lifecycle: Lifecycle get() = registry
-    fun start() {
-        Handler(Looper.getMainLooper()).post {
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-        }
-    }
-    fun stop() {
-        Handler(Looper.getMainLooper()).post {
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-        }
     }
 }

@@ -55,11 +55,5 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
 
-    def camerax = "1.4.0"
-    implementation "androidx.camera:camera-core:$camerax"
-    implementation "androidx.camera:camera-camera2:$camerax"
-    implementation "androidx.camera:camera-lifecycle:$camerax"
-    implementation "androidx.camera:camera-view:$camerax"
-
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
