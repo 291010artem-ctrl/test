@@ -217,6 +217,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .muted-text { color: var(--muted); font-size: 12px; }
 .build-msg { margin-top: 10px; font-size: 13px; white-space: pre-wrap; }
 .build-msg a { color: var(--accent2); }
+.tg-row { display: flex; gap: 6px; margin-top: 4px; }
+.tg-row input { margin-top: 0 !important; }
 
 /* ----- Экран выбора устройства ----- */
 .picker {

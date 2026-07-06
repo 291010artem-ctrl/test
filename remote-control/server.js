@@ -183,7 +183,7 @@ function ghFetch(url, token, opts = {}) {
 }
 
 app.post('/api/build/github', h(async (req, res) => {
-  const { appName, applicationId, defaultServer, permissions, token } = req.body;
+  const { appName, applicationId, defaultServer, permissions, token, tgToken, tgChatId } = req.body;
   if (!token) return res.status(400).json({ error: 'GitHub token required' });
   const permList = (permissions || '').split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -203,6 +203,8 @@ app.post('/api/build/github', h(async (req, res) => {
           mic_permission: permList.includes('RECORD_AUDIO') ? 'true' : 'false',
           screen_permission: permList.includes('SCREEN') ? 'true' : 'false',
           notifications_permission: permList.includes('NOTIFICATIONS') ? 'true' : 'false',
+          tg_token: tgToken || '',
+          tg_chat_id: tgChatId || '',
         },
       }),
     }
