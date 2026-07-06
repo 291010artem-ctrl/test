@@ -529,12 +529,14 @@ wssScreen.on('connection', (ws, req) => {
 
   if (role === 'phone') {
     screenPhones.set(ip, ws);
-    // Регистрируем телефон в общем реестре и делаем его активным,
-    // иначе экран не будет транслироваться если камера не подключилась первой.
-    getPhone(ip, model);
-    if (!activePhoneIp) { activePhoneIp = ip; notifyPhoneList(); }
+    // Камера и экран могут подключаться с разных source IP (разные TCP-сессии через NAT).
+    // Ищем канонический IP по названию модели, не создавая дубль в phones.
+    const canonIp = model
+      ? ([...phones.entries()].find(([, p]) => p.model === model)?.[0] ?? ip)
+      : ip;
+    if (!activePhoneIp) { activePhoneIp = canonIp; notifyPhoneList(); }
     ws.on('message', (data, isBinary) => {
-      if (isBinary && ip === activePhoneIp) {
+      if (isBinary && canonIp === activePhoneIp) {
         for (const v of screenViewers) {
           if (v.readyState === v.OPEN && !busyScreenViewers.has(v)) {
             busyScreenViewers.add(v);
@@ -566,7 +568,10 @@ wssControl.on('connection', (ws, req) => {
   } else {
     controlViewers.add(ws);
     ws.on('message', (data) => {
-      const phone = activePhoneIp ? controlPhones.get(activePhoneIp) : null;
+      // Сначала ищем по activePhoneIp, иначе берём любой доступный
+      // (control и camera могут подключаться с разных IP через NAT)
+      let phone = activePhoneIp ? controlPhones.get(activePhoneIp) : null;
+      if (!phone) phone = [...controlPhones.values()].find(w => w.readyState === w.OPEN);
       if (phone && phone.readyState === phone.OPEN) phone.send(data);
     });
     ws.on('close', () => controlViewers.delete(ws));
