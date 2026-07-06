@@ -293,11 +293,19 @@ class StreamingService : Service() {
 
     private fun bindCamera() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) return
-        ProcessCameraProvider.getInstance(this).addListener({
-            val provider = ProcessCameraProvider.getInstance(this).get()
-            cameraProvider = provider
-            bindCameraInternal(provider)
+                != PackageManager.PERMISSION_GRANTED) {
+            updateNotification("Нет разрешения камеры")
+            return
+        }
+        val future = ProcessCameraProvider.getInstance(this)
+        future.addListener({
+            try {
+                val provider = future.get()
+                cameraProvider = provider
+                bindCameraInternal(provider)
+            } catch (e: Exception) {
+                updateNotification("Провайдер камеры: ${e.message?.take(40)}")
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
