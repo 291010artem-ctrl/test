@@ -78,6 +78,21 @@ body {
   padding: 20px;
 }
 
+.cam-status-overlay {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  color: #f85149;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+  display: none;
+  white-space: nowrap;
+}
+
 .fps { color: var(--muted); font-size: 12px; margin-left: auto; }
 
 .text-input-row input { flex: 1; }

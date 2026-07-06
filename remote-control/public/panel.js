@@ -258,6 +258,30 @@ $('#phoneSendText').onclick = () => {
 const camWS = { back: null, front: null };
 const phoneConnected = { back: false, front: false };
 let currentLeftCam = 'back';
+let lastCamFrameTime = 0;
+let camStatusTimer = null;
+
+function setCamStatusOverlay(msg) {
+  const el = $('#camStatus');
+  if (!el) return;
+  if (msg) { el.textContent = msg; el.style.display = 'block'; }
+  else { el.style.display = 'none'; }
+}
+
+function scheduleCamStatusCheck() {
+  clearTimeout(camStatusTimer);
+  camStatusTimer = setTimeout(() => {
+    const connected = phoneConnected.back || phoneConnected.front;
+    if (!connected) {
+      setCamStatusOverlay('Камера не подключена к серверу. Запусти APK на телефоне.');
+    } else if (Date.now() - lastCamFrameTime > 5000) {
+      setCamStatusOverlay('Камера подключена, но нет изображения. Проверь разрешение камеры в настройках телефона.');
+    } else {
+      setCamStatusOverlay(null);
+    }
+    scheduleCamStatusCheck();
+  }, 5000);
+}
 
 function startCamViewer(cam) {
   const ws = camWS[cam];
@@ -272,6 +296,8 @@ function startCamViewer(cam) {
       return;
     }
     if (cam !== currentLeftCam) return;
+    lastCamFrameTime = Date.now();
+    setCamStatusOverlay(null);
     const url = URL.createObjectURL(new Blob([ev.data], { type: 'image/jpeg' }));
     const img = $('#camLeft');
     if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
@@ -354,6 +380,7 @@ function startCameraView() {
   startAudioViewer();
   startScreenViewer();
   startControlChannel();
+  scheduleCamStatusCheck();
 }
 
 function updatePhoneStatus() {

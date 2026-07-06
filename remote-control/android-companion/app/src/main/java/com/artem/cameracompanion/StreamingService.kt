@@ -317,7 +317,6 @@ class StreamingService : Service() {
             val selector = if (isFront) CameraSelector.DEFAULT_FRONT_CAMERA
                            else CameraSelector.DEFAULT_BACK_CAMERA
             val analysis = ImageAnalysis.Builder()
-                .setTargetResolution(android.util.Size(1280, 720))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
             val camRef = currentCam
