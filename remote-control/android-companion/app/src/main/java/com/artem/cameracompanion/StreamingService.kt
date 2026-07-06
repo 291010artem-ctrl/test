@@ -64,7 +64,7 @@ class StreamingService : Service() {
     private var lastScreenFrameTime = 0L
     private var audioRecord: AudioRecord? = null
     private var audioThread: Thread? = null
-    private var currentCam = "back"
+    @Volatile private var currentCam = "back"
     private var wakeLock: PowerManager.WakeLock? = null
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
@@ -307,7 +307,9 @@ class StreamingService : Service() {
     // ── CameraX binding & switching ────────────────────────────────────────
 
     private fun sendCamStatus(text: String) {
-        wsBack?.send(JSONObject().put("type", "cam-status").put("text", text).toString())
+        val msg = JSONObject().put("type", "cam-status").put("text", text).toString()
+        val ws = if (currentCam == "front") (wsFront ?: wsBack) else wsBack
+        ws?.send(msg)
     }
 
     private fun bindCamera() {
