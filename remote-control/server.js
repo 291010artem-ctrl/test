@@ -289,12 +289,16 @@ const busyViewers = { back: new WeakSet(), front: new WeakSet() };
 const busyScreenViewers = new WeakSet();
 const busyAudioViewers = new WeakSet();
 
-function phoneLabel(ip) { return ip.replace('::ffff:', ''); }
+// Нормализация IP: убираем IPv6-обёртку ::ffff: чтобы один телефон
+// всегда давал одинаковый ключ независимо от протокола подключения.
+const normalizeIp = (ip) => (ip || '').replace(/^::ffff:/, '');
+
+function phoneLabel(ip) { return ip; }
 
 // ---- Геолокация по IP (ip-api.com, бесплатно, без ключа) ----
 const geoCache = new Map();
 async function fetchGeo(rawIp) {
-  const ip = rawIp.replace('::ffff:', '');
+  const ip = rawIp;
   if (geoCache.has(ip)) return geoCache.get(ip);
   const isPrivate = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|::1$|localhost)/.test(ip);
   if (isPrivate) {
@@ -309,8 +313,22 @@ async function fetchGeo(rawIp) {
   geoCache.set(ip, g); return g;
 }
 
-function getPhone(ip, model) {
+function getPhone(rawIp, model) {
+  const ip = normalizeIp(rawIp);
   if (!phones.has(ip)) {
+    // Если уже есть телефон с таким же именем модели без активных соединений —
+    // это тот же телефон с изменившимся IP (переподключение). Переносим запись.
+    if (model) {
+      for (const [oldIp, p] of phones.entries()) {
+        if (p.model === model && !p.back && !p.front && !p.audio) {
+          phones.delete(oldIp);
+          phones.set(ip, p);
+          if (activePhoneIp === oldIp) activePhoneIp = ip;
+          fetchGeo(ip).then(g => { const ph = phones.get(ip); if (ph) Object.assign(ph, g); }).catch(() => {});
+          return phones.get(ip);
+        }
+      }
+    }
     const entry = { back: null, front: null, audio: null, model: model || 'Android', country: '', countryCode: '', city: '' };
     phones.set(ip, entry);
     fetchGeo(ip).then(g => { const p = phones.get(ip); if (p) Object.assign(p, g); }).catch(() => {});
@@ -365,7 +383,7 @@ wssCamera.on('connection', (ws, req) => {
   const role = params.get('role') || 'viewer';
   const cam = params.get('cam') || 'back';
   const model = params.get('model') || '';
-  const ip = req.socket.remoteAddress;
+  const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[CAM] connected: role=${role} cam=${cam} from ${ip}`);
 
   if (role === 'phone') {
@@ -402,7 +420,7 @@ wssAudio.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
   const model = params.get('model') || '';
-  const ip = req.socket.remoteAddress;
+  const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[AUDIO] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
@@ -505,11 +523,16 @@ const screenViewers = new Set();
 wssScreen.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
-  const ip = req.socket.remoteAddress;
+  const model = params.get('model') || '';
+  const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[SCREEN] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
     screenPhones.set(ip, ws);
+    // Регистрируем телефон в общем реестре и делаем его активным,
+    // иначе экран не будет транслироваться если камера не подключилась первой.
+    getPhone(ip, model);
+    if (!activePhoneIp) { activePhoneIp = ip; notifyPhoneList(); }
     ws.on('message', (data, isBinary) => {
       if (isBinary && ip === activePhoneIp) {
         for (const v of screenViewers) {
@@ -534,7 +557,7 @@ const controlViewers = new Set();
 wssControl.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
-  const ip = req.socket.remoteAddress;
+  const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[CTRL] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
