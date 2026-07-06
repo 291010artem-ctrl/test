@@ -73,6 +73,8 @@ class StreamingService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var screenImageReader: ImageReader? = null
+    private var screenHandlerThread: HandlerThread? = null
+    private var screenHandler: Handler? = null
 
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
 
@@ -245,6 +247,9 @@ class StreamingService : Service() {
         val h = (metrics.heightPixels / 2).coerceAtLeast(640)
         val dpi = metrics.densityDpi / 2
 
+        val ht = HandlerThread("arp_screen_reader").also { it.start(); screenHandlerThread = it }
+        val handler = Handler(ht.looper).also { screenHandler = it }
+
         val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
         screenImageReader = reader
         reader.setOnImageAvailableListener({ r ->
@@ -269,7 +274,7 @@ class StreamingService : Service() {
             } finally {
                 img.close()
             }
-        }, analyzerExecutor)
+        }, handler)
 
         virtualDisplay = mp.createVirtualDisplay(
             "arp_screen", w, h, dpi,
@@ -281,6 +286,7 @@ class StreamingService : Service() {
     private fun releaseVirtualDisplay() {
         virtualDisplay?.release(); virtualDisplay = null
         screenImageReader?.close(); screenImageReader = null
+        screenHandlerThread?.quitSafely(); screenHandlerThread = null; screenHandler = null
     }
 
     // ── Camera binding & switching ─────────────────────────────────────────
