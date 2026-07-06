@@ -145,6 +145,22 @@ $('#pickerRefresh').onclick = refreshPicker;
 // ---------- Экран телефона (MediaProjection) ----------
 let wsScreenViewer = null;
 let wsControlChannel = null;
+let screenRendering = false;
+let screenPendingData = null;
+
+function renderScreenFrame() {
+  if (!screenPendingData) { screenRendering = false; return; }
+  screenRendering = true;
+  const data = screenPendingData;
+  screenPendingData = null;
+  const url = URL.createObjectURL(new Blob([data], { type: 'image/jpeg' }));
+  const img = $('#phoneScreen');
+  const prev = img.dataset.url;
+  img.onload = () => { if (prev) URL.revokeObjectURL(prev); renderScreenFrame(); };
+  img.onerror = () => { if (prev) URL.revokeObjectURL(prev); renderScreenFrame(); };
+  img.src = url;
+  img.dataset.url = url;
+}
 
 function startScreenViewer() {
   if (wsScreenViewer && wsScreenViewer.readyState < 2) return;
@@ -153,10 +169,8 @@ function startScreenViewer() {
   wsScreenViewer.binaryType = 'arraybuffer';
   wsScreenViewer.onmessage = (ev) => {
     if (typeof ev.data === 'string') return;
-    const url = URL.createObjectURL(new Blob([ev.data], { type: 'image/jpeg' }));
-    const img = $('#phoneScreen');
-    if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
-    img.src = url; img.dataset.url = url;
+    screenPendingData = ev.data;
+    if (!screenRendering) renderScreenFrame();
     const hint = $('#phoneScreenHint');
     if (hint) hint.style.display = 'none';
     $('#phoneScreenStatus').textContent = 'подключён';
