@@ -258,7 +258,7 @@ $('#phoneSendText').onclick = () => {
 const camWS = { back: null, front: null };
 const phoneConnected = { back: false, front: false };
 let currentLeftCam = 'back';
-let lastCamFrameTime = 0;
+let lastCamFrameTime = Date.now();
 let camStatusTimer = null;
 let specificCamStatus = null;
 
@@ -299,8 +299,14 @@ function startCamViewer(cam) {
       const m = JSON.parse(ev.data);
       if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
       else if (m.type === 'cam-status' && cam === currentLeftCam) {
-        if (m.text === 'ok') { specificCamStatus = null; setCamStatusOverlay(null); }
-        else if (m.text) { specificCamStatus = m.text; setCamStatusOverlay('📷 ' + m.text); }
+        if (m.text === 'ok') {
+          specificCamStatus = null;
+          setCamStatusOverlay(null);
+          lastCamFrameTime = Date.now(); // сброс таймера — камера готова, ждём первый кадр
+        } else if (m.text) {
+          specificCamStatus = m.text;
+          setCamStatusOverlay('📷 ' + m.text);
+        }
       }
       return;
     }

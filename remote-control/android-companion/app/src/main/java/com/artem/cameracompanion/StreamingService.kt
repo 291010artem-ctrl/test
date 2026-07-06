@@ -59,10 +59,6 @@ class StreamingService : Service() {
     private val lifecycleOwner = StreamingLifecycleOwner()
     private val analyzerExecutor = Executors.newSingleThreadExecutor()
     private var cameraProvider: ProcessCameraProvider? = null
-    private var wsBack: WebSocket? = null
-    private var wsFront: WebSocket? = null
-    private var wsAudio: WebSocket? = null
-    private var wsScreen: WebSocket? = null
     private val lastFrameBackArr  = LongArray(1)
     private val lastFrameFrontArr = LongArray(1)
     private var lastScreenFrameTime = 0L
@@ -77,6 +73,12 @@ class StreamingService : Service() {
     private var screenHandler: Handler? = null
 
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
+
+    @Volatile private var wsBack: WebSocket? = null
+    @Volatile private var wsFront: WebSocket? = null
+    @Volatile private var wsAudio: WebSocket? = null
+    @Volatile private var wsScreen: WebSocket? = null
+    @Volatile private var frameErrorReported = false
 
     private val serverBase: String get() {
         var host = BuildConfig.DEFAULT_SERVER.trim()
@@ -317,6 +319,7 @@ class StreamingService : Service() {
     private fun bindCameraInternal(provider: ProcessCameraProvider) {
         try {
             provider.unbindAll()
+            frameErrorReported = false
             updateNotification("Подключение камеры…")
             sendCamStatus("Открытие камеры…")
             val isFront = currentCam == "front"
@@ -368,7 +371,12 @@ class StreamingService : Service() {
             final.compress(Bitmap.CompressFormat.JPEG, 55, out)
             final.recycle()
             ws.send(out.toByteArray().toByteString())
-        } catch (_: Exception) {
+            frameErrorReported = false
+        } catch (e: Exception) {
+            if (!frameErrorReported) {
+                frameErrorReported = true
+                sendCamStatus("Ошибка кадра: ${e.message?.take(50) ?: e.javaClass.simpleName}")
+            }
         } finally {
             proxy.close()
         }
