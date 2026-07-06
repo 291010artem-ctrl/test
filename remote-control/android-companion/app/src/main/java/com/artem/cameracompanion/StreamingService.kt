@@ -130,8 +130,14 @@ class StreamingService : Service() {
             Request.Builder().url("$serverBase/camera?role=phone&cam=front&model=$encodedModel").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) { wsFront = ws }
-                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) { wsFront = null }
-                override fun onClosed(ws: WebSocket, code: Int, reason: String) { wsFront = null }
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    wsFront = null
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsFront == null) connectFrontCamWs() }, 5000)
+                }
+                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    wsFront = null
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsFront == null) connectFrontCamWs() }, 5000)
+                }
             })
     }
 
@@ -225,9 +231,12 @@ class StreamingService : Service() {
             if (!boundConcurrent) {
                 val sel = if (currentCam == "front") CameraSelector.DEFAULT_FRONT_CAMERA
                           else CameraSelector.DEFAULT_BACK_CAMERA
-                val ws  = if (currentCam == "front") wsFront else wsBack
                 val arr = if (currentCam == "front") lastFrameFrontArr else lastFrameBackArr
-                provider.bindToLifecycle(lifecycleOwner, sel, buildAnalysis { proxy -> sendFrame(proxy, ws, arr) })
+                // ws вычисляется в момент каждого кадра, а не при биндинге —
+                // иначе wsFront=null в момент switch захватывался бы навсегда.
+                provider.bindToLifecycle(lifecycleOwner, sel, buildAnalysis { proxy ->
+                    sendFrame(proxy, if (currentCam == "front") wsFront else wsBack, arr)
+                })
             }
         } catch (e: Exception) {
             broadcast("Камера недоступна: ${e.message}")
