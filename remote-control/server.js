@@ -529,6 +529,9 @@ wssScreen.on('connection', (ws, req) => {
 
   if (role === 'phone') {
     screenPhones.set(ip, ws);
+    for (const v of screenViewers) {
+      if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'screen-phone', connected: true }));
+    }
     ws.on('message', (data, isBinary) => {
       if (!isBinary) return;
       // Транслируем если: нет активного телефона (ещё не подключился), или
@@ -542,9 +545,16 @@ wssScreen.on('connection', (ws, req) => {
         }
       }
     });
-    ws.on('close', () => { if (screenPhones.get(ip) === ws) screenPhones.delete(ip); });
+    ws.on('close', () => {
+      if (screenPhones.get(ip) === ws) screenPhones.delete(ip);
+      const hasPhone = screenPhones.size > 0;
+      for (const v of screenViewers) {
+        if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'screen-phone', connected: hasPhone }));
+      }
+    });
   } else {
     screenViewers.add(ws);
+    ws.send(JSON.stringify({ type: 'screen-phone', connected: screenPhones.size > 0 }));
     ws.on('close', () => screenViewers.delete(ws));
   }
 });

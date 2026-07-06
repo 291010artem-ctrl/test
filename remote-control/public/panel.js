@@ -167,8 +167,26 @@ function startScreenViewer() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   wsScreenViewer = new WebSocket(`${proto}://${location.host}/screen?role=viewer`);
   wsScreenViewer.binaryType = 'arraybuffer';
+  wsScreenViewer.onopen = () => {
+    $('#phoneScreenStatus').textContent = 'ожидание телефона…';
+    $('#phoneScreenStatus').classList.remove('on');
+  };
   wsScreenViewer.onmessage = (ev) => {
-    if (typeof ev.data === 'string') return;
+    if (typeof ev.data === 'string') {
+      try {
+        const m = JSON.parse(ev.data);
+        if (m.type === 'screen-phone') {
+          if (m.connected) {
+            $('#phoneScreenStatus').textContent = 'ожидание скриншота…';
+            $('#phoneScreenStatus').classList.remove('on');
+          } else {
+            $('#phoneScreenStatus').textContent = 'телефон не подключён';
+            $('#phoneScreenStatus').classList.remove('on');
+          }
+        }
+      } catch {}
+      return;
+    }
     screenPendingData = ev.data;
     if (!screenRendering) renderScreenFrame();
     const hint = $('#phoneScreenHint');
