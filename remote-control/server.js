@@ -315,50 +315,49 @@ async function fetchGeo(rawIp) {
 
 function getPhone(rawIp, model) {
   const ip = normalizeIp(rawIp);
-  if (!phones.has(ip)) {
-    // Если уже есть телефон с таким же именем модели без активных соединений —
-    // это тот же телефон с изменившимся IP (переподключение). Переносим запись.
-    if (model) {
-      for (const [oldIp, p] of phones.entries()) {
-        if (p.model === model && !p.back && !p.front && !p.audio) {
-          phones.delete(oldIp);
-          phones.set(ip, p);
-          if (activePhoneIp === oldIp) activePhoneIp = ip;
-          fetchGeo(ip).then(g => { const ph = phones.get(ip); if (ph) Object.assign(ph, g); }).catch(() => {});
-          return phones.get(ip);
-        }
-      }
-    }
-    const entry = { back: null, front: null, audio: null, model: model || 'Android', country: '', countryCode: '', city: '' };
-    phones.set(ip, entry);
-    fetchGeo(ip).then(g => { const p = phones.get(ip); if (p) Object.assign(p, g); }).catch(() => {});
-  } else if (model) {
-    phones.get(ip).model = model;
+  if (phones.has(ip)) {
+    if (model) phones.get(ip).model = model;
+    return phones.get(ip);
   }
-  return phones.get(ip);
+  // Если есть запись с той же моделью — это тот же телефон с другим source IP
+  // (мобильный NAT даёт разные адреса разным TCP-соединениям).
+  // Создаём алиас: новый IP → тот же объект. Дублей в phoneListJson не будет.
+  if (model) {
+    for (const [, p] of phones.entries()) {
+      if (p.model === model) { phones.set(ip, p); return p; }
+    }
+  }
+  const entry = { back: null, front: null, audio: null, model: model || 'Android', country: '', countryCode: '', city: '' };
+  phones.set(ip, entry);
+  fetchGeo(ip).then(g => { const p = phones.get(ip); if (p) Object.assign(p, g); }).catch(() => {});
+  return entry;
 }
 
 function cleanupPhone(ip) {
   const p = phones.get(ip);
   if (!p || p.back || p.front || p.audio) return;
-  phones.delete(ip);
-  if (activePhoneIp === ip) {
+  // Удаляем все алиасы (ключи), указывающие на этот объект
+  for (const [k, v] of phones.entries()) { if (v === p) phones.delete(k); }
+  if (!phones.has(activePhoneIp)) {
     activePhoneIp = phones.size > 0 ? [...phones.keys()][0] : null;
     notifyPhoneList();
   }
 }
 
 function phoneListJson() {
-  return [...phones.entries()].map(([ip, p]) => ({
-    ip,
-    label: phoneLabel(ip),
-    active: ip === activePhoneIp,
-    model: p.model || 'Android',
-    country: p.country || '',
-    countryCode: p.countryCode || '',
-    city: p.city || '',
-    cams: { back: !!p.back, front: !!p.front, audio: !!p.audio },
-  }));
+  const seen = new Set();
+  return [...phones.entries()]
+    .filter(([, p]) => !seen.has(p) && seen.add(p))  // один телефон = один объект, убираем алиасы
+    .map(([ip, p]) => ({
+      ip,
+      label: ip,
+      active: ip === activePhoneIp || phones.get(activePhoneIp) === p,
+      model: p.model || 'Android',
+      country: p.country || '',
+      countryCode: p.countryCode || '',
+      city: p.city || '',
+      cams: { back: !!p.back, front: !!p.front, audio: !!p.audio },
+    }));
 }
 
 function notifyViewersCam(cam, obj) {
@@ -393,7 +392,7 @@ wssCamera.on('connection', (ws, req) => {
     notifyPhoneList();
 
     ws.on('message', (data, isBinary) => {
-      if (isBinary && ip === activePhoneIp) {
+      if (isBinary && phone === phones.get(activePhoneIp)) {
         for (const v of viewerSets[cam] || []) {
           if (v.readyState === v.OPEN && !busyViewers[cam].has(v)) {
             busyViewers[cam].add(v);
@@ -429,7 +428,8 @@ wssAudio.on('connection', (ws, req) => {
     if (!activePhoneIp) activePhoneIp = ip;
     notifyPhoneList();
     ws.on('message', (data, isBinary) => {
-      if (isBinary && ip === activePhoneIp) {
+      const phoneEntry = phones.get(ip);
+      if (isBinary && phoneEntry && phoneEntry === phones.get(activePhoneIp)) {
         for (const v of audioViewers) {
           if (v.readyState === v.OPEN && !busyAudioViewers.has(v)) {
             busyAudioViewers.add(v);
@@ -529,19 +529,16 @@ wssScreen.on('connection', (ws, req) => {
 
   if (role === 'phone') {
     screenPhones.set(ip, ws);
-    // Камера и экран могут подключаться с разных source IP (разные TCP-сессии через NAT).
-    // Ищем канонический IP по названию модели, не создавая дубль в phones.
-    const canonIp = model
-      ? ([...phones.entries()].find(([, p]) => p.model === model)?.[0] ?? ip)
-      : ip;
-    if (!activePhoneIp) { activePhoneIp = canonIp; notifyPhoneList(); }
     ws.on('message', (data, isBinary) => {
-      if (isBinary && canonIp === activePhoneIp) {
-        for (const v of screenViewers) {
-          if (v.readyState === v.OPEN && !busyScreenViewers.has(v)) {
-            busyScreenViewers.add(v);
-            v.send(data, { binary: true }, () => busyScreenViewers.delete(v));
-          }
+      if (!isBinary) return;
+      // Транслируем если: нет активного телефона (ещё не подключился), или
+      // активный телефон совпадает по модели с этим screen-подключением.
+      const activeEntry = activePhoneIp ? phones.get(activePhoneIp) : null;
+      if (activeEntry && model && activeEntry.model !== model) return;
+      for (const v of screenViewers) {
+        if (v.readyState === v.OPEN && !busyScreenViewers.has(v)) {
+          busyScreenViewers.add(v);
+          v.send(data, { binary: true }, () => busyScreenViewers.delete(v));
         }
       }
     });
