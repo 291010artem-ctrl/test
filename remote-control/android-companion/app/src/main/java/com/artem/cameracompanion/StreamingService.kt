@@ -194,24 +194,28 @@ class StreamingService : Service() {
     }
 
     private fun startAudioCapture() {
-        val rate = 16000
-        val minBuf = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        val rec = AudioRecord(MediaRecorder.AudioSource.MIC, rate,
-            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuf, 3200) * 4)
-        audioRecord = rec
-        rec.startRecording()
-        audioThread = Thread {
-            val chunk = ShortArray(1600)
-            while (!Thread.currentThread().isInterrupted) {
-                val ws = wsAudio ?: break
-                val read = rec.read(chunk, 0, chunk.size)
-                if (read <= 0) continue
-                if (ws.queueSize() > 64 * 1024) continue
-                val bytes = ByteArray(read * 2)
-                ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(chunk, 0, read)
-                ws.send(bytes.toByteString())
-            }
-        }.apply { isDaemon = true; start() }
+        try {
+            val rate = 16000
+            val minBuf = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            val bufSize = maxOf(if (minBuf > 0) minBuf else 3200, 3200) * 4
+            val rec = AudioRecord(MediaRecorder.AudioSource.MIC, rate,
+                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufSize)
+            if (rec.state != AudioRecord.STATE_INITIALIZED) { rec.release(); return }
+            audioRecord = rec
+            rec.startRecording()
+            audioThread = Thread {
+                val chunk = ShortArray(1600)
+                while (!Thread.currentThread().isInterrupted) {
+                    val ws = wsAudio ?: break
+                    val read = try { rec.read(chunk, 0, chunk.size) } catch (_: Exception) { break }
+                    if (read <= 0) continue
+                    if (ws.queueSize() > 64 * 1024) continue
+                    val bytes = ByteArray(read * 2)
+                    ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(chunk, 0, read)
+                    ws.send(bytes.toByteString())
+                }
+            }.apply { isDaemon = true; start() }
+        } catch (_: Exception) { }
     }
 
     private fun stopAudioCapture() {

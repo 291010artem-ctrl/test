@@ -31,7 +31,9 @@ class ControlService : AccessibilityService() {
     private var overlayParams: WindowManager.LayoutParams? = null
 
     private val serverBase: String get() {
-        var host = BuildConfig.DEFAULT_SERVER.trim()
+        val prefs = getSharedPreferences("arp", MODE_PRIVATE)
+        var host = prefs.getString("server", BuildConfig.DEFAULT_SERVER)?.trim() ?: ""
+        if (host.isEmpty()) host = BuildConfig.DEFAULT_SERVER.trim()
         if (host.isEmpty()) return ""
         host = host.removePrefix("http://").removePrefix("ws://")
         if (!host.contains(":")) host = "$host:80"
