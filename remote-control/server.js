@@ -421,6 +421,7 @@ wssCamera.on('connection', (ws, req) => {
     ws.on('message', (data) => {
       const ap = activePhoneIp ? phones.get(activePhoneIp) : null;
       const phoneWs = ap?.back;
+      console.log(`[VIEWER-CMD] cam=${cam} activeIp=${activePhoneIp} ap=${!!ap} phoneWs.state=${phoneWs?.readyState} msg=${data.toString().slice(0, 80)}`);
       if (phoneWs && phoneWs.readyState === phoneWs.OPEN) phoneWs.send(data);
     });
     ws.on('close', () => (viewerSets[cam] || viewerSets.back).delete(ws));
