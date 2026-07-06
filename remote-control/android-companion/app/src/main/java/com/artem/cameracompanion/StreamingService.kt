@@ -41,6 +41,7 @@ class StreamingService : Service() {
         @Volatile var screenQuality = 60
         @Volatile var hasProjection = false
         @Volatile var statusText = "Запуск…"
+        @Volatile var paused = false
 
         fun start(ctx: Context, projectionCode: Int = -1, projectionData: Intent? = null) {
             val i = Intent(ctx, StreamingService::class.java).setAction(ACTION_START)
@@ -139,6 +140,8 @@ class StreamingService : Service() {
                             "stop"   -> { disconnect(); stopSelf() }
                             "start"  -> { if (wsBack == null) connectCamWs() }
                             "switch" -> switchCamera(json.optString("cam", "back"))
+                            "pause"  -> { paused = true; updateNotification("Приостановлено"); sendCamStatus("Трансляция приостановлена") }
+                            "resume" -> { paused = false; updateNotification("Идёт трансляция"); sendCamStatus("ok") }
                         }
                     } catch (_: Exception) {}
                 }
@@ -257,6 +260,7 @@ class StreamingService : Service() {
         reader.setOnImageAvailableListener({ r ->
             val img = r.acquireLatestImage() ?: return@setOnImageAvailableListener
             try {
+                if (paused) return@setOnImageAvailableListener
                 val ws = wsScreen ?: return@setOnImageAvailableListener
                 if (ws.queueSize() > 512 * 1024) return@setOnImageAvailableListener
                 val now = System.currentTimeMillis()
@@ -347,6 +351,7 @@ class StreamingService : Service() {
 
     private fun sendFrame(proxy: ImageProxy, target: WebSocket?, lastArr: LongArray) {
         try {
+            if (paused) return
             val now = System.currentTimeMillis()
             val ws = target ?: return
             if (now - lastArr[0] < 33 || ws.queueSize() > 512 * 1024) return

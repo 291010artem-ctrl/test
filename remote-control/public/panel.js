@@ -338,10 +338,20 @@ $('#btnCamSwitch').onclick = () => {
 
 // ---------- Аудио с телефона ----------
 let audioCtx = null;
+let gainNode = null;
 let audioWs = null;
 let audioMuted = true;
 let nextAudioTime = 0;
 const AUDIO_SAMPLE_RATE = 16000;
+
+function ensureAudioCtx() {
+  if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
+  audioCtx = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = audioMuted ? 0 : 1;
+  gainNode.connect(audioCtx.destination);
+  nextAudioTime = 0;
+}
 
 function startAudioViewer() {
   if (audioWs && (audioWs.readyState === WebSocket.OPEN || audioWs.readyState === WebSocket.CONNECTING)) return;
@@ -349,8 +359,8 @@ function startAudioViewer() {
   audioWs = new WebSocket(`${proto}://${location.host}/audio?role=viewer`);
   audioWs.binaryType = 'arraybuffer';
   audioWs.onmessage = (ev) => {
-    if (audioMuted || typeof ev.data === 'string') return;
-    if (!audioCtx) return;
+    if (typeof ev.data === 'string') return;
+    if (!audioCtx || !gainNode) return;
     const int16 = new Int16Array(ev.data);
     const float32 = new Float32Array(int16.length);
     for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
@@ -358,7 +368,7 @@ function startAudioViewer() {
     buf.copyToChannel(float32, 0);
     const src = audioCtx.createBufferSource();
     src.buffer = buf;
-    src.connect(audioCtx.destination);
+    src.connect(gainNode);
     const now = audioCtx.currentTime;
     if (nextAudioTime < now + 0.02) nextAudioTime = now + 0.06;
     src.start(nextAudioTime);
@@ -368,12 +378,9 @@ function startAudioViewer() {
 }
 
 $('#camMute').onclick = () => {
-  if (!audioCtx) {
-    audioCtx = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
-    nextAudioTime = 0;
-  }
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  ensureAudioCtx();
   audioMuted = !audioMuted;
+  gainNode.gain.setValueAtTime(audioMuted ? 0 : 1, audioCtx.currentTime);
   $('#camMute').textContent = audioMuted ? '🔇 Тихо' : '🔊 Звук';
 };
 
@@ -382,6 +389,15 @@ $('#btnTouchLock').onclick = () => {
   touchLocked = !touchLocked;
   $('#btnTouchLock').textContent = touchLocked ? '🔒 Касания' : '🔓 Касания';
   ctrlSend({ type: 'touch-lock', locked: touchLocked });
+};
+
+let streamPaused = false;
+$('#btnStream').onclick = () => {
+  streamPaused = !streamPaused;
+  const cmd = streamPaused ? 'pause' : 'resume';
+  const backWs = camWS.back;
+  if (backWs && backWs.readyState === WebSocket.OPEN) backWs.send(JSON.stringify({ cmd }));
+  $('#btnStream').textContent = streamPaused ? '▶ Стрим' : '⏸ Пауза';
 };
 
 function startCameraView() {
