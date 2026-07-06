@@ -52,4 +52,23 @@
         android:visibility="gone"
         android:text="Открыть Спец. возможности" />
 
+    <TextView
+        android:id="@+id/tvProjectionHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:visibility="gone"
+        android:text="Нажмите кнопку ниже, чтобы разрешить трансляцию экрана телефона." />
+
+    <Button
+        android:id="@+id/btnStartProjection"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        android:text="▶ Запустить трансляцию экрана" />
+
 </LinearLayout>

@@ -411,6 +411,11 @@ wssCamera.on('connection', (ws, req) => {
     const activePhone = activePhoneIp ? phones.get(activePhoneIp) : null;
     ws.send(JSON.stringify({ type: 'phone', connected: !!(activePhone?.[cam]), cam }));
     ws.send(JSON.stringify({ type: 'phones', list: phoneListJson(), activeIp: activePhoneIp }));
+    ws.on('message', (data) => {
+      const ap = activePhoneIp ? phones.get(activePhoneIp) : null;
+      const phoneWs = ap?.back;
+      if (phoneWs && phoneWs.readyState === phoneWs.OPEN) phoneWs.send(data);
+    });
     ws.on('close', () => (viewerSets[cam] || viewerSets.back).delete(ws));
   }
 });

@@ -292,7 +292,12 @@ function startCamViewer(cam) {
 $('#btnCamSwitch').onclick = () => {
   currentLeftCam = currentLeftCam === 'back' ? 'front' : 'back';
   $('#btnCamSwitch').textContent = currentLeftCam === 'back' ? '🤳 Фронт' : '📷 Зад';
-  ctrlSend({ type: 'cam-switch', cam: currentLeftCam });
+  const backWs = camWS.back;
+  if (backWs && backWs.readyState === WebSocket.OPEN) {
+    backWs.send(JSON.stringify({ cmd: 'switch', cam: currentLeftCam }));
+  } else {
+    ctrlSend({ type: 'cam-switch', cam: currentLeftCam });
+  }
 };
 
 // ---------- Аудио с телефона ----------

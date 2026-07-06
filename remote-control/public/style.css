@@ -295,3 +295,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
 .toast.err { border-color: var(--danger); }
+
+/* ----- D-pad навигация ----- */
+.dpad { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.dpad-row { display: flex; gap: 3px; align-items: center; }
+.dpad-btn { width: 38px; height: 38px; padding: 0; font-size: 15px; border-radius: 6px; }
+.dpad-center { width: 38px; height: 38px; }

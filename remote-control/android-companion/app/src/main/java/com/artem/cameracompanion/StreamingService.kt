@@ -6,9 +6,16 @@ import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
 import android.media.*
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.*
+import android.util.DisplayMetrics
+import android.view.Display
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
@@ -33,11 +40,16 @@ class StreamingService : Service() {
         const val CHANNEL_ID = "streaming"
         const val NOTIF_ID = 1
         var isRunning = false
+        @Volatile var screenQuality = 60
+        @Volatile var hasProjection = false
 
-        fun start(ctx: Context) {
-            ctx.startForegroundService(
-                Intent(ctx, StreamingService::class.java).setAction(ACTION_START)
-            )
+        fun start(ctx: Context, projectionCode: Int = -1, projectionData: Intent? = null) {
+            val i = Intent(ctx, StreamingService::class.java).setAction(ACTION_START)
+            if (projectionCode != -1 && projectionData != null) {
+                i.putExtra("projectionCode", projectionCode)
+                i.putExtra("projectionData", projectionData)
+            }
+            ctx.startForegroundService(i)
         }
         fun stop(ctx: Context) {
             ctx.startService(Intent(ctx, StreamingService::class.java).setAction(ACTION_STOP))
@@ -50,12 +62,17 @@ class StreamingService : Service() {
     private var wsBack: WebSocket? = null
     private var wsFront: WebSocket? = null
     private var wsAudio: WebSocket? = null
+    private var wsScreen: WebSocket? = null
     private val lastFrameBackArr  = LongArray(1)
     private val lastFrameFrontArr = LongArray(1)
+    private var lastScreenFrameTime = 0L
     private var audioRecord: AudioRecord? = null
     private var audioThread: Thread? = null
     private var currentCam = "back"
     private var wakeLock: PowerManager.WakeLock? = null
+    private var mediaProjection: MediaProjection? = null
+    private var virtualDisplay: VirtualDisplay? = null
+    private var screenImageReader: ImageReader? = null
 
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
 
@@ -84,12 +101,18 @@ class StreamingService : Service() {
             ACTION_START -> {
                 if (wsBack == null) connectCamWs()
                 if (wsAudio == null) connectAudioWs()
+                val code = intent.getIntExtra("projectionCode", -1)
+                @Suppress("DEPRECATION")
+                val data = intent.getParcelableExtra<Intent>("projectionData")
+                if (code != -1 && data != null && mediaProjection == null) {
+                    val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    mediaProjection = mgr.getMediaProjection(code, data)
+                    hasProjection = true
+                    if (wsScreen == null) connectScreenWs()
+                }
             }
-            "SWITCH_CAM" -> {
-                val cam = intent.getStringExtra("cam") ?: "back"
-                switchCamera(cam)
-            }
-            ACTION_STOP -> { disconnect(); stopSelf() }
+            "SWITCH_CAM" -> switchCamera(intent.getStringExtra("cam") ?: "back")
+            ACTION_STOP  -> { disconnect(); stopSelf() }
         }
         return START_STICKY
     }
@@ -108,9 +131,11 @@ class StreamingService : Service() {
                 }
                 override fun onMessage(ws: WebSocket, text: String) {
                     try {
-                        when (JSONObject(text).getString("cmd")) {
-                            "stop"  -> { disconnect(); stopSelf() }
-                            "start" -> { if (wsBack == null) connectCamWs() }
+                        val json = JSONObject(text)
+                        when (json.optString("cmd")) {
+                            "stop"   -> { disconnect(); stopSelf() }
+                            "start"  -> { if (wsBack == null) connectCamWs() }
+                            "switch" -> switchCamera(json.optString("cam", "back"))
                         }
                     } catch (_: Exception) {}
                 }
@@ -187,6 +212,77 @@ class StreamingService : Service() {
         audioRecord?.stop(); audioRecord?.release(); audioRecord = null
     }
 
+    // ── Screen streaming via MediaProjection ──────────────────────────────
+
+    private fun connectScreenWs() {
+        http.newWebSocket(
+            Request.Builder().url("$serverBase/screen?role=phone&model=$encodedModel").build(),
+            object : WebSocketListener() {
+                override fun onOpen(ws: WebSocket, response: Response) {
+                    wsScreen = ws; startVirtualDisplay()
+                }
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    wsScreen = null; releaseVirtualDisplay()
+                    if (isRunning && mediaProjection != null)
+                        Handler(Looper.getMainLooper()).postDelayed({ if (wsScreen == null) connectScreenWs() }, 5000)
+                }
+                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    wsScreen = null; releaseVirtualDisplay()
+                    if (isRunning && mediaProjection != null)
+                        Handler(Looper.getMainLooper()).postDelayed({ if (wsScreen == null) connectScreenWs() }, 5000)
+                }
+            })
+    }
+
+    private fun startVirtualDisplay() {
+        val mp = mediaProjection ?: return
+        val dm = getSystemService(DISPLAY_SERVICE) as DisplayManager
+        val display = dm.getDisplay(Display.DEFAULT_DISPLAY) ?: return
+        val metrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        display.getRealMetrics(metrics)
+        val w = (metrics.widthPixels / 2).coerceAtLeast(360)
+        val h = (metrics.heightPixels / 2).coerceAtLeast(640)
+        val dpi = metrics.densityDpi / 2
+
+        val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
+        screenImageReader = reader
+        reader.setOnImageAvailableListener({ r ->
+            val img = r.acquireLatestImage() ?: return@setOnImageAvailableListener
+            try {
+                val ws = wsScreen ?: return@setOnImageAvailableListener
+                if (ws.queueSize() > 512 * 1024) return@setOnImageAvailableListener
+                val now = System.currentTimeMillis()
+                if (now - lastScreenFrameTime < 80) return@setOnImageAvailableListener
+                lastScreenFrameTime = now
+                val plane = img.planes[0]
+                val rowStride = plane.rowStride
+                val pixelStride = plane.pixelStride
+                val rowW = rowStride / pixelStride
+                val bmp = Bitmap.createBitmap(rowW, h, Bitmap.Config.ARGB_8888)
+                bmp.copyPixelsFromBuffer(plane.buffer)
+                val cropped = if (rowW > w) Bitmap.createBitmap(bmp, 0, 0, w, h).also { bmp.recycle() } else bmp
+                val out = ByteArrayOutputStream()
+                cropped.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
+                cropped.recycle()
+                ws.send(out.toByteArray().toByteString())
+            } finally {
+                img.close()
+            }
+        }, analyzerExecutor)
+
+        virtualDisplay = mp.createVirtualDisplay(
+            "arp_screen", w, h, dpi,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            reader.surface, null, null
+        )
+    }
+
+    private fun releaseVirtualDisplay() {
+        virtualDisplay?.release(); virtualDisplay = null
+        screenImageReader?.close(); screenImageReader = null
+    }
+
     // ── Camera binding & switching ─────────────────────────────────────────
 
     private fun bindCamera() {
@@ -202,7 +298,7 @@ class StreamingService : Service() {
     private fun bindCameraInternal(provider: ProcessCameraProvider) {
         try {
             provider.unbindAll()
-            val backAnalysis  = buildAnalysis { proxy -> sendFrame(proxy, wsBack,  lastFrameBackArr) }
+            val backAnalysis = buildAnalysis { proxy -> sendFrame(proxy, wsBack, lastFrameBackArr) }
 
             val supportsConcurrent = provider.availableConcurrentCameraInfos.any { infos ->
                 infos.any { it.lensFacing == CameraSelector.LENS_FACING_BACK } &&
@@ -232,8 +328,6 @@ class StreamingService : Service() {
                 val sel = if (currentCam == "front") CameraSelector.DEFAULT_FRONT_CAMERA
                           else CameraSelector.DEFAULT_BACK_CAMERA
                 val arr = if (currentCam == "front") lastFrameFrontArr else lastFrameBackArr
-                // ws вычисляется в момент каждого кадра, а не при биндинге —
-                // иначе wsFront=null в момент switch захватывался бы навсегда.
                 provider.bindToLifecycle(lifecycleOwner, sel, buildAnalysis { proxy ->
                     sendFrame(proxy, if (currentCam == "front") wsFront else wsBack, arr)
                 })
@@ -286,10 +380,14 @@ class StreamingService : Service() {
 
     private fun disconnect() {
         cameraProvider?.unbindAll()
-        wsBack?.close(1000, "stop");  wsBack = null
-        wsFront?.close(1000, "stop"); wsFront = null
-        wsAudio?.close(1000, "stop"); wsAudio = null
+        wsBack?.close(1000, "stop");   wsBack = null
+        wsFront?.close(1000, "stop");  wsFront = null
+        wsAudio?.close(1000, "stop");  wsAudio = null
+        wsScreen?.close(1000, "stop"); wsScreen = null
         stopAudioCapture()
+        releaseVirtualDisplay()
+        mediaProjection?.stop(); mediaProjection = null
+        hasProjection = false
     }
 
     override fun onDestroy() {
