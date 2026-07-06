@@ -321,13 +321,22 @@ function startCamViewer(cam) {
       camFrameCount = 0; lastCamFpsTime = now;
     }
   };
-  sock.onclose = () => { if (cam === currentLeftCam) specificCamStatus = null; phoneConnected[cam] = false; updatePhoneStatus(); };
+  sock.onclose = () => {
+    camWS[cam] = null;
+    phoneConnected[cam] = false;
+    updatePhoneStatus();
+    setTimeout(() => startCamViewer(cam), 3000);
+  };
   camWS[cam] = sock;
 }
 
 $('#btnCamSwitch').onclick = () => {
   currentLeftCam = currentLeftCam === 'back' ? 'front' : 'back';
   $('#btnCamSwitch').textContent = currentLeftCam === 'back' ? '🤳 Фронт' : '📷 Зад';
+  lastCamFrameTime = Date.now();
+  specificCamStatus = null;
+  setCamStatusOverlay(null);
+  startCamViewer(currentLeftCam);
   const backWs = camWS.back;
   if (backWs && backWs.readyState === WebSocket.OPEN) {
     backWs.send(JSON.stringify({ cmd: 'switch', cam: currentLeftCam }));
