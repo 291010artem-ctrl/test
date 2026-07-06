@@ -18,6 +18,7 @@ export const AVAILABLE_PERMISSIONS = [
   { id: 'CAMERA', manifest: 'android.permission.CAMERA', label: 'Камера', runtime: true, default: true },
   { id: 'RECORD_AUDIO', manifest: 'android.permission.RECORD_AUDIO', label: 'Микрофон', runtime: true, default: false },
   { id: 'SCREEN', manifest: 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION', label: 'Экран и управление', runtime: false, default: true },
+  { id: 'NOTIFICATIONS', manifest: 'android.permission.POST_NOTIFICATIONS', label: 'Уведомления', runtime: true, default: true },
 ];
 
 export function hasAndroidSdk() {
