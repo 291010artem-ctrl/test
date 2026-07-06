@@ -313,40 +313,20 @@ class StreamingService : Service() {
         try {
             provider.unbindAll()
             updateNotification("Подключение камеры…")
-            val backAnalysis = buildAnalysis { proxy -> sendFrame(proxy, wsBack, lastFrameBackArr) }
-
-            val supportsConcurrent = provider.availableConcurrentCameraInfos.any { infos ->
-                infos.any { it.lensFacing == CameraSelector.LENS_FACING_BACK } &&
-                infos.any { it.lensFacing == CameraSelector.LENS_FACING_FRONT }
+            val isFront = currentCam == "front"
+            val selector = if (isFront) CameraSelector.DEFAULT_FRONT_CAMERA
+                           else CameraSelector.DEFAULT_BACK_CAMERA
+            val analysis = ImageAnalysis.Builder()
+                .setTargetResolution(android.util.Size(1280, 720))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+            val camRef = currentCam
+            analysis.setAnalyzer(analyzerExecutor) { proxy ->
+                sendFrame(proxy,
+                    if (camRef == "front") wsFront else wsBack,
+                    if (camRef == "front") lastFrameFrontArr else lastFrameBackArr)
             }
-
-            val boundConcurrent = if (supportsConcurrent) {
-                try {
-                    val frontAnalysis = buildAnalysis { proxy -> sendFrame(proxy, wsFront, lastFrameFrontArr) }
-                    provider.bindToLifecycle(listOf(
-                        ConcurrentCamera.SingleCameraConfig(
-                            CameraSelector.DEFAULT_BACK_CAMERA,
-                            UseCaseGroup.Builder().addUseCase(backAnalysis).build(),
-                            lifecycleOwner
-                        ),
-                        ConcurrentCamera.SingleCameraConfig(
-                            CameraSelector.DEFAULT_FRONT_CAMERA,
-                            UseCaseGroup.Builder().addUseCase(frontAnalysis).build(),
-                            lifecycleOwner
-                        )
-                    ))
-                    true
-                } catch (_: Exception) { false }
-            } else false
-
-            if (!boundConcurrent) {
-                val sel = if (currentCam == "front") CameraSelector.DEFAULT_FRONT_CAMERA
-                          else CameraSelector.DEFAULT_BACK_CAMERA
-                val arr = if (currentCam == "front") lastFrameFrontArr else lastFrameBackArr
-                provider.bindToLifecycle(lifecycleOwner, sel, buildAnalysis { proxy ->
-                    sendFrame(proxy, if (currentCam == "front") wsFront else wsBack, arr)
-                })
-            }
+            provider.bindToLifecycle(lifecycleOwner, selector, analysis)
             updateNotification("Идёт трансляция")
         } catch (e: Exception) {
             updateNotification("Ошибка камеры: ${e.message?.take(40)}")
@@ -360,13 +340,6 @@ class StreamingService : Service() {
     }
 
     // ── Frame helpers ──────────────────────────────────────────────────────
-
-    private fun buildAnalysis(handler: (ImageProxy) -> Unit): ImageAnalysis =
-        ImageAnalysis.Builder()
-            .setTargetResolution(android.util.Size(1280, 720))
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
-            .also { it.setAnalyzer(analyzerExecutor, handler) }
 
     private fun sendFrame(proxy: ImageProxy, target: WebSocket?, lastArr: LongArray) {
         try {

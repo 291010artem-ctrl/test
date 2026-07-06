@@ -36,6 +36,10 @@ on:
         description: "Включить экран и удалённое управление (true/false)"
         required: false
         default: "true"
+      notifications_permission:
+        description: "Включить разрешение уведомлений (true/false)"
+        required: false
+        default: "true"
 
 jobs:
   build:
@@ -71,6 +75,7 @@ jobs:
           CAM="${{ github.event.inputs.camera_permission }}"
           MIC="${{ github.event.inputs.mic_permission }}"
           SCREEN="${{ github.event.inputs.screen_permission }}"
+          NOTIF="${{ github.event.inputs.notifications_permission }}"
           cat > build.properties.generated <<EOF
           ARP_APP_NAME=${APP_NAME:-Camera Companion}
           ARP_APPLICATION_ID=${APP_ID:-com.artem.cameracompanion}
@@ -88,6 +93,9 @@ jobs:
           if [ "$SCREEN" != "true" ]; then
             sed -i '/FOREGROUND_SERVICE_MEDIA_PROJECTION/d' "$MANIFEST"
             sed -i '/<!--CONTROL_SERVICE_START-->/,/<!--CONTROL_SERVICE_END-->/d' "$MANIFEST"
+          fi
+          if [ "$NOTIF" != "true" ]; then
+            sed -i '/POST_NOTIFICATIONS/d' "$MANIFEST"
           fi
           FST=""
           [ "$SCREEN" = "true" ] && FST="mediaProjection"
