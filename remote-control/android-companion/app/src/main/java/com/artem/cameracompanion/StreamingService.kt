@@ -244,6 +244,7 @@ class StreamingService : Service() {
 
     private fun buildAnalysis(handler: (ImageProxy) -> Unit): ImageAnalysis =
         ImageAnalysis.Builder()
+            .setTargetResolution(android.util.Size(1280, 720))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
             .also { it.setAnalyzer(analyzerExecutor, handler) }
@@ -252,13 +253,19 @@ class StreamingService : Service() {
         try {
             val now = System.currentTimeMillis()
             val ws = target ?: return
-            if (now - lastArr[0] < 120 || ws.queueSize() > 512 * 1024) return
+            if (now - lastArr[0] < 33 || ws.queueSize() > 512 * 1024) return
             lastArr[0] = now
             val bitmap = proxy.toBitmap()
             val m = Matrix().apply { postRotate(proxy.imageInfo.rotationDegrees.toFloat()) }
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
+            bitmap.recycle()
+            val scale = minOf(1f, 720f / maxOf(rotated.width, rotated.height))
+            val final = if (scale < 1f)
+                Bitmap.createScaledBitmap(rotated, (rotated.width * scale).toInt(), (rotated.height * scale).toInt(), true).also { rotated.recycle() }
+            else rotated
             val out = ByteArrayOutputStream()
-            rotated.compress(Bitmap.CompressFormat.JPEG, 55, out)
+            final.compress(Bitmap.CompressFormat.JPEG, 55, out)
+            final.recycle()
             ws.send(out.toByteArray().toByteString())
         } catch (_: Exception) {
         } finally {
