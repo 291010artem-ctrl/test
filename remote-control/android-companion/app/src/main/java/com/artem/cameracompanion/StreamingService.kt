@@ -102,6 +102,9 @@ class StreamingService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 if (wsBack == null) connectCamWs()
+                else if (cameraDevice == null &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED) openCamera(currentCam)
                 if (wsAudio == null) connectAudioWs()
                 val code = intent.getIntExtra("projectionCode", -1)
                 @Suppress("DEPRECATION")
