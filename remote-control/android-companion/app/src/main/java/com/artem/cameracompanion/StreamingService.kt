@@ -304,6 +304,7 @@ class StreamingService : Service() {
     private fun bindCameraInternal(provider: ProcessCameraProvider) {
         try {
             provider.unbindAll()
+            updateNotification("Подключение камеры…")
             val backAnalysis = buildAnalysis { proxy -> sendFrame(proxy, wsBack, lastFrameBackArr) }
 
             val supportsConcurrent = provider.availableConcurrentCameraInfos.any { infos ->
@@ -338,8 +339,9 @@ class StreamingService : Service() {
                     sendFrame(proxy, if (currentCam == "front") wsFront else wsBack, arr)
                 })
             }
+            updateNotification("Идёт трансляция")
         } catch (e: Exception) {
-            broadcast("Камера недоступна: ${e.message}")
+            updateNotification("Ошибка камеры: ${e.message?.take(40)}")
         }
     }
 
@@ -436,6 +438,18 @@ class StreamingService : Service() {
 class StreamingLifecycleOwner : LifecycleOwner {
     private val registry = LifecycleRegistry(this)
     override val lifecycle: Lifecycle get() = registry
-    fun start() { Handler(Looper.getMainLooper()).post { registry.currentState = Lifecycle.State.RESUMED } }
-    fun stop()  { Handler(Looper.getMainLooper()).post { registry.currentState = Lifecycle.State.DESTROYED } }
+    fun start() {
+        Handler(Looper.getMainLooper()).post {
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        }
+    }
+    fun stop() {
+        Handler(Looper.getMainLooper()).post {
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+            registry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        }
+    }
 }
