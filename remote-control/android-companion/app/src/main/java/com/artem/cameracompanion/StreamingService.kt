@@ -80,7 +80,9 @@ class StreamingService : Service() {
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
 
     private val serverBase: String get() {
-        var host = BuildConfig.DEFAULT_SERVER.trim()
+        val prefs = getSharedPreferences("arp", MODE_PRIVATE)
+        var host = prefs.getString("server", BuildConfig.DEFAULT_SERVER)?.trim() ?: ""
+        if (host.isEmpty()) host = BuildConfig.DEFAULT_SERVER.trim()
         if (host.isEmpty()) host = "localhost:80"
         host = host.removePrefix("http://").removePrefix("ws://")
         if (!host.contains(":")) host = "$host:80"

@@ -7,9 +7,13 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -36,6 +40,22 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        val prefs = getSharedPreferences("arp", MODE_PRIVATE)
+        val etServer = findViewById<EditText>(R.id.etServer)
+        etServer.setText(prefs.getString("server", BuildConfig.DEFAULT_SERVER))
+
+        val doConnect = {
+            val addr = etServer.text.toString().trim()
+            prefs.edit().putString("server", addr).apply()
+            StreamingService.stop(this)
+            Handler(Looper.getMainLooper()).postDelayed({ StreamingService.start(this) }, 600)
+        }
+        findViewById<Button>(R.id.btnConnect).setOnClickListener { doConnect() }
+        etServer.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) { doConnect(); true } else false
+        }
+
         StreamingService.start(this)
         updatePermsUi()
         requestMissingPermissions()
