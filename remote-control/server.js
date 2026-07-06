@@ -286,9 +286,7 @@ const phones = new Map();
 let activePhoneIp = null;
 const viewerSets = { back: new Set(), front: new Set() };
 const audioViewers = new Set();
-const busyViewers = { back: new WeakSet(), front: new WeakSet() };
-const busyScreenViewers = new WeakSet();
-const busyAudioViewers = new WeakSet();
+const MAX_BUF = 512 * 1024; // 512 KB backpressure limit
 
 // Нормализация IP: убираем IPv6-обёртку ::ffff: чтобы один телефон
 // всегда давал одинаковый ключ независимо от протокола подключения.
@@ -396,9 +394,8 @@ wssCamera.on('connection', (ws, req) => {
       if (phone !== phones.get(activePhoneIp)) return;
       if (isBinary) {
         for (const v of viewerSets[cam] || []) {
-          if (v.readyState === v.OPEN && !busyViewers[cam].has(v)) {
-            busyViewers[cam].add(v);
-            v.send(data, { binary: true }, () => busyViewers[cam].delete(v));
+          if (v.readyState === v.OPEN && v.bufferedAmount < MAX_BUF) {
+            v.send(data, { binary: true });
           }
         }
       } else {
@@ -444,9 +441,8 @@ wssAudio.on('connection', (ws, req) => {
       const phoneEntry = phones.get(ip);
       if (isBinary && phoneEntry && phoneEntry === phones.get(activePhoneIp)) {
         for (const v of audioViewers) {
-          if (v.readyState === v.OPEN && !busyAudioViewers.has(v)) {
-            busyAudioViewers.add(v);
-            v.send(data, { binary: true }, () => busyAudioViewers.delete(v));
+          if (v.readyState === v.OPEN && v.bufferedAmount < MAX_BUF) {
+            v.send(data, { binary: true });
           }
         }
       }
@@ -552,9 +548,8 @@ wssScreen.on('connection', (ws, req) => {
       const activeEntry = activePhoneIp ? phones.get(activePhoneIp) : null;
       if (activeEntry && model && activeEntry.model !== model) return;
       for (const v of screenViewers) {
-        if (v.readyState === v.OPEN && !busyScreenViewers.has(v)) {
-          busyScreenViewers.add(v);
-          v.send(data, { binary: true }, () => busyScreenViewers.delete(v));
+        if (v.readyState === v.OPEN && v.bufferedAmount < MAX_BUF) {
+          v.send(data, { binary: true });
         }
       }
     });

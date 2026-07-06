@@ -72,7 +72,10 @@ class StreamingService : Service() {
     private var screenHandlerThread: HandlerThread? = null
     private var screenHandler: Handler? = null
 
-    private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
+    private val http = OkHttpClient.Builder()
+        .pingInterval(5, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.SECONDS)
+        .build()
 
     @Volatile private var wsBack: WebSocket? = null
     @Volatile private var wsFront: WebSocket? = null
@@ -131,6 +134,8 @@ class StreamingService : Service() {
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
                     wsBack = ws
+                    currentCam = "back"  // всегда начинаем с задней камеры при (пере)подключении
+                    paused = false
                     updateNotification("Идёт трансляция")
                     connectFrontCamWs()
                     bindCamera()
@@ -162,7 +167,17 @@ class StreamingService : Service() {
         http.newWebSocket(
             Request.Builder().url("$serverBase/camera?role=phone&cam=front&model=$encodedModel").build(),
             object : WebSocketListener() {
-                override fun onOpen(ws: WebSocket, response: Response) { wsFront = ws }
+                override fun onOpen(ws: WebSocket, response: Response) {
+                    wsFront = ws
+                    // Если уже переключились на фронт пока соединение устанавливалось — перепривязываем камеру
+                    if (currentCam == "front") {
+                        cameraProvider?.let { provider ->
+                            ContextCompat.getMainExecutor(this@StreamingService).execute {
+                                bindCameraInternal(provider)
+                            }
+                        }
+                    }
+                }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     wsFront = null
                     if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsFront == null) connectFrontCamWs() }, 5000)
@@ -346,6 +361,7 @@ class StreamingService : Service() {
 
     private fun switchCamera(cam: String) {
         currentCam = cam
+        if (cam == "front" && wsFront == null) connectFrontCamWs()
         val provider = cameraProvider ?: return
         ContextCompat.getMainExecutor(this).execute { bindCameraInternal(provider) }
     }
