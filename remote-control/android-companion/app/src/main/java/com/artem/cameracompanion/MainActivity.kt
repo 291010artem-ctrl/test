@@ -7,6 +7,8 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.View
 import android.widget.Button
@@ -16,6 +18,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
+
+    private val statusHandler = Handler(Looper.getMainLooper())
+    private val statusRunnable = object : Runnable {
+        override fun run() {
+            findViewById<TextView>(R.id.tvStatus)?.text = StreamingService.statusText
+            statusHandler.postDelayed(this, 1000)
+        }
+    }
 
     private val requestPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -58,6 +68,12 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         StreamingService.start(this)
         updatePermsUi()
+        statusHandler.post(statusRunnable)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        statusHandler.removeCallbacks(statusRunnable)
     }
 
     private fun requestMissingPermissions() {

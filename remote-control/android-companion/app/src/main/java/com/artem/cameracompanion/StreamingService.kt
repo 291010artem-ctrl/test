@@ -40,6 +40,7 @@ class StreamingService : Service() {
         var isRunning = false
         @Volatile var screenQuality = 60
         @Volatile var hasProjection = false
+        @Volatile var statusText = "Запуск…"
 
         fun start(ctx: Context, projectionCode: Int = -1, projectionData: Intent? = null) {
             val i = Intent(ctx, StreamingService::class.java).setAction(ACTION_START)
@@ -411,6 +412,7 @@ class StreamingService : Service() {
     }
 
     private fun updateNotification(text: String) {
+        statusText = text
         getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification(text))
     }
 }
