@@ -147,7 +147,7 @@ function permsHtml(perms) {
 function batteryBar(pct) {
   if (pct === null || pct === undefined) return '';
   const cls = pct < 20 ? 'bat-low' : pct < 40 ? 'bat-mid' : 'bat-ok';
-  return `<span class="ps-battery ${cls}">${pct}%</span>`;
+  return `<span class="ps-bat ${cls}"><span class="ps-bat-body"><span class="ps-bat-fill" style="width:${pct}%"></span><span class="ps-bat-pct">${pct}%</span></span><span class="ps-bat-tip"></span></span>`;
 }
 
 function relTime(ts) {

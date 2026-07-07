@@ -310,10 +310,36 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .ps-online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; flex-shrink: 0; }
 .ps-online-dot.on { background: var(--accent); }
 .ps-online-lbl { font-size: 11px; }
-.ps-battery { font-size: 11px; font-weight: 600; }
-.ps-battery.bat-ok { color: var(--accent); }
-.ps-battery.bat-mid { color: #f0a030; }
-.ps-battery.bat-low { color: var(--danger); }
+.ps-bat { display: inline-flex; align-items: center; }
+.ps-bat.bat-ok  { color: var(--accent); }
+.ps-bat.bat-mid { color: #f0a030; }
+.ps-bat.bat-low { color: var(--danger); }
+.ps-bat-body {
+  position: relative;
+  width: 36px; height: 16px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ps-bat-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: currentColor;
+  opacity: 0.3;
+}
+.ps-bat-pct {
+  position: absolute;
+  inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 700;
+  color: currentColor;
+}
+.ps-bat-tip {
+  width: 3px; height: 8px;
+  background: currentColor;
+  border-radius: 0 2px 2px 0;
+  opacity: 0.7;
+}
 .ps-last { font-size: 11px; }
 .ps-del-btn { opacity: 0; transition: opacity .15s; padding: 4px 7px; flex-shrink: 0; }
 .phone-strip:hover .ps-del-btn { opacity: 1; }
