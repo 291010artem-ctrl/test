@@ -170,7 +170,7 @@ app.post('/api/phones/select', (req, res) => {
   res.json({ ok: true, activeIp: ip });
 });
 
-app.delete('/api/phones/:ip', (req, res) => {
+app.post('/api/phones/:ip/delete', (req, res) => {
   regTouch(decodeURIComponent(req.params.ip), { deleted: true });
   notifyPhoneList();
   res.json({ ok: true });
