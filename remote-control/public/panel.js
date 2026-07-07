@@ -226,7 +226,7 @@ function renderPickerPhones(phones) {
 
 async function deletePhone(ip) {
   try {
-    await jpost('phones/' + encodeURIComponent(ip) + '/delete', {});
+    await jpost('phones/delete', { ip });
     toast('Устройство удалено');
     refreshPicker();
   } catch (e) { toast(e.message, true); }
@@ -234,7 +234,7 @@ async function deletePhone(ip) {
 
 async function restorePhone(ip) {
   try {
-    await jpost('phones/' + encodeURIComponent(ip) + '/restore', {});
+    await jpost('phones/restore', { ip });
     currentDft = 'all';
     document.querySelectorAll('.dft').forEach((t) => t.classList.toggle('active', t.dataset.dft === 'all'));
     toast('Устройство восстановлено');

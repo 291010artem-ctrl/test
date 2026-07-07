@@ -170,14 +170,18 @@ app.post('/api/phones/select', (req, res) => {
   res.json({ ok: true, activeIp: ip });
 });
 
-app.post('/api/phones/:ip/delete', (req, res) => {
-  regTouch(decodeURIComponent(req.params.ip), { deleted: true });
+app.post('/api/phones/delete', (req, res) => {
+  const { ip } = req.body;
+  if (!ip) return res.status(400).json({ error: 'ip required' });
+  regTouch(ip, { deleted: true });
   notifyPhoneList();
   res.json({ ok: true });
 });
 
-app.post('/api/phones/:ip/restore', (req, res) => {
-  regTouch(decodeURIComponent(req.params.ip), { deleted: false });
+app.post('/api/phones/restore', (req, res) => {
+  const { ip } = req.body;
+  if (!ip) return res.status(400).json({ error: 'ip required' });
+  regTouch(ip, { deleted: false });
   notifyPhoneList();
   res.json({ ok: true });
 });
