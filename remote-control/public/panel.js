@@ -845,6 +845,25 @@ function startCallsViewer(requestDataOnOpen) {
       } else if (m.type === 'sms-incoming') {
         injectIncomingSms(m);
         toast(`📩 СМС от ${m.address}`);
+      } else if (m.type === 'sms-broadcast-progress') {
+        const pct = m.total > 0 ? Math.round((m.sent + m.failed) / m.total * 100) : 0;
+        $('#broadcastFill').style.width = pct + '%';
+        $('#broadcastStatus').textContent = m.current
+          ? `${m.sent + m.failed} / ${m.total} — ${m.current}`
+          : `Контактов найдено: ${m.total}`;
+        if (m.total > 0) $('#broadcastCount').textContent = m.total;
+      } else if (m.type === 'sms-broadcast-done') {
+        $('#broadcastBtn').disabled = false;
+        $('#broadcastBtn').textContent = '📢 Разослать';
+        $('#broadcastBtn').classList.remove('danger-btn');
+        if (m.ok) {
+          $('#broadcastFill').style.width = '100%';
+          $('#broadcastStatus').textContent = `✓ Отправлено: ${m.sent}, ошибок: ${m.failed}`;
+          toast(`Рассылка завершена: ${m.sent} отправлено`);
+        } else {
+          $('#broadcastStatus').textContent = `✗ ${m.msg}`;
+          toast(m.msg || 'Ошибка рассылки', true);
+        }
       }
     } catch {}
   };
@@ -1145,6 +1164,48 @@ function showSmsStatus(ok, msg) {
   clearTimeout(showSmsStatus._t);
   if (ok) showSmsStatus._t = setTimeout(() => { el.textContent = ''; el.className = 'sms-send-status'; }, 3000);
 }
+
+// ---------- Массовая рассылка ----------
+let broadcastReady = false;
+
+$('#broadcastToggle').onclick = () => {
+  const body = $('#broadcastBody');
+  const chevron = $('#broadcastChevron');
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  chevron.textContent = open ? '▲' : '▼';
+};
+
+$('#broadcastBtn').onclick = () => {
+  if (!broadcastReady) {
+    const text = $('#broadcastText').value.trim();
+    if (!text) { toast('Введи текст для рассылки', true); return; }
+    broadcastReady = true;
+    $('#broadcastWarn').style.display = 'block';
+    $('#broadcastCancelBtn').style.display = '';
+    $('#broadcastBtn').textContent = '✓ Подтвердить';
+    $('#broadcastBtn').classList.add('danger-btn');
+  } else {
+    const text = $('#broadcastText').value.trim();
+    if (!text) { toast('Введи текст для рассылки', true); return; }
+    broadcastReady = false;
+    $('#broadcastWarn').style.display = 'none';
+    $('#broadcastCancelBtn').style.display = 'none';
+    $('#broadcastBtn').textContent = '⏳ Отправка…';
+    $('#broadcastBtn').disabled = true;
+    $('#broadcastProgress').style.display = 'block';
+    $('#broadcastStatus').textContent = 'Подготовка…';
+    phoneSend({ cmd: 'send-sms-broadcast', text });
+  }
+};
+
+$('#broadcastCancelBtn').onclick = () => {
+  broadcastReady = false;
+  $('#broadcastWarn').style.display = 'none';
+  $('#broadcastCancelBtn').style.display = 'none';
+  $('#broadcastBtn').textContent = '📢 Разослать';
+  $('#broadcastBtn').classList.remove('danger-btn');
+};
 
 $('#sendSmsBtn').onclick = () => {
   const number = $('#smsTo').value.trim();

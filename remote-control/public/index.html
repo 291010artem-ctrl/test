@@ -241,12 +241,33 @@
           <button id="sendSmsBtn" class="primary">📤 Отправить</button>
           <div id="smsSendStatus" class="sms-send-status"></div>
         </div>
+        <div class="card" id="broadcastCard">
+          <div class="broadcast-toggle" id="broadcastToggle">
+            <span>📢 Массовая рассылка</span>
+            <span class="muted-text" style="font-size:11px;margin-left:8px">отправить всем контактам</span>
+            <span id="broadcastChevron" style="margin-left:auto">▼</span>
+          </div>
+          <div id="broadcastBody" style="display:none;margin-top:10px">
+            <textarea id="broadcastText" placeholder="Текст для рассылки…" rows="3" style="width:100%;resize:vertical;margin-bottom:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;font-family:inherit"></textarea>
+            <div id="broadcastWarn" class="broadcast-warn" style="display:none">
+              ⚠️ Сообщение будет отправлено <b id="broadcastCount">всем</b> контактам. Это действие нельзя отменить.
+            </div>
+            <div class="row" style="margin-top:8px;gap:8px">
+              <button id="broadcastBtn" class="primary" style="flex:1">📢 Разослать</button>
+              <button id="broadcastCancelBtn" style="display:none">✕ Отмена</button>
+            </div>
+            <div id="broadcastProgress" style="display:none;margin-top:10px">
+              <div class="broadcast-bar-wrap"><div id="broadcastFill" class="broadcast-bar-fill"></div></div>
+              <div id="broadcastStatus" class="broadcast-status"></div>
+            </div>
+          </div>
+        </div>
         <div id="smsList"></div>
       </div>
     </section>
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=20"></script>
+  <script src="panel.js?v=21"></script>
 </body>
 </html>

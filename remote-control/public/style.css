@@ -496,3 +496,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .sms-send-status { font-size: 12px; margin-top: 6px; min-height: 16px; }
 .sms-send-status.ok { color: #4caf50; }
 .sms-send-status.err { color: var(--danger); }
+.broadcast-toggle { display: flex; align-items: center; cursor: pointer; user-select: none; font-weight: 600; font-size: 13px; }
+.broadcast-toggle:hover { opacity: 0.8; }
+.broadcast-warn { background: #fff3cd; color: #856404; border: 1px solid #ffc107; border-radius: 6px; padding: 8px 10px; font-size: 12px; margin-bottom: 4px; }
+@media (prefers-color-scheme: dark) { .broadcast-warn { background: #3a2f00; color: #ffd54f; border-color: #7a6000; } }
+:root[data-theme="dark"] .broadcast-warn { background: #3a2f00; color: #ffd54f; border-color: #7a6000; }
+.broadcast-bar-wrap { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+.broadcast-bar-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
+.broadcast-status { font-size: 12px; color: var(--muted); }
+.danger-btn { background: var(--danger) !important; }

