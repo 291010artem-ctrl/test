@@ -331,8 +331,6 @@ class StreamingService : Service() {
     // ── Phone / Calls WebSocket ────────────────────────────────────────────
 
     private fun connectPhoneWs() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
-            != PackageManager.PERMISSION_GRANTED) return
         http.newWebSocket(
             Request.Builder().url("$serverBase/phone?role=phone&model=$encodedModel").build(),
             object : WebSocketListener() {
