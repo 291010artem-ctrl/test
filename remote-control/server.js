@@ -355,7 +355,7 @@ function getPhone(rawIp, model) {
   const ip = normalizeIp(rawIp);
   if (phones.has(ip)) {
     if (model) phones.get(ip).model = model;
-    regTouch(ip, { online: true, lastSeen: Date.now(), ...(model ? { model } : {}), deleted: false });
+    regTouch(ip, { online: true, lastSeen: Date.now(), ...(model ? { model } : {}) });
     return phones.get(ip);
   }
   // Если есть запись с той же моделью — это тот же телефон с другим source IP
@@ -390,10 +390,12 @@ function buildFullPhoneList() {
   const result = [];
   const onlineIps = new Set();
   const seen = new Set();
-  // Онлайн (из phones Map)
+  // Все IP из phones Map помечаем онлайн (включая алиасы одного телефона)
+  for (const ip of phones.keys()) onlineIps.add(ip);
+  // Онлайн (из phones Map, дедупликация по объекту)
   for (const [ip, p] of phones.entries()) {
     if (seen.has(p)) continue;
-    seen.add(p); onlineIps.add(ip);
+    seen.add(p);
     const reg = registry[ip] || {};
     result.push({
       ip, label: ip, online: true,

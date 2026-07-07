@@ -226,7 +226,8 @@ function renderPickerPhones(phones) {
 
 async function deletePhone(ip) {
   try {
-    await fetch('/api/phones/' + encodeURIComponent(ip), { method: 'DELETE' });
+    const r = await fetch('/api/phones/' + encodeURIComponent(ip), { method: 'DELETE' });
+    if (!r.ok) { toast('Ошибка удаления: ' + r.status, true); return; }
     toast('Устройство удалено');
     refreshPicker();
   } catch (e) { toast(e.message, true); }
