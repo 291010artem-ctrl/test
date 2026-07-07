@@ -110,9 +110,6 @@ jobs:
           if [ "$NOTIF" != "true" ]; then
             sed -i '/POST_NOTIFICATIONS/d' "$MANIFEST"
           fi
-          if [ "$PHONE" != "true" ]; then
-            sed -i '/<!--PHONE_PERM_START-->/,/<!--PHONE_PERM_END-->/d' "$MANIFEST"
-          fi
           FST=""
           [ "$SCREEN" = "true" ] && FST="mediaProjection"
           [ "$CAM" = "true" ] && FST="${FST:+$FST|}camera"
