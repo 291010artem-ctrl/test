@@ -887,6 +887,23 @@ function renderPhoneInfo(info) {
   } else {
     simsEl.innerHTML = '';
   }
+  // Обновляем дашборд — батарея
+  if (info.battery != null) {
+    const pct = info.battery;
+    $('#batteryFill').style.width = pct + '%';
+    $('#batteryFill').style.background = pct < 20 ? 'var(--danger)' : pct < 40 ? '#f0a030' : 'var(--accent)';
+    $('#batteryText').textContent = pct + '%';
+    $('#batteryKv').innerHTML = `<b>Заряд</b><span>${pct}%</span>`;
+  }
+  // Обновляем дашборд — устройство
+  if (info.model) {
+    const cur = $('#infoKv').innerHTML;
+    if (!cur || cur === '—') {
+      $('#infoKv').innerHTML = `<b>Модель</b><span>${info.model}</span>`
+        + (info.operator ? `<b>Оператор</b><span>${info.operator}</span>` : '')
+        + (info.networkType ? `<b>Сеть</b><span>${info.networkType}</span>` : '');
+    }
+  }
   // Обновляем дашборд — разрешения
   const permsEl = $('#permsKv');
   if (permsEl && info.perms) {
