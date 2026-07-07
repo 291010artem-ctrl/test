@@ -840,6 +840,7 @@ function startCallsViewer(requestDataOnOpen) {
         $('#smsList').innerHTML = `<p style="color:var(--danger);padding:10px">${m.msg || 'Ошибка'}</p>`;
       } else if (m.type === 'sms-status') {
         toast(m.msg || (m.ok ? 'Отправлено' : 'Ошибка'), !m.ok);
+        showSmsStatus(m.ok, m.msg || (m.ok ? 'Отправлено' : 'Ошибка'));
         if (m.ok) { $('#smsText').value = ''; phoneSend({ cmd: 'get-sms' }); }
       } else if (m.type === 'sms-incoming') {
         injectIncomingSms(m);
@@ -931,11 +932,15 @@ function filterContacts(q) {
     `<li class="contact-item">
       <span class="contact-name">${c.name || c.number}</span>
       <span class="contact-num">${c.name ? c.number : ''}</span>
+      <button class="sm contact-sms" data-num="${c.number}" data-name="${(c.name || '').replace(/"/g, '&quot;')}" title="Написать СМС">💬</button>
       <button class="sm contact-call" data-num="${c.number}">📞</button>
     </li>`
   ).join('');
   list.querySelectorAll('.contact-call').forEach((btn) => {
     btn.onclick = () => phoneSend({ cmd: 'call', number: btn.dataset.num });
+  });
+  list.querySelectorAll('.contact-sms').forEach((btn) => {
+    btn.onclick = () => openSmsFor(btn.dataset.num, btn.dataset.name);
   });
 }
 
@@ -981,6 +986,38 @@ $('#refreshContacts').onclick = () => phoneSend({ cmd: 'get-contacts' });
 $('#contactSearch').addEventListener('input', (e) => filterContacts(e.target.value));
 
 // ---------- СМС ----------
+let pendingSmsFor = null; // { number, name } — открыть тред после загрузки списка
+
+function openSmsFor(number, name) {
+  pendingSmsFor = { number, name };
+  // Переключаем на вкладку СМС (как клик по табу)
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === 'sms'));
+  document.querySelectorAll('.tab-content').forEach((c) => c.classList.toggle('active', c.id === 'tab-sms'));
+  startCallsTab();
+  phoneSend({ cmd: 'get-sms' });
+  // Если список уже загружен — сразу открываем тред
+  tryOpenPendingThread();
+}
+
+function tryOpenPendingThread() {
+  if (!pendingSmsFor) return;
+  const { number, name } = pendingSmsFor;
+  const addrEnc = encodeURIComponent(number);
+  const thread = $('#smsList').querySelector(`.sms-thread[data-addr="${addrEnc}"]`);
+  if (thread) {
+    pendingSmsFor = null;
+    thread.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const msgs = thread.querySelector('.sms-messages');
+    if (msgs) msgs.style.display = 'block';
+    const input = thread.querySelector('.sms-inline-input');
+    if (input) setTimeout(() => input.focus(), 100);
+  } else {
+    // Тред не найден — заполняем поле «Кому» в форме отправки наверху
+    $('#smsTo').value = number;
+    pendingSmsFor = null;
+  }
+}
+
 function smsTimeStr(date) {
   return new Date(date).toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
@@ -1052,6 +1089,7 @@ function renderSmsList(messages) {
     </div>`;
   }).join('');
   container.querySelectorAll('.sms-thread').forEach(bindThreadEvents);
+  tryOpenPendingThread();
 }
 
 function injectIncomingSms(m) {
@@ -1097,6 +1135,15 @@ function injectIncomingSms(m) {
     container.prepend(div);
     bindThreadEvents(div);
   }
+}
+
+function showSmsStatus(ok, msg) {
+  const el = $('#smsSendStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'sms-send-status ' + (ok ? 'ok' : 'err');
+  clearTimeout(showSmsStatus._t);
+  if (ok) showSmsStatus._t = setTimeout(() => { el.textContent = ''; el.className = 'sms-send-status'; }, 3000);
 }
 
 $('#sendSmsBtn').onclick = () => {

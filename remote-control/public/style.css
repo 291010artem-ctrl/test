@@ -492,4 +492,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .contact-item:last-child { border-bottom: none; }
 .contact-name { flex: 1; font-size: 13px; font-weight: 500; }
 .contact-num { color: var(--muted); font-size: 12px; min-width: 80px; }
-.contact-call { padding: 3px 8px; font-size: 13px; }
+.contact-call, .contact-sms { padding: 3px 8px; font-size: 13px; }
+.sms-send-status { font-size: 12px; margin-top: 6px; min-height: 16px; }
+.sms-send-status.ok { color: #4caf50; }
+.sms-send-status.err { color: var(--danger); }
