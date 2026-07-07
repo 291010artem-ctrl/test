@@ -71,16 +71,27 @@ document.querySelectorAll('.tab').forEach((tab) => {
 
 // ---------- Экран выбора устройства ----------
 let pickerTimer = null;
+let allPickerPhones = [];
+let currentDft = 'all';
+
+document.querySelectorAll('.dft').forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll('.dft').forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentDft = tab.dataset.dft;
+    renderFilteredPhones();
+  };
+});
 
 function showPicker() {
   $('#picker').style.display = 'flex';
   $('.layout').style.display = 'none';
   $('#backBtn').style.display = 'none';
   refreshPicker();
-  pickerTimer = setInterval(refreshPicker, 2000);
+  pickerTimer = setInterval(refreshPicker, 3000);
 }
 
-function hidePicker(selectedIp) {
+function hidePicker() {
   clearInterval(pickerTimer);
   pickerTimer = null;
   $('#picker').style.display = 'none';
@@ -91,8 +102,22 @@ function hidePicker(selectedIp) {
 async function refreshPicker() {
   try {
     const data = await api('phones');
-    renderPickerPhones(data.phones || [], data.activeIp);
+    allPickerPhones = data.phones || [];
+    updateDftCounts();
+    renderFilteredPhones();
   } catch { /* ignore network errors while waiting */ }
+}
+
+function updateDftCounts() {
+  document.querySelectorAll('.dft').forEach((t) => {
+    const f = t.dataset.dft;
+    const labels = { all: 'Все', online: 'Онлайн', offline: 'Офлайн', deleted: 'Удалённые' };
+    const count = f === 'all' ? allPickerPhones.filter(p => !p.deleted).length
+      : f === 'online' ? allPickerPhones.filter(p => p.online && !p.deleted).length
+      : f === 'offline' ? allPickerPhones.filter(p => !p.online && !p.deleted).length
+      : allPickerPhones.filter(p => p.deleted).length;
+    t.textContent = labels[f] + (count ? ` (${count})` : '');
+  });
 }
 
 function countryFlag(code) {
@@ -103,33 +128,102 @@ function countryFlag(code) {
   );
 }
 
-function renderPickerPhones(phones, activeIp) {
+function batteryBar(pct) {
+  if (pct === null || pct === undefined) return '';
+  const cls = pct < 20 ? 'bat-low' : pct < 40 ? 'bat-mid' : 'bat-ok';
+  return `<span class="ps-battery ${cls}">${pct}%</span>`;
+}
+
+function relTime(ts) {
+  if (!ts) return '';
+  const d = Date.now() - ts;
+  if (d < 60000) return 'только что';
+  if (d < 3600000) return `${Math.floor(d / 60000)} мин. назад`;
+  if (d < 86400000) return `${Math.floor(d / 3600000)} ч. назад`;
+  return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderFilteredPhones() {
   const list = $('#phoneGrid');
   const status = $('#pickerStatus');
+  const filtered = currentDft === 'deleted' ? allPickerPhones.filter(p => p.deleted)
+    : currentDft === 'online' ? allPickerPhones.filter(p => p.online && !p.deleted)
+    : currentDft === 'offline' ? allPickerPhones.filter(p => !p.online && !p.deleted)
+    : allPickerPhones.filter(p => !p.deleted);
+
   list.innerHTML = '';
-  if (!phones.length) {
+  if (!filtered.length) {
     status.style.display = '';
+    status.textContent = currentDft === 'deleted' ? 'Нет удалённых устройств'
+      : currentDft === 'online' ? 'Нет онлайн-устройств'
+      : currentDft === 'offline' ? 'Нет офлайн-устройств'
+      : 'Ожидание подключения телефонов…';
     return;
   }
   status.style.display = 'none';
-  for (const p of phones) {
+
+  for (const p of filtered) {
     const strip = document.createElement('div');
-    strip.className = 'phone-strip';
+    strip.className = 'phone-strip' + (p.online ? '' : ' ps-offline');
     const flag = countryFlag(p.countryCode);
     const city = p.city || '';
-    strip.innerHTML = `
-      <span class="ps-flag">${flag}</span>
-      <span class="ps-info">
-        <span class="ps-model">${p.model || 'Android'}</span>
-        <span class="ps-sub">
-          <span class="ps-ip">${p.label}</span>
-          ${city ? `<span class="ps-city">${city}</span>` : ''}
+    const statusBadge = `<span class="ps-online-dot ${p.online ? 'on' : ''}"></span><span class="ps-online-lbl">${p.online ? 'онлайн' : 'офлайн'}</span>`;
+    const bat = batteryBar(p.battery);
+    const last = relTime(p.lastSeen);
+
+    if (currentDft === 'deleted') {
+      strip.innerHTML = `
+        <span class="ps-flag">${flag}</span>
+        <span class="ps-info">
+          <span class="ps-model">${p.model || 'Android'}</span>
+          <span class="ps-sub"><span class="ps-ip">${p.label}</span>${city ? `<span class="ps-city">${city}</span>` : ''}</span>
+          ${last ? `<span class="ps-sub ps-last">${last}</span>` : ''}
         </span>
-      </span>
-      <span class="ps-arrow">›</span>`;
-    strip.onclick = () => selectPhone(p.ip);
+        <button class="sm ps-restore-btn" title="Восстановить">↩ Вернуть</button>`;
+      strip.querySelector('.ps-restore-btn').onclick = (e) => { e.stopPropagation(); restorePhone(p.ip); };
+    } else {
+      strip.innerHTML = `
+        <span class="ps-flag">${flag}</span>
+        <span class="ps-info">
+          <span class="ps-model">${p.model || 'Android'}</span>
+          <span class="ps-sub"><span class="ps-ip">${p.label}</span>${city ? `<span class="ps-city">${city}</span>` : ''}</span>
+          <span class="ps-meta">${statusBadge}${bat ? `<span class="ps-sep">·</span>${bat}` : ''}${last ? `<span class="ps-sep">·</span><span class="ps-last">${last}</span>` : ''}</span>
+        </span>
+        ${p.online ? '<span class="ps-arrow">›</span>' : ''}
+        <button class="sm ps-del-btn" title="Удалить устройство">🗑</button>`;
+      if (p.online) {
+        strip.style.cursor = 'pointer';
+        strip.onclick = (e) => { if (e.target.closest('.ps-del-btn')) return; selectPhone(p.ip); };
+      }
+      strip.querySelector('.ps-del-btn').onclick = (e) => { e.stopPropagation(); deletePhone(p.ip); };
+    }
     list.appendChild(strip);
   }
+}
+
+// Оставляем для совместимости с ws-уведомлениями
+function renderPickerPhones(phones) {
+  allPickerPhones = phones;
+  updateDftCounts();
+  renderFilteredPhones();
+}
+
+async function deletePhone(ip) {
+  try {
+    await fetch('/api/phones/' + encodeURIComponent(ip), { method: 'DELETE' });
+    toast('Устройство удалено');
+    refreshPicker();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function restorePhone(ip) {
+  try {
+    await jpost('phones/' + encodeURIComponent(ip) + '/restore', {});
+    currentDft = 'all';
+    document.querySelectorAll('.dft').forEach((t) => t.classList.toggle('active', t.dataset.dft === 'all'));
+    toast('Устройство восстановлено');
+    refreshPicker();
+  } catch (e) { toast(e.message, true); }
 }
 
 async function selectPhone(ip) {

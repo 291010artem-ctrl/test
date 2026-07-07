@@ -378,6 +378,11 @@ class StreamingService : Service() {
                 }
                 if (sims.length() > 0) json.put("sims", sims)
             } catch (_: Exception) {}
+            try {
+                val bm = getSystemService(BATTERY_SERVICE) as? android.os.BatteryManager
+                val level = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+                if (level >= 0) json.put("battery", level)
+            } catch (_: Exception) {}
             ws.send(json.toString())
         } catch (_: Exception) {}
     }

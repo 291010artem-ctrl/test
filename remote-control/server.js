@@ -157,9 +157,9 @@ app.post('/api/camera/command', h(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---- Список подключённых телефонов ----
+// ---- Список телефонов (все: онлайн + офлайн + удалённые) ----
 app.get('/api/phones', (req, res) => {
-  res.json({ phones: phoneListJson(), activeIp: activePhoneIp });
+  res.json({ phones: buildFullPhoneList(), activeIp: activePhoneIp });
 });
 
 app.post('/api/phones/select', (req, res) => {
@@ -168,6 +168,18 @@ app.post('/api/phones/select', (req, res) => {
   activePhoneIp = ip;
   notifyPhoneList();
   res.json({ ok: true, activeIp: ip });
+});
+
+app.delete('/api/phones/:ip', (req, res) => {
+  regTouch(decodeURIComponent(req.params.ip), { deleted: true });
+  notifyPhoneList();
+  res.json({ ok: true });
+});
+
+app.post('/api/phones/:ip/restore', (req, res) => {
+  regTouch(decodeURIComponent(req.params.ip), { deleted: false });
+  notifyPhoneList();
+  res.json({ ok: true });
 });
 
 // ---- GitHub Actions: сборка APK без локального SDK ----
@@ -296,6 +308,21 @@ server.on('upgrade', (req, socket, head) => {
 // Реестр телефонов: ключ — IP-адрес, значение — { back, front, audio, model, country, countryCode, city }.
 const phones = new Map();
 let activePhoneIp = null;
+
+// Персистентный реестр устройств (все когда-либо подключавшиеся)
+const REGISTRY_FILE = path.join(__dirname, 'devices.json');
+let registry = {};
+try { registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8')); } catch {}
+let _saveTimer = null;
+function saveRegistry() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => fs.writeFile(REGISTRY_FILE, JSON.stringify(registry, null, 2), () => {}), 500);
+}
+function regTouch(ip, fields) {
+  if (!registry[ip]) registry[ip] = { ip, model: 'Android', lastSeen: null, battery: null, online: false, deleted: false };
+  Object.assign(registry[ip], fields);
+  saveRegistry();
+}
 const viewerSets = { back: new Set(), front: new Set() };
 const audioViewers = new Set();
 const MAX_BUF = 512 * 1024; // 512 KB backpressure limit
@@ -328,25 +355,29 @@ function getPhone(rawIp, model) {
   const ip = normalizeIp(rawIp);
   if (phones.has(ip)) {
     if (model) phones.get(ip).model = model;
+    regTouch(ip, { online: true, lastSeen: Date.now(), ...(model ? { model } : {}), deleted: false });
     return phones.get(ip);
   }
   // Если есть запись с той же моделью — это тот же телефон с другим source IP
   // (мобильный NAT даёт разные адреса разным TCP-соединениям).
-  // Создаём алиас: новый IP → тот же объект. Дублей в phoneListJson не будет.
+  // Создаём алиас: новый IP → тот же объект. Дублей в buildFullPhoneList не будет.
   if (model) {
     for (const [, p] of phones.entries()) {
       if (p.model === model) { phones.set(ip, p); return p; }
     }
   }
-  const entry = { back: null, front: null, audio: null, model: model || 'Android', country: '', countryCode: '', city: '' };
+  const reg = registry[ip] || {};
+  const entry = { back: null, front: null, audio: null, model: model || reg.model || 'Android', country: reg.country || '', countryCode: reg.countryCode || '', city: reg.city || '' };
   phones.set(ip, entry);
-  fetchGeo(ip).then(g => { const p = phones.get(ip); if (p) Object.assign(p, g); }).catch(() => {});
+  fetchGeo(ip).then(g => { const p = phones.get(ip); if (p) { Object.assign(p, g); regTouch(ip, g); } }).catch(() => {});
+  regTouch(ip, { model: entry.model, online: true, lastSeen: Date.now(), deleted: false });
   return entry;
 }
 
 function cleanupPhone(ip) {
   const p = phones.get(ip);
   if (!p || p.back || p.front || p.audio) return;
+  regTouch(ip, { online: false, lastSeen: Date.now() });
   // Удаляем все алиасы (ключи), указывающие на этот объект
   for (const [k, v] of phones.entries()) { if (v === p) phones.delete(k); }
   if (!phones.has(activePhoneIp)) {
@@ -355,21 +386,48 @@ function cleanupPhone(ip) {
   }
 }
 
-function phoneListJson() {
+function buildFullPhoneList() {
+  const result = [];
+  const onlineIps = new Set();
   const seen = new Set();
-  return [...phones.entries()]
-    .filter(([, p]) => !seen.has(p) && seen.add(p))  // один телефон = один объект, убираем алиасы
-    .map(([ip, p]) => ({
-      ip,
-      label: ip,
+  // Онлайн (из phones Map)
+  for (const [ip, p] of phones.entries()) {
+    if (seen.has(p)) continue;
+    seen.add(p); onlineIps.add(ip);
+    const reg = registry[ip] || {};
+    result.push({
+      ip, label: ip, online: true,
+      model: p.model || reg.model || 'Android',
+      battery: reg.battery ?? null,
+      lastSeen: Date.now(),
+      country: p.country || reg.country || '',
+      countryCode: p.countryCode || reg.countryCode || '',
+      city: p.city || reg.city || '',
       active: ip === activePhoneIp || phones.get(activePhoneIp) === p,
-      model: p.model || 'Android',
-      country: p.country || '',
-      countryCode: p.countryCode || '',
-      city: p.city || '',
+      deleted: reg.deleted || false,
       cams: { back: !!p.back, front: !!p.front, audio: !!p.audio },
-    }));
+    });
+  }
+  // Офлайн (из registry)
+  for (const [ip, reg] of Object.entries(registry)) {
+    if (onlineIps.has(ip)) continue;
+    result.push({
+      ip, label: ip, online: false,
+      model: reg.model || 'Android',
+      battery: reg.battery ?? null,
+      lastSeen: reg.lastSeen || null,
+      country: reg.country || '',
+      countryCode: reg.countryCode || '',
+      city: reg.city || '',
+      active: false,
+      deleted: reg.deleted || false,
+      cams: { back: false, front: false, audio: false },
+    });
+  }
+  return result;
 }
+// Оставляем phoneListJson как алиас для совместимости
+function phoneListJson() { return buildFullPhoneList().filter(p => p.online && !p.deleted); }
 
 function notifyViewersCam(cam, obj) {
   const data = JSON.stringify(obj);
@@ -377,7 +435,7 @@ function notifyViewersCam(cam, obj) {
 }
 
 function notifyPhoneList() {
-  const msg = JSON.stringify({ type: 'phones', list: phoneListJson(), activeIp: activePhoneIp });
+  const msg = JSON.stringify({ type: 'phones', list: buildFullPhoneList(), activeIp: activePhoneIp });
   for (const s of [...viewerSets.back, ...viewerSets.front, ...audioViewers]) {
     if (s.readyState === s.OPEN) s.send(msg);
   }
@@ -623,12 +681,23 @@ wssPhone.on('connection', (ws, req) => {
 
   if (role === 'phone') {
     phoneCallPhones.set(ip, ws);
+    regTouch(ip, { online: true, lastSeen: Date.now(), deleted: false });
     for (const v of phoneCallViewers) {
       if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'phone-connected', connected: true }));
     }
     ws.on('message', (data, isBinary) => {
       if (isBinary) return;
       const str = data.toString();
+      // Перехватываем phone-info чтобы сохранить батарею и модель
+      try {
+        const m = JSON.parse(str);
+        if (m.type === 'phone-info') {
+          const upd = { lastSeen: Date.now() };
+          if (m.battery !== undefined) upd.battery = m.battery;
+          if (m.model) upd.model = m.model;
+          regTouch(ip, upd);
+        }
+      } catch {}
       for (const v of phoneCallViewers) {
         if (v.readyState === v.OPEN) v.send(str);
       }

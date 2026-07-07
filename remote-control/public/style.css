@@ -252,11 +252,25 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .picker-top {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding: 10px 16px;
+  justify-content: space-between;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  gap: 8px;
 }
+
+.dft-bar { display: flex; gap: 4px; flex-wrap: wrap; }
+.dft {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--muted);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dft.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
 
 .build-scroll { flex: 1; overflow-y: auto; padding: 16px; }
 
@@ -288,8 +302,22 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .ps-model { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ps-sub { display: flex; gap: 10px; font-size: 12px; color: var(--muted); }
 .ps-ip { font-family: monospace; }
-.ps-city {}
 .ps-arrow { font-size: 20px; color: var(--muted); flex-shrink: 0; }
+.ps-offline { opacity: .6; }
+.ps-offline:hover { opacity: .8; }
+.ps-meta { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.ps-sep { color: var(--border); }
+.ps-online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; flex-shrink: 0; }
+.ps-online-dot.on { background: var(--accent); }
+.ps-online-lbl { font-size: 11px; }
+.ps-battery { font-size: 11px; font-weight: 600; }
+.ps-battery.bat-ok { color: var(--accent); }
+.ps-battery.bat-mid { color: #f0a030; }
+.ps-battery.bat-low { color: var(--danger); }
+.ps-last { font-size: 11px; }
+.ps-del-btn { opacity: 0; transition: opacity .15s; padding: 4px 7px; flex-shrink: 0; }
+.phone-strip:hover .ps-del-btn { opacity: 1; }
+.ps-restore-btn { padding: 4px 10px; flex-shrink: 0; }
 
 .picker-status {
   color: var(--muted);

@@ -22,7 +22,13 @@
     <!-- Вкладка: список устройств -->
     <div class="picker-panel active" id="ptab-devices">
       <div class="picker-top">
-        <button id="pickerRefresh" class="sm">⟳ Обновить</button>
+        <div class="dft-bar">
+          <button class="dft active" data-dft="all">Все</button>
+          <button class="dft" data-dft="online">Онлайн</button>
+          <button class="dft" data-dft="offline">Офлайн</button>
+          <button class="dft" data-dft="deleted">Удалённые</button>
+        </div>
+        <button id="pickerRefresh" class="sm">⟳</button>
       </div>
       <div id="phoneGrid" class="phone-list"></div>
       <p id="pickerStatus" class="picker-status">Ожидание подключения телефонов…</p>
@@ -222,6 +228,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=6"></script>
+  <script src="panel.js?v=7"></script>
 </body>
 </html>
