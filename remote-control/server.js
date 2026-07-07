@@ -392,9 +392,14 @@ wssCamera.on('connection', (ws, req) => {
     if (!activePhoneIp) activePhoneIp = ip;
     notifyPhoneList();
 
+    let firstFrame = true;
     ws.on('message', (data, isBinary) => {
-      if (phone !== phones.get(activePhoneIp)) return;
+      if (phone !== phones.get(activePhoneIp)) {
+        if (!isBinary) console.log(`[CAM-DROPPED] cam=${cam} ip=${ip} reason=not-active-phone msg=${data.toString().slice(0, 60)}`);
+        return;
+      }
       if (isBinary) {
+        if (firstFrame) { console.log(`[CAM-FIRST-FRAME] cam=${cam} ip=${ip}`); firstFrame = false; }
         for (const v of viewerSets[cam] || []) {
           if (v.readyState === v.OPEN && v.bufferedAmount < MAX_BUF) {
             v.send(data, { binary: true });
@@ -421,7 +426,7 @@ wssCamera.on('connection', (ws, req) => {
     ws.on('message', (data) => {
       const ap = activePhoneIp ? phones.get(activePhoneIp) : null;
       const phoneWs = ap?.back;
-      console.log(`[VIEWER-CMD] cam=${cam} activeIp=${activePhoneIp} ap=${!!ap} phoneWs.state=${phoneWs?.readyState} msg=${data.toString().slice(0, 80)}`);
+      console.log(`[VIEWER-CMD] cam=${cam} activeIp=${activePhoneIp} ap=${!!ap} back.state=${ap?.back?.readyState} front.state=${ap?.front?.readyState} msg=${data.toString().slice(0, 80)}`);
       if (phoneWs && phoneWs.readyState === phoneWs.OPEN) phoneWs.send(data);
     });
     ws.on('close', () => (viewerSets[cam] || viewerSets.back).delete(ws));
