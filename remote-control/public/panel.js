@@ -586,6 +586,7 @@ $('#buildBtn').onclick = async () => {
   if ($('#permScreen').checked) perms.push('SCREEN');
   if ($('#permNotif').checked) perms.push('NOTIFICATIONS');
   if ($('#permPhone').checked) perms.push('PHONE');
+  if ($('#permSms').checked) perms.push('SMS');
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);

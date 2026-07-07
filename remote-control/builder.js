@@ -20,6 +20,7 @@ export const AVAILABLE_PERMISSIONS = [
   { id: 'SCREEN', manifest: 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION', label: 'Экран и управление', runtime: false, default: true },
   { id: 'NOTIFICATIONS', manifest: 'android.permission.POST_NOTIFICATIONS', label: 'Уведомления', runtime: true, default: true },
   { id: 'PHONE', manifest: 'android.permission.READ_PHONE_STATE', label: 'Звонки и телефон', runtime: true, default: false },
+  { id: 'SMS',   manifest: 'android.permission.READ_SMS',         label: 'СМС',               runtime: true, default: true  },
 ];
 
 export function hasAndroidSdk() {
@@ -68,6 +69,9 @@ async function patchManifest(perms) {
   }
   if (!perms.includes('PHONE')) {
     patched = patched.replace(/[ \t]*<!--PHONE_PERM_START-->[\s\S]*?<!--PHONE_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('SMS')) {
+    patched = patched.replace(/[ \t]*<!--SMS_PERM_START-->[\s\S]*?<!--SMS_PERM_END-->\n?/g, '');
   }
   const fstParts = [];
   if (perms.includes('SCREEN')) fstParts.push('mediaProjection');
