@@ -338,3 +338,16 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .call-log-table .type-incoming { color: var(--accent); }
 .call-log-table .type-outgoing { color: var(--accent2); }
 .call-log-table td small { color: var(--muted); font-size: 11px; display: block; }
+
+/* ----- Контакты ----- */
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.contact-item:last-child { border-bottom: none; }
+.contact-name { flex: 1; font-size: 13px; font-weight: 500; }
+.contact-num { color: var(--muted); font-size: 12px; min-width: 80px; }
+.contact-call { padding: 3px 8px; font-size: 13px; }

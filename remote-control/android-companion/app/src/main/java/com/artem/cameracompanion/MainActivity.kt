@@ -88,6 +88,7 @@ class MainActivity : AppCompatActivity() {
             if (!has(Manifest.permission.READ_PHONE_NUMBERS)) add(Manifest.permission.READ_PHONE_NUMBERS)
             if (!has(Manifest.permission.READ_CALL_LOG)) add(Manifest.permission.READ_CALL_LOG)
             if (!has(Manifest.permission.CALL_PHONE)) add(Manifest.permission.CALL_PHONE)
+            if (!has(Manifest.permission.READ_CONTACTS)) add(Manifest.permission.READ_CONTACTS)
         }
         if (needed.isNotEmpty()) requestPermissions.launch(needed.toTypedArray())
     }

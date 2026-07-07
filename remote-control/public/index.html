@@ -191,12 +191,21 @@
         <div class="card" id="phoneInfoCard">
           <h3>Телефон <span id="callsStatus" class="cam-status">нет соединения</span></h3>
           <div class="kv" id="phoneInfoKv">—</div>
+          <div class="kv" id="simsKv" style="margin-top:4px"></div>
         </div>
         <div class="card">
           <div class="row">
             <input id="dialInput" placeholder="Номер для звонка…" type="tel" style="flex:1">
             <button id="callBtn">📞 Позвонить</button>
           </div>
+        </div>
+        <div class="card">
+          <div class="row" style="margin-bottom:6px">
+            <b style="flex:1">Контакты</b>
+            <input id="contactSearch" placeholder="Поиск…" style="flex:2;margin:0 6px">
+            <button id="refreshContacts" class="sm">⟳</button>
+          </div>
+          <ul id="contactList" class="list" style="max-height:300px;overflow-y:auto"><li style="color:var(--muted);padding:8px">Загрузка…</li></ul>
         </div>
         <div class="row">
           <b style="flex:1">Журнал звонков</b>

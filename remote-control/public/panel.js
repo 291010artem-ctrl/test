@@ -716,6 +716,10 @@ function startCallsViewer() {
         renderCallLog(m.entries || []);
       } else if (m.type === 'call-log-error') {
         $('#callLogBody').innerHTML = `<tr><td colspan="4" style="color:var(--danger)">${m.msg || 'Ошибка'}</td></tr>`;
+      } else if (m.type === 'contacts') {
+        renderContacts(m.entries || []);
+      } else if (m.type === 'contacts-error') {
+        $('#contactList').innerHTML = `<li style="color:var(--danger)">${m.msg || 'Ошибка'}</li>`;
       }
     } catch {}
   };
@@ -727,6 +731,8 @@ function startCallsViewer() {
   wsPhone.onerror = () => {};
 }
 
+let allContacts = [];
+
 function renderPhoneInfo(info) {
   $('#callsStatus').textContent = 'подключён';
   $('#callsStatus').classList.add('on');
@@ -735,9 +741,46 @@ function renderPhoneInfo(info) {
   if (info.number) rows.push(`<b>Номер</b><span>${info.number}</span>`);
   if (info.imei) rows.push(`<b>IMEI</b><span>${info.imei}</span>`);
   if (info.operator) rows.push(`<b>Оператор</b><span>${info.operator}</span>`);
-  if (info.simOperator && info.simOperator !== info.operator) rows.push(`<b>SIM</b><span>${info.simOperator}</span>`);
   if (info.networkType) rows.push(`<b>Сеть</b><span>${info.networkType}</span>`);
   $('#phoneInfoKv').innerHTML = rows.length ? rows.join('') : '—';
+  const simsEl = $('#simsKv');
+  if (info.sims && info.sims.length) {
+    simsEl.innerHTML = info.sims.map((s) =>
+      `<b>SIM ${s.slot}</b><span>${s.displayName || s.carrierName}${s.number ? ' · ' + s.number : ''}</span>`
+    ).join('');
+  } else {
+    simsEl.innerHTML = '';
+  }
+}
+
+function renderContacts(entries) {
+  allContacts = entries;
+  filterContacts($('#contactSearch').value);
+}
+
+function filterContacts(q) {
+  const list = $('#contactList');
+  const query = (q || '').toLowerCase().trim();
+  const filtered = query
+    ? allContacts.filter((c) => c.name.toLowerCase().includes(query) || c.number.includes(query))
+    : allContacts;
+  if (!filtered.length) {
+    list.innerHTML = `<li style="color:var(--muted);padding:8px">${allContacts.length ? 'Не найдено' : 'Контакты пусты'}</li>`;
+    return;
+  }
+  list.innerHTML = filtered.map((c) =>
+    `<li class="contact-item">
+      <span class="contact-name">${c.name || c.number}</span>
+      <span class="contact-num">${c.name ? c.number : ''}</span>
+      <button class="sm contact-call" data-num="${c.number}">📞</button>
+    </li>`
+  ).join('');
+  list.querySelectorAll('.contact-call').forEach((btn) => {
+    btn.onclick = () => {
+      phoneSend({ cmd: 'call', number: btn.dataset.num });
+      toast(`Звонок: ${btn.dataset.num}`);
+    };
+  });
 }
 
 function renderCallLog(entries) {
@@ -765,6 +808,7 @@ function startCallsTab() {
   startCallsViewer();
   phoneSend({ cmd: 'get-phone-info' });
   phoneSend({ cmd: 'get-call-log' });
+  phoneSend({ cmd: 'get-contacts' });
 }
 
 $('#callBtn').onclick = () => {
@@ -775,6 +819,8 @@ $('#callBtn').onclick = () => {
 };
 $('#dialInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#callBtn').click(); });
 $('#refreshCallLog').onclick = () => phoneSend({ cmd: 'get-call-log' });
+$('#refreshContacts').onclick = () => phoneSend({ cmd: 'get-contacts' });
+$('#contactSearch').addEventListener('input', (e) => filterContacts(e.target.value));
 
 // ---------- Старт ----------
 loadDashboard();
