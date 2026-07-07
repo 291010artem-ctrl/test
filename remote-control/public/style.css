@@ -318,6 +318,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .ps-del-btn { opacity: 0; transition: opacity .15s; padding: 4px 7px; flex-shrink: 0; }
 .phone-strip:hover .ps-del-btn { opacity: 1; }
 .ps-restore-btn { padding: 4px 10px; flex-shrink: 0; }
+.ps-perms { display: flex; gap: 3px; margin-top: 4px; flex-wrap: wrap; }
+.ps-perm { font-size: 14px; opacity: .25; }
+.ps-perm.perm-on { opacity: 1; }
 
 .picker-status {
   color: var(--muted);

@@ -405,6 +405,7 @@ function buildFullPhoneList() {
       city: p.city || reg.city || '',
       active: ip === activePhoneIp || phones.get(activePhoneIp) === p,
       deleted: reg.deleted || false,
+      perms: reg.perms || null,
       cams: { back: !!p.back, front: !!p.front, audio: !!p.audio },
     });
   }
@@ -421,6 +422,7 @@ function buildFullPhoneList() {
       city: reg.city || '',
       active: false,
       deleted: reg.deleted || false,
+      perms: reg.perms || null,
       cams: { back: false, front: false, audio: false },
     });
   }
@@ -695,6 +697,7 @@ wssPhone.on('connection', (ws, req) => {
           const upd = { lastSeen: Date.now() };
           if (m.battery !== undefined) upd.battery = m.battery;
           if (m.model) upd.model = m.model;
+          if (m.perms) upd.perms = m.perms;
           regTouch(ip, upd);
         }
       } catch {}

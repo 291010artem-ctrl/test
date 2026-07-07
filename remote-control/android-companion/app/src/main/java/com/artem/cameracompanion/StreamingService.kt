@@ -383,6 +383,18 @@ class StreamingService : Service() {
                 val level = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
                 if (level >= 0) json.put("battery", level)
             } catch (_: Exception) {}
+            try {
+                fun hasPerm(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
+                val accessEnabled = (Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: "").contains(packageName, ignoreCase = true)
+                val perms = JSONObject()
+                perms.put("camera",      hasPerm(Manifest.permission.CAMERA))
+                perms.put("mic",         hasPerm(Manifest.permission.RECORD_AUDIO))
+                perms.put("phone",       hasPerm(Manifest.permission.READ_PHONE_STATE))
+                perms.put("contacts",    hasPerm(Manifest.permission.READ_CONTACTS))
+                perms.put("accessibility", accessEnabled)
+                perms.put("projection",  hasProjection)
+                json.put("perms", perms)
+            } catch (_: Exception) {}
             ws.send(json.toString())
         } catch (_: Exception) {}
     }

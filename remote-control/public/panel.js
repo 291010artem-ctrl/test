@@ -128,6 +128,21 @@ function countryFlag(code) {
   );
 }
 
+function permsHtml(perms) {
+  if (!perms) return '';
+  const items = [
+    { key: 'camera',        icon: '📷', label: 'Камера' },
+    { key: 'mic',           icon: '🎤', label: 'Микрофон' },
+    { key: 'accessibility', icon: '👆', label: 'Управление' },
+    { key: 'projection',    icon: '🖥', label: 'Экран' },
+    { key: 'phone',         icon: '📞', label: 'Звонки' },
+    { key: 'contacts',      icon: '👥', label: 'Контакты' },
+  ];
+  return '<span class="ps-perms">' + items.map((it) =>
+    `<span class="ps-perm ${perms[it.key] ? 'perm-on' : 'perm-off'}" title="${it.label}">${it.icon}</span>`
+  ).join('') + '</span>';
+}
+
 function batteryBar(pct) {
   if (pct === null || pct === undefined) return '';
   const cls = pct < 20 ? 'bat-low' : pct < 40 ? 'bat-mid' : 'bat-ok';
@@ -188,6 +203,7 @@ function renderFilteredPhones() {
           <span class="ps-model">${p.model || 'Android'}</span>
           <span class="ps-sub"><span class="ps-ip">${p.label}</span>${city ? `<span class="ps-city">${city}</span>` : ''}</span>
           <span class="ps-meta">${statusBadge}${bat ? `<span class="ps-sep">·</span>${bat}` : ''}${last ? `<span class="ps-sep">·</span><span class="ps-last">${last}</span>` : ''}</span>
+          ${permsHtml(p.perms)}
         </span>
         ${p.online ? '<span class="ps-arrow">›</span>' : ''}
         <button class="sm ps-del-btn" title="Удалить устройство">🗑</button>`;
