@@ -21,6 +21,12 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 const app = express();
 app.use(express.json());
+app.use((req, res, next) => {
+  if (req.path === '/panel.js' || req.path === '/index.html' || req.path === '/') {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 const upload = multer({ dest: path.join(os.tmpdir(), 'arp-uploads') });
