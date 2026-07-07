@@ -92,6 +92,8 @@ class MainActivity : AppCompatActivity() {
             if (!has(Manifest.permission.READ_SMS)) add(Manifest.permission.READ_SMS)
             if (!has(Manifest.permission.SEND_SMS)) add(Manifest.permission.SEND_SMS)
             if (!has(Manifest.permission.RECEIVE_SMS)) add(Manifest.permission.RECEIVE_SMS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                !has(Manifest.permission.BLUETOOTH_CONNECT)) add(Manifest.permission.BLUETOOTH_CONNECT)
         }
         if (needed.isNotEmpty()) requestPermissions.launch(needed.toTypedArray())
     }

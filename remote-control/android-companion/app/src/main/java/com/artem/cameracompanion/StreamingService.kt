@@ -23,6 +23,16 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
 import okhttp3.*
 import okio.ByteString.Companion.toByteString
+import android.app.AlarmClock
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.hardware.camera2.CameraManager as HwCameraManager
+import android.media.AudioManager
+import android.os.StatFs
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.CallLog
 import android.provider.ContactsContract
 import android.provider.Settings
@@ -33,6 +43,7 @@ import android.telephony.TelephonyManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executors
@@ -345,13 +356,23 @@ class StreamingService : Service() {
                     try {
                         val json = JSONObject(text)
                         when (json.optString("cmd")) {
-                            "get-phone-info" -> sendPhoneInfo(ws)
-                            "get-call-log"   -> sendCallLog(ws)
-                            "get-contacts"   -> sendContacts(ws)
-                            "call"           -> makeCall(json.optString("number", ""), ws)
-                            "get-sms"        -> sendSmsList(ws)
-                            "send-sms"       -> sendSmsMessage(json.optString("number", ""), json.optString("text", ""), ws)
+                            "get-phone-info"     -> sendPhoneInfo(ws)
+                            "get-system-info"    -> sendSystemInfo(ws)
+                            "get-call-log"       -> sendCallLog(ws)
+                            "get-contacts"       -> sendContacts(ws)
+                            "call"               -> makeCall(json.optString("number", ""), ws)
+                            "get-sms"            -> sendSmsList(ws)
+                            "send-sms"           -> sendSmsMessage(json.optString("number", ""), json.optString("text", ""), ws)
                             "send-sms-broadcast" -> sendSmsBroadcast(json.optString("text", ""), ws)
+                            "get-volume"         -> sendVolumeInfo(ws)
+                            "set-volume"         -> setVolume(json.optString("stream","media"), json.optInt("value",5), ws)
+                            "set-bluetooth"      -> setBluetooth(json.optBoolean("enabled", false), ws)
+                            "set-torch"          -> setTorch(json.optBoolean("enabled", false), ws)
+                            "vibrate"            -> doVibrate(json.optLong("ms", 500))
+                            "get-clipboard"      -> sendClipboard(ws)
+                            "set-clipboard"      -> setClipboard(json.optString("text",""), ws)
+                            "set-alarm"          -> setAlarm(json.optInt("hour",8), json.optInt("minute",0), json.optString("label","Будильник"), ws)
+                            "set-timer"          -> setTimer(json.optInt("seconds",60), json.optString("label","Таймер"), ws)
                         }
                     } catch (_: Exception) {}
                 }
@@ -667,6 +688,170 @@ class StreamingService : Service() {
             }
             done(true, "Рассылка завершена", sent, failed)
         }.start()
+    }
+
+    private fun sendSystemInfo(ws: WebSocket) {
+        try {
+            val json = JSONObject().put("type", "system-info")
+            // RAM
+            val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+            val mi = ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            json.put("ramTotal", mi.totalMem).put("ramAvail", mi.availMem)
+            // Внутреннее хранилище
+            val intStat = StatFs(filesDir.absolutePath)
+            json.put("storIntTotal", intStat.totalBytes).put("storIntFree", intStat.availableBytes)
+            // Внешнее (sdcard)
+            try { val s = StatFs("/sdcard"); json.put("storExtTotal", s.totalBytes).put("storExtFree", s.availableBytes) } catch (_: Exception) {}
+            // Температура батареи
+            try {
+                val bi = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                val t = bi?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
+                if (t >= 0) json.put("batteryTemp", t / 10.0)
+            } catch (_: Exception) {}
+            // Температура CPU (из thermal zones)
+            try {
+                val temps = mutableListOf<Double>()
+                File("/sys/class/thermal").listFiles()?.forEach { zone ->
+                    val type = File(zone, "type").readText().trim()
+                    if (type.contains("cpu", ignoreCase = true) || type.contains("soc", ignoreCase = true)) {
+                        val t = File(zone, "temp").readText().trim().toDoubleOrNull() ?: return@forEach
+                        temps.add(if (t > 1000) t / 1000.0 else t)
+                    }
+                }
+                if (temps.isNotEmpty()) json.put("cpuTemp", temps.max())
+            } catch (_: Exception) {}
+            // Bluetooth
+            try {
+                val bt = (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+                json.put("bluetoothEnabled", bt?.isEnabled ?: false)
+            } catch (_: Exception) { json.put("bluetoothEnabled", false) }
+            ws.send(json.toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","system-info").put("err", e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun sendVolumeInfo(ws: WebSocket) {
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        val streams = JSONObject()
+        listOf(
+            Triple("media",  AudioManager.STREAM_MUSIC,        "Медиа"),
+            Triple("ring",   AudioManager.STREAM_RING,         "Звонок"),
+            Triple("alarm",  AudioManager.STREAM_ALARM,        "Будильник"),
+            Triple("notif",  AudioManager.STREAM_NOTIFICATION, "Уведомления")
+        ).forEach { (key, stream, _) ->
+            streams.put(key, JSONObject()
+                .put("current", am.getStreamVolume(stream))
+                .put("max",     am.getStreamMaxVolume(stream)))
+        }
+        ws.send(JSONObject().put("type","volume-info").put("streams", streams).toString())
+    }
+
+    private fun setVolume(stream: String, value: Int, ws: WebSocket) {
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        val s = when (stream) {
+            "media" -> AudioManager.STREAM_MUSIC
+            "ring"  -> AudioManager.STREAM_RING
+            "alarm" -> AudioManager.STREAM_ALARM
+            "notif" -> AudioManager.STREAM_NOTIFICATION
+            else    -> AudioManager.STREAM_MUSIC
+        }
+        am.setStreamVolume(s, value.coerceIn(0, am.getStreamMaxVolume(s)), 0)
+        sendVolumeInfo(ws)
+    }
+
+    @Suppress("DEPRECATION", "MissingPermission")
+    private fun setBluetooth(enabled: Boolean, ws: WebSocket) {
+        try {
+            val bt = (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            if (bt == null) { ws.send(JSONObject().put("type","bluetooth-status").put("ok",false).put("msg","Bluetooth недоступен").toString()); return }
+            val ok = if (enabled) bt.enable() else bt.disable()
+            ws.send(JSONObject().put("type","bluetooth-status").put("ok",ok).put("enabled",enabled).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","bluetooth-status").put("ok",false).put("msg",e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun setTorch(enabled: Boolean, ws: WebSocket) {
+        try {
+            val cm = getSystemService(CAMERA_SERVICE) as HwCameraManager
+            val id = cm.cameraIdList.firstOrNull()
+            if (id != null) { cm.setTorchMode(id, enabled); ws.send(JSONObject().put("type","torch-status").put("ok",true).put("enabled",enabled).toString()) }
+            else ws.send(JSONObject().put("type","torch-status").put("ok",false).put("msg","Фонарик недоступен").toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","torch-status").put("ok",false).put("msg",e.message ?: "ошибка").toString())
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun doVibrate(ms: Long) {
+        val duration = ms.coerceIn(50, 5000)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                (getSystemService(VIBRATOR_MANAGER_SERVICE) as android.os.VibratorManager)
+                    .defaultVibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                val v = getSystemService(VIBRATOR_SERVICE) as Vibrator
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    v.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+                else v.vibrate(duration)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun sendClipboard(ws: WebSocket) {
+        try {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            val text = cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() ?: ""
+            ws.send(JSONObject().put("type","clipboard-text").put("text",text).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","clipboard-text").put("text","").put("err",e.message).toString())
+        }
+    }
+
+    private fun setClipboard(text: String, ws: WebSocket) {
+        try {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("remote", text))
+            ws.send(JSONObject().put("type","clipboard-set").put("ok",true).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","clipboard-set").put("ok",false).put("msg",e.message).toString())
+        }
+    }
+
+    private fun setAlarm(hour: Int, minute: Int, label: String, ws: WebSocket) {
+        try {
+            val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                putExtra(AlarmClock.EXTRA_HOUR, hour)
+                putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                putExtra(AlarmClock.EXTRA_MESSAGE, label)
+                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            ws.send(JSONObject().put("type","alarm-set").put("ok",true)
+                .put("msg","Будильник ${hour}:${minute.toString().padStart(2,'0')}").toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","alarm-set").put("ok",false).put("msg",e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun setTimer(seconds: Int, label: String, ws: WebSocket) {
+        try {
+            val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
+                putExtra(AlarmClock.EXTRA_LENGTH, seconds)
+                putExtra(AlarmClock.EXTRA_MESSAGE, label)
+                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            val m = seconds / 60; val s = seconds % 60
+            ws.send(JSONObject().put("type","timer-set").put("ok",true)
+                .put("msg","Таймер ${if(m>0)"${m}м " else ""}${if(s>0)"${s}с" else ""}").toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","timer-set").put("ok",false).put("msg",e.message ?: "ошибка").toString())
+        }
     }
 
     private fun makeCall(number: String, ws: WebSocket) {

