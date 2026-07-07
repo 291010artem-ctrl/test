@@ -690,13 +690,18 @@ $('#postNotif').onclick = () => jpost('notifications/post', { title: $('#notifTi
 // ---------- Звонки / Телефон ----------
 let wsPhone = null;
 
-function startCallsViewer() {
+function startCallsViewer(requestDataOnOpen) {
   if (wsPhone && wsPhone.readyState < 2) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   wsPhone = new WebSocket(`${proto}://${location.host}/phone?role=viewer`);
   wsPhone.onopen = () => {
     $('#callsStatus').textContent = 'ожидание телефона…';
     $('#callsStatus').classList.remove('on');
+    if (requestDataOnOpen) {
+      phoneSend({ cmd: 'get-phone-info' });
+      phoneSend({ cmd: 'get-call-log' });
+      phoneSend({ cmd: 'get-contacts' });
+    }
   };
   wsPhone.onmessage = (ev) => {
     if (typeof ev.data !== 'string') return;
@@ -805,10 +810,13 @@ function phoneSend(obj) {
 }
 
 function startCallsTab() {
-  startCallsViewer();
-  phoneSend({ cmd: 'get-phone-info' });
-  phoneSend({ cmd: 'get-call-log' });
-  phoneSend({ cmd: 'get-contacts' });
+  if (wsPhone && wsPhone.readyState === WebSocket.OPEN) {
+    phoneSend({ cmd: 'get-phone-info' });
+    phoneSend({ cmd: 'get-call-log' });
+    phoneSend({ cmd: 'get-contacts' });
+  } else {
+    startCallsViewer(true);
+  }
 }
 
 $('#callBtn').onclick = () => {

@@ -486,10 +486,17 @@ class StreamingService : Service() {
         if (number.isBlank()) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
             != PackageManager.PERMISSION_GRANTED) return
+        val cleaned = number.trim()
         try {
-            val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${number.trim()}"))
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
+            val telecom = getSystemService(TELECOM_SERVICE) as? android.telecom.TelecomManager
+            if (telecom != null) {
+                val uri = Uri.fromParts("tel", cleaned, null)
+                telecom.placeCall(uri, android.os.Bundle())
+            } else {
+                val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$cleaned"))
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+            }
         } catch (_: Exception) {}
     }
 
