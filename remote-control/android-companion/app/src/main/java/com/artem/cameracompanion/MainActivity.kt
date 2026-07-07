@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
         StreamingService.start(this)
         updatePermsUi()
         statusHandler.post(statusRunnable)
+        requestMissingPermissions()
     }
 
     override fun onPause() {
