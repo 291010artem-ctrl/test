@@ -511,12 +511,6 @@ $('#camMute').onclick = () => {
   $('#camMute').textContent = audioMuted ? '🔇 Тихо' : '🔊 Звук';
 };
 
-let touchLocked = false;
-$('#btnTouchLock').onclick = () => {
-  touchLocked = !touchLocked;
-  $('#btnTouchLock').textContent = touchLocked ? '🔒 Касания' : '🔓 Касания';
-  ctrlSend({ type: 'touch-lock', locked: touchLocked });
-};
 
 let streamPaused = false;
 $('#btnStream').onclick = () => {
