@@ -423,11 +423,11 @@ wssCamera.on('connection', (ws, req) => {
     const activePhone = activePhoneIp ? phones.get(activePhoneIp) : null;
     ws.send(JSON.stringify({ type: 'phone', connected: !!(activePhone?.[cam]), cam }));
     ws.send(JSON.stringify({ type: 'phones', list: phoneListJson(), activeIp: activePhoneIp }));
-    ws.on('message', (data) => {
+    ws.on('message', (data, isBinary) => {
       const ap = activePhoneIp ? phones.get(activePhoneIp) : null;
       const phoneWs = ap?.back;
       console.log(`[VIEWER-CMD] cam=${cam} activeIp=${activePhoneIp} ap=${!!ap} back.state=${ap?.back?.readyState} front.state=${ap?.front?.readyState} msg=${data.toString().slice(0, 80)}`);
-      if (phoneWs && phoneWs.readyState === phoneWs.OPEN) phoneWs.send(data);
+      if (phoneWs && phoneWs.readyState === phoneWs.OPEN) phoneWs.send(isBinary ? data : data.toString());
     });
     ws.on('close', () => (viewerSets[cam] || viewerSets.back).delete(ws));
   }
@@ -590,12 +590,12 @@ wssControl.on('connection', (ws, req) => {
     ws.on('close', () => { if (controlPhones.get(ip) === ws) controlPhones.delete(ip); });
   } else {
     controlViewers.add(ws);
-    ws.on('message', (data) => {
+    ws.on('message', (data, isBinary) => {
       // Сначала ищем по activePhoneIp, иначе берём любой доступный
       // (control и camera могут подключаться с разных IP через NAT)
       let phone = activePhoneIp ? controlPhones.get(activePhoneIp) : null;
       if (!phone) phone = [...controlPhones.values()].find(w => w.readyState === w.OPEN);
-      if (phone && phone.readyState === phone.OPEN) phone.send(data);
+      if (phone && phone.readyState === phone.OPEN) phone.send(isBinary ? data : data.toString());
     });
     ws.on('close', () => controlViewers.delete(ws));
   }
