@@ -505,3 +505,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .broadcast-bar-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
 .broadcast-status { font-size: 12px; color: var(--muted); }
 .danger-btn { background: var(--danger) !important; }
+.broadcast-log { max-height: 200px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+.bc-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.bc-row:last-child { border-bottom: none; }
+.bc-icon { font-weight: 700; width: 14px; flex-shrink: 0; }
+.bc-ok .bc-icon { color: #4caf50; }
+.bc-fail .bc-icon { color: var(--danger); }
+.bc-name { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-num { color: var(--muted); flex-shrink: 0; }
+.bc-err { color: var(--danger); font-size: 11px; flex-shrink: 0; }

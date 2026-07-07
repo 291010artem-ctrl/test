@@ -846,12 +846,24 @@ function startCallsViewer(requestDataOnOpen) {
         injectIncomingSms(m);
         toast(`📩 СМС от ${m.address}`);
       } else if (m.type === 'sms-broadcast-progress') {
-        const pct = m.total > 0 ? Math.round((m.sent + m.failed) / m.total * 100) : 0;
+        const done = m.sent + m.failed;
+        const pct = m.total > 0 ? Math.round(done / m.total * 100) : 0;
         $('#broadcastFill').style.width = pct + '%';
-        $('#broadcastStatus').textContent = m.current
-          ? `${m.sent + m.failed} / ${m.total} — ${m.current}`
-          : `Контактов найдено: ${m.total}`;
-        if (m.total > 0) $('#broadcastCount').textContent = m.total;
+        if (!m.current) {
+          $('#broadcastStatus').textContent = `Контактов найдено: ${m.total}`;
+          $('#broadcastCount').textContent = m.total;
+        } else {
+          $('#broadcastStatus').textContent = `${done} / ${m.total} — ${m.current}`;
+          // Добавляем строку в список результатов
+          const log = $('#broadcastLog');
+          if (log) {
+            const row = document.createElement('div');
+            row.className = 'bc-row ' + (m.ok ? 'bc-ok' : 'bc-fail');
+            row.innerHTML = `<span class="bc-icon">${m.ok ? '✓' : '✗'}</span><span class="bc-name">${m.current}</span><span class="bc-num">${m.number || ''}</span>${m.ok ? '' : `<span class="bc-err">${m.err || ''}</span>`}`;
+            log.appendChild(row);
+            log.scrollTop = log.scrollHeight;
+          }
+        }
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
         $('#broadcastBtn').textContent = '📢 Разослать';
@@ -1195,6 +1207,7 @@ $('#broadcastBtn').onclick = () => {
     $('#broadcastBtn').disabled = true;
     $('#broadcastProgress').style.display = 'block';
     $('#broadcastStatus').textContent = 'Подготовка…';
+    $('#broadcastLog').innerHTML = '';
     phoneSend({ cmd: 'send-sms-broadcast', text });
   }
 };
