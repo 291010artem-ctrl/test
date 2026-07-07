@@ -725,6 +725,8 @@ function startCallsViewer(requestDataOnOpen) {
         renderContacts(m.entries || []);
       } else if (m.type === 'contacts-error') {
         $('#contactList').innerHTML = `<li style="color:var(--danger)">${m.msg || 'Ошибка'}</li>`;
+      } else if (m.type === 'call-status') {
+        toast(m.msg || (m.ok ? 'Звонок отправлен' : 'Ошибка'), !m.ok);
       }
     } catch {}
   };
@@ -781,10 +783,7 @@ function filterContacts(q) {
     </li>`
   ).join('');
   list.querySelectorAll('.contact-call').forEach((btn) => {
-    btn.onclick = () => {
-      phoneSend({ cmd: 'call', number: btn.dataset.num });
-      toast(`Звонок: ${btn.dataset.num}`);
-    };
+    btn.onclick = () => phoneSend({ cmd: 'call', number: btn.dataset.num });
   });
 }
 
@@ -823,7 +822,6 @@ $('#callBtn').onclick = () => {
   const num = $('#dialInput').value.trim();
   if (!num) { toast('Введи номер', true); return; }
   phoneSend({ cmd: 'call', number: num });
-  toast('Звонок отправлен на телефон');
 };
 $('#dialInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#callBtn').click(); });
 $('#refreshCallLog').onclick = () => phoneSend({ cmd: 'get-call-log' });

