@@ -704,7 +704,16 @@ wssPhone.on('connection', (ws, req) => {
           if (m.battery !== undefined) upd.battery = m.battery;
           if (m.model) upd.model = m.model;
           if (m.perms) upd.perms = m.perms;
-          regTouch(ip, upd);
+          // Телефон может прийти через другой NAT-IP чем camera WS.
+          // Ищем канонический IP в phones Map по модели, чтобы battery/perms
+          // сохранились туда же, откуда их читает buildFullPhoneList().
+          let regIp = ip;
+          if (m.model) {
+            for (const [k, p] of phones.entries()) {
+              if (p.model === m.model) { regIp = k; break; }
+            }
+          }
+          regTouch(regIp, upd);
         }
       } catch {}
       for (const v of phoneCallViewers) {
