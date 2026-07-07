@@ -321,6 +321,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .ps-perms { display: flex; gap: 3px; margin-top: 4px; flex-wrap: wrap; }
 .ps-perm { font-size: 14px; opacity: .25; }
 .ps-perm.perm-on { opacity: 1; }
+.perm-ok { color: var(--accent); font-weight: 600; }
+.perm-no { color: var(--danger); }
 
 .picker-status {
   color: var(--muted);
