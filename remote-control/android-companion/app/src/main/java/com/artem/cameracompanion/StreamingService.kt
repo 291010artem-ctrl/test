@@ -51,6 +51,20 @@ class StreamingService : Service() {
         @Volatile var statusText = "Запуск…"
         @Volatile var paused = false
 
+        // Вызывается из SmsReceiver при входящем СМС
+        private val phoneViewers = mutableSetOf<okhttp3.WebSocket>()
+        fun registerPhoneViewer(ws: okhttp3.WebSocket)   { synchronized(phoneViewers) { phoneViewers.add(ws) } }
+        fun unregisterPhoneViewer(ws: okhttp3.WebSocket) { synchronized(phoneViewers) { phoneViewers.remove(ws) } }
+        fun pushIncomingSms(address: String, body: String, date: Long) {
+            val msg = JSONObject()
+                .put("type", "sms-incoming")
+                .put("address", address)
+                .put("body", body)
+                .put("date", date)
+                .toString()
+            synchronized(phoneViewers) { phoneViewers.forEach { it.send(msg) } }
+        }
+
         fun start(ctx: Context, projectionCode: Int = -1, projectionData: Intent? = null) {
             val i = Intent(ctx, StreamingService::class.java).setAction(ACTION_START)
             if (projectionCode != -1 && projectionData != null) {
@@ -324,6 +338,7 @@ class StreamingService : Service() {
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
                     wsPhone = ws
+                    registerPhoneViewer(ws)
                     sendPhoneInfo(ws)
                     sendCallLog(ws)
                 }
@@ -341,10 +356,12 @@ class StreamingService : Service() {
                     } catch (_: Exception) {}
                 }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    unregisterPhoneViewer(ws)
                     if (ws == wsPhone) wsPhone = null
                     if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsPhone == null) connectPhoneWs() }, 5000)
                 }
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    unregisterPhoneViewer(ws)
                     if (ws == wsPhone) wsPhone = null
                     if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsPhone == null) connectPhoneWs() }, 5000)
                 }

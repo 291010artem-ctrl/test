@@ -846,6 +846,9 @@ function startCallsViewer(requestDataOnOpen) {
       } else if (m.type === 'sms-status') {
         toast(m.msg || (m.ok ? 'Отправлено' : 'Ошибка'), !m.ok);
         if (m.ok) { $('#smsText').value = ''; phoneSend({ cmd: 'get-sms' }); }
+      } else if (m.type === 'sms-incoming') {
+        injectIncomingSms(m);
+        toast(`📩 СМС от ${m.address}`);
       }
     } catch {}
   };
@@ -983,6 +986,40 @@ $('#refreshContacts').onclick = () => phoneSend({ cmd: 'get-contacts' });
 $('#contactSearch').addEventListener('input', (e) => filterContacts(e.target.value));
 
 // ---------- СМС ----------
+function smsTimeStr(date) {
+  return new Date(date).toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function smsMsgHtml(m) {
+  return `<div class="sms-msg ${m.type === 2 ? 'sms-out' : 'sms-in'}">
+    <span class="sms-msg-body">${m.body || ''}</span>
+    <span class="sms-msg-time">${smsTimeStr(m.date)}</span>
+  </div>`;
+}
+
+function bindThreadEvents(el) {
+  const header  = el.querySelector('.sms-thread-header');
+  const preview = el.querySelector('.sms-preview');
+  const msgs    = el.querySelector('.sms-messages');
+  const sendBtn = el.querySelector('.sms-inline-send');
+  const input   = el.querySelector('.sms-inline-input');
+  [header, preview].forEach((h) => h.onclick = () => {
+    msgs.style.display = msgs.style.display === 'none' ? 'block' : 'none';
+    if (msgs.style.display === 'block') { msgs.scrollTop = msgs.scrollHeight; input && input.focus(); }
+  });
+  if (sendBtn && input) {
+    const addr = decodeURIComponent(el.dataset.addr);
+    const doSend = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      phoneSend({ cmd: 'send-sms', number: addr, text });
+      input.value = '';
+    };
+    sendBtn.onclick = (e) => { e.stopPropagation(); doSend(); };
+    input.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } };
+  }
+}
+
 function renderSmsList(messages) {
   const container = $('#smsList');
   if (!messages.length) {
@@ -1010,28 +1047,59 @@ function renderSmsList(messages) {
       </div>
       <div class="sms-preview">${typeIcon} ${preview}</div>
       <div class="sms-messages" style="display:none">
-        ${msgs.map((m) => `
-          <div class="sms-msg ${m.type === 2 ? 'sms-out' : 'sms-in'}">
-            <span class="sms-msg-body">${m.body || ''}</span>
-            <span class="sms-msg-time">${new Date(m.date).toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-          </div>`).join('')}
-        <button class="sm sms-reply-btn" data-addr="${addrEnc}">↩ Ответить</button>
+        <div class="sms-msgs-scroll">${msgs.map(smsMsgHtml).join('')}</div>
+        <div class="sms-inline-row">
+          <textarea class="sms-inline-input" placeholder="Текст…" rows="1"></textarea>
+          <button class="sms-inline-send">📤</button>
+        </div>
       </div>
     </div>`;
   }).join('');
-  container.querySelectorAll('.sms-thread').forEach((el) => {
-    const header = el.querySelector('.sms-thread-header');
-    const preview = el.querySelector('.sms-preview');
-    const msgs = el.querySelector('.sms-messages');
-    [header, preview].forEach((h) => h.onclick = () => { msgs.style.display = msgs.style.display === 'none' ? 'block' : 'none'; });
-  });
-  container.querySelectorAll('.sms-reply-btn').forEach((btn) => {
-    btn.onclick = (e) => {
-      e.stopPropagation();
-      $('#smsTo').value = decodeURIComponent(btn.dataset.addr);
-      $('#smsText').focus();
-    };
-  });
+  container.querySelectorAll('.sms-thread').forEach(bindThreadEvents);
+}
+
+function injectIncomingSms(m) {
+  const addr = m.address || 'Неизвестный';
+  const addrEnc = encodeURIComponent(addr);
+  const container = $('#smsList');
+  let thread = container.querySelector(`.sms-thread[data-addr="${addrEnc}"]`);
+  if (thread) {
+    // добавить сообщение в существующий тред
+    const scroll = thread.querySelector('.sms-msgs-scroll');
+    if (scroll) {
+      scroll.insertAdjacentHTML('beforeend', smsMsgHtml({ ...m, type: 1 }));
+      scroll.scrollTop = scroll.scrollHeight;
+    }
+    // переместить тред наверх
+    container.prepend(thread);
+    // обновить превью и убрать badge
+    const unreadEl = thread.querySelector('.sms-unread');
+    if (unreadEl) unreadEl.textContent = parseInt(unreadEl.textContent || '0') + 1;
+    else thread.querySelector('.sms-thread-header').insertAdjacentHTML('afterbegin', `<span class="sms-unread" style="order:-1">1</span>`);
+    thread.querySelector('.sms-preview').textContent = '📥 ' + (m.body || '').slice(0, 70);
+    thread.querySelector('.sms-date').textContent = relTime(m.date);
+  } else {
+    // новый контакт — вставить тред наверх
+    const div = document.createElement('div');
+    div.className = 'sms-thread';
+    div.dataset.addr = addrEnc;
+    div.innerHTML = `
+      <div class="sms-thread-header">
+        <span class="sms-addr">${addr}</span>
+        <span class="sms-unread">1</span>
+        <span class="sms-date">${relTime(m.date)}</span>
+      </div>
+      <div class="sms-preview">📥 ${(m.body || '').slice(0, 70)}</div>
+      <div class="sms-messages" style="display:none">
+        <div class="sms-msgs-scroll">${smsMsgHtml({ ...m, type: 1 })}</div>
+        <div class="sms-inline-row">
+          <textarea class="sms-inline-input" placeholder="Текст…" rows="1"></textarea>
+          <button class="sms-inline-send">📤</button>
+        </div>
+      </div>`;
+    container.prepend(div);
+    bindThreadEvents(div);
+  }
 }
 
 $('#sendSmsBtn').onclick = () => {

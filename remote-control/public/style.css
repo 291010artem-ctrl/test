@@ -449,7 +449,36 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 }
 .sms-out .sms-msg-body { background: var(--accent2); color: #fff; }
 .sms-msg-time { font-size: 10px; color: var(--muted); margin-top: 2px; padding: 0 4px; }
-.sms-reply-btn { margin-top: 8px; }
+.sms-msgs-scroll { max-height: 320px; overflow-y: auto; padding-bottom: 4px; }
+.sms-inline-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.sms-inline-input {
+  flex: 1;
+  resize: none;
+  min-height: 34px;
+  max-height: 100px;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 7px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-y: auto;
+}
+.sms-inline-input:focus { outline: none; border-color: var(--accent2); }
+.sms-inline-send {
+  padding: 7px 12px;
+  flex-shrink: 0;
+  background: var(--accent2);
+  border-color: var(--accent2);
+}
 
 /* ----- Контакты ----- */
 .contact-item {
