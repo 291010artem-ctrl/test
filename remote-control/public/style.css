@@ -372,6 +372,59 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .call-log-table .type-outgoing { color: var(--accent2); }
 .call-log-table td small { color: var(--muted); font-size: 11px; display: block; }
 
+/* ----- СМС ----- */
+.sms-thread {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.sms-thread-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 4px;
+  cursor: pointer;
+}
+.sms-addr { font-weight: 600; font-size: 13px; flex: 1; }
+.sms-unread {
+  background: var(--accent2);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 11px;
+  padding: 1px 6px;
+}
+.sms-date { font-size: 11px; color: var(--muted); }
+.sms-preview {
+  padding: 2px 12px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.sms-messages { padding: 8px 12px 12px; border-top: 1px solid var(--border); }
+.sms-msg {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+  max-width: 85%;
+}
+.sms-in { align-items: flex-start; }
+.sms-out { align-items: flex-end; margin-left: auto; }
+.sms-msg-body {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 7px 11px;
+  font-size: 13px;
+  word-break: break-word;
+}
+.sms-out .sms-msg-body { background: var(--accent2); color: #fff; }
+.sms-msg-time { font-size: 10px; color: var(--muted); margin-top: 2px; padding: 0 4px; }
+.sms-reply-btn { margin-top: 8px; }
+
 /* ----- Контакты ----- */
 .contact-item {
   display: flex;

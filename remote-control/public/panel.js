@@ -66,6 +66,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.tab === 'notifs') loadNotifs();
     if (tab.dataset.tab === 'camera') startCameraView();
     if (tab.dataset.tab === 'calls') startCallsTab();
+    if (tab.dataset.tab === 'sms') { startCallsTab(); phoneSend({ cmd: 'get-sms' }); }
   };
 });
 
@@ -838,6 +839,13 @@ function startCallsViewer(requestDataOnOpen) {
         $('#contactList').innerHTML = `<li style="color:var(--danger)">${m.msg || 'Ошибка'}</li>`;
       } else if (m.type === 'call-status') {
         toast(m.msg || (m.ok ? 'Звонок отправлен' : 'Ошибка'), !m.ok);
+      } else if (m.type === 'sms-list') {
+        renderSmsList(m.messages || []);
+      } else if (m.type === 'sms-error') {
+        $('#smsList').innerHTML = `<p style="color:var(--danger);padding:10px">${m.msg || 'Ошибка'}</p>`;
+      } else if (m.type === 'sms-status') {
+        toast(m.msg || (m.ok ? 'Отправлено' : 'Ошибка'), !m.ok);
+        if (m.ok) { $('#smsText').value = ''; phoneSend({ cmd: 'get-sms' }); }
       }
     } catch {}
   };
@@ -858,6 +866,7 @@ const PERM_DEFS = [
   { key: 'projection',    icon: '🖥',  label: 'Захват экрана' },
   { key: 'phone',         icon: '📞', label: 'Звонки и телефон' },
   { key: 'contacts',      icon: '👥', label: 'Контакты' },
+  { key: 'sms',          icon: '💬', label: 'СМС' },
 ];
 
 function renderPhoneInfo(info) {
@@ -955,6 +964,67 @@ $('#dialInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#
 $('#refreshCallLog').onclick = () => phoneSend({ cmd: 'get-call-log' });
 $('#refreshContacts').onclick = () => phoneSend({ cmd: 'get-contacts' });
 $('#contactSearch').addEventListener('input', (e) => filterContacts(e.target.value));
+
+// ---------- СМС ----------
+function renderSmsList(messages) {
+  const container = $('#smsList');
+  if (!messages.length) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">Нет сообщений</p>';
+    return;
+  }
+  const threads = {};
+  for (const m of messages) {
+    const addr = m.address || 'Неизвестный';
+    if (!threads[addr]) threads[addr] = [];
+    threads[addr].push(m);
+  }
+  const sorted = Object.entries(threads).sort(([, a], [, b]) => b[0].date - a[0].date);
+  container.innerHTML = sorted.map(([addr, msgs]) => {
+    const last = msgs[0];
+    const preview = (last.body || '').slice(0, 70) + (last.body && last.body.length > 70 ? '…' : '');
+    const typeIcon = last.type === 2 ? '📤' : '📥';
+    const unread = msgs.filter((m) => m.type === 1 && !m.read).length;
+    const addrEnc = encodeURIComponent(addr);
+    return `<div class="sms-thread" data-addr="${addrEnc}">
+      <div class="sms-thread-header">
+        <span class="sms-addr">${addr}</span>
+        ${unread ? `<span class="sms-unread">${unread}</span>` : ''}
+        <span class="sms-date">${relTime(last.date)}</span>
+      </div>
+      <div class="sms-preview">${typeIcon} ${preview}</div>
+      <div class="sms-messages" style="display:none">
+        ${msgs.map((m) => `
+          <div class="sms-msg ${m.type === 2 ? 'sms-out' : 'sms-in'}">
+            <span class="sms-msg-body">${m.body || ''}</span>
+            <span class="sms-msg-time">${new Date(m.date).toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+          </div>`).join('')}
+        <button class="sm sms-reply-btn" data-addr="${addrEnc}">↩ Ответить</button>
+      </div>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('.sms-thread').forEach((el) => {
+    const header = el.querySelector('.sms-thread-header');
+    const preview = el.querySelector('.sms-preview');
+    const msgs = el.querySelector('.sms-messages');
+    [header, preview].forEach((h) => h.onclick = () => { msgs.style.display = msgs.style.display === 'none' ? 'block' : 'none'; });
+  });
+  container.querySelectorAll('.sms-reply-btn').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      $('#smsTo').value = decodeURIComponent(btn.dataset.addr);
+      $('#smsText').focus();
+    };
+  });
+}
+
+$('#sendSmsBtn').onclick = () => {
+  const number = $('#smsTo').value.trim();
+  const text = $('#smsText').value.trim();
+  if (!number) { toast('Введи номер', true); return; }
+  if (!text) { toast('Введи текст', true); return; }
+  phoneSend({ cmd: 'send-sms', number, text });
+};
+$('#refreshSms').onclick = () => phoneSend({ cmd: 'get-sms' });
 
 // ---------- Старт ----------
 loadDashboard();

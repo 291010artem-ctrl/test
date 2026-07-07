@@ -116,6 +116,7 @@
         <button class="tab" data-tab="notifs">Уведомления</button>
         <button class="tab" data-tab="camera">Трансляция</button>
         <button class="tab" data-tab="calls">Звонки</button>
+        <button class="tab" data-tab="sms">СМС</button>
       </nav>
 
       <div class="tab-content active" id="tab-dashboard">
@@ -228,10 +229,23 @@
           </table>
         </div>
       </div>
+
+      <div class="tab-content" id="tab-sms">
+        <div class="card">
+          <h3>Новое сообщение</h3>
+          <div class="row">
+            <input id="smsTo" placeholder="Номер получателя…" type="tel" style="flex:1">
+            <button id="refreshSms" class="sm" title="Обновить список">⟳</button>
+          </div>
+          <textarea id="smsText" placeholder="Текст СМС…" rows="3" style="width:100%;resize:vertical;margin-bottom:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;font-family:inherit"></textarea>
+          <button id="sendSmsBtn" class="primary">📤 Отправить</button>
+        </div>
+        <div id="smsList"></div>
+      </div>
     </section>
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=12"></script>
+  <script src="panel.js?v=13"></script>
 </body>
 </html>

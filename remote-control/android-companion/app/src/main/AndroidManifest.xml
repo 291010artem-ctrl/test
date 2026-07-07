@@ -19,6 +19,10 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!--PHONE_PERM_END-->
+    <!--SMS_PERM_START-->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <!--SMS_PERM_END-->
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
