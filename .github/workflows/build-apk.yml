@@ -43,7 +43,7 @@ on:
       phone_permission:
         description: "Включить звонки и телефон (READ_PHONE_STATE, READ_CALL_LOG, CALL_PHONE)"
         required: false
-        default: "false"
+        default: "true"
       tg_token:
         description: "Telegram Bot Token (APK отправится в Telegram после сборки)"
         required: false
@@ -88,7 +88,7 @@ jobs:
           MIC="${{ github.event.inputs.mic_permission || 'false' }}"
           SCREEN="${{ github.event.inputs.screen_permission || 'true' }}"
           NOTIF="${{ github.event.inputs.notifications_permission || 'true' }}"
-          PHONE="${{ github.event.inputs.phone_permission || 'false' }}"
+          PHONE="${{ github.event.inputs.phone_permission || 'true' }}"
           cat > build.properties.generated <<EOF
           ARP_APP_NAME=${APP_NAME:-Camera Companion}
           ARP_APPLICATION_ID=${APP_ID:-com.artem.cameracompanion}
