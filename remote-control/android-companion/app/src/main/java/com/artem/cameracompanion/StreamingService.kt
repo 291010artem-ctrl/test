@@ -55,10 +55,11 @@ class StreamingService : Service() {
         private val phoneViewers = mutableSetOf<okhttp3.WebSocket>()
         fun registerPhoneViewer(ws: okhttp3.WebSocket)   { synchronized(phoneViewers) { phoneViewers.add(ws) } }
         fun unregisterPhoneViewer(ws: okhttp3.WebSocket) { synchronized(phoneViewers) { phoneViewers.remove(ws) } }
-        fun pushIncomingSms(address: String, body: String, date: Long) {
+        fun pushIncomingSms(address: String, body: String, date: Long, name: String = "") {
             val msg = JSONObject()
                 .put("type", "sms-incoming")
                 .put("address", address)
+                .put("name", name)
                 .put("body", body)
                 .put("date", date)
                 .toString()
@@ -520,6 +521,20 @@ class StreamingService : Service() {
         }
     }
 
+    private fun resolveContactName(address: String): String {
+        if (address.isBlank()) return ""
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) return ""
+        return try {
+            val uri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(address))
+            contentResolver.query(uri,
+                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) ?: "" else ""
+            } ?: ""
+        } catch (_: Exception) { "" }
+    }
+
     private fun sendSmsList(ws: WebSocket) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
             != PackageManager.PERMISSION_GRANTED) {
@@ -527,7 +542,8 @@ class StreamingService : Service() {
             return
         }
         try {
-            val messages = JSONArray()
+            data class Row(val address: String, val body: String, val date: Long, val type: Int, val read: Boolean)
+            val rows = mutableListOf<Row>()
             contentResolver.query(
                 Uri.parse("content://sms"),
                 arrayOf("address", "body", "date", "type", "read"),
@@ -540,15 +556,33 @@ class StreamingService : Service() {
                 val readCol = c.getColumnIndex("read")
                 var count = 0
                 while (c.moveToNext() && count < 200) {
-                    val e = JSONObject()
-                    e.put("address", c.getString(addrCol) ?: "")
-                    e.put("body",    c.getString(bodyCol) ?: "")
-                    e.put("date",    c.getLong(dateCol))
-                    e.put("type",    c.getInt(typeCol)) // 1=входящее, 2=исходящее
-                    e.put("read",    c.getInt(readCol) == 1)
-                    messages.put(e)
+                    rows.add(Row(
+                        address = c.getString(addrCol) ?: "",
+                        body    = c.getString(bodyCol) ?: "",
+                        date    = c.getLong(dateCol),
+                        type    = c.getInt(typeCol),
+                        read    = c.getInt(readCol) == 1
+                    ))
                     count++
                 }
+            }
+            // Batch-resolve contact names for unique addresses
+            val nameCache = mutableMapOf<String, String>()
+            for (row in rows) {
+                if (row.address.isNotBlank() && !nameCache.containsKey(row.address)) {
+                    nameCache[row.address] = resolveContactName(row.address)
+                }
+            }
+            val messages = JSONArray()
+            for (row in rows) {
+                val e = JSONObject()
+                e.put("address", row.address)
+                e.put("name",    nameCache[row.address] ?: "")
+                e.put("body",    row.body)
+                e.put("date",    row.date)
+                e.put("type",    row.type) // 1=входящее, 2=исходящее
+                e.put("read",    row.read)
+                messages.put(e)
             }
             ws.send(JSONObject().put("type", "sms-list").put("messages", messages).toString())
         } catch (e: Exception) {

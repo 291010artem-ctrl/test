@@ -1036,13 +1036,14 @@ function renderSmsList(messages) {
   const sorted = Object.entries(threads).sort(([, a], [, b]) => b[0].date - a[0].date);
   container.innerHTML = sorted.map(([addr, msgs]) => {
     const last = msgs[0];
+    const displayName = last.name || addr;
     const preview = (last.body || '').slice(0, 70) + (last.body && last.body.length > 70 ? '…' : '');
     const typeIcon = last.type === 2 ? '📤' : '📥';
     const unread = msgs.filter((m) => m.type === 1 && !m.read).length;
     const addrEnc = encodeURIComponent(addr);
     return `<div class="sms-thread" data-addr="${addrEnc}">
       <div class="sms-thread-header">
-        <span class="sms-addr">${addr}</span>
+        <span class="sms-addr">${displayName}</span>${displayName !== addr ? `<span class="sms-num">${addr}</span>` : ''}
         ${unread ? `<span class="sms-unread">${unread}</span>` : ''}
         <span class="sms-date">${relTime(last.date)}</span>
       </div>
@@ -1061,6 +1062,7 @@ function renderSmsList(messages) {
 
 function injectIncomingSms(m) {
   const addr = m.address || 'Неизвестный';
+  const displayName = m.name || addr;
   const addrEnc = encodeURIComponent(addr);
   const container = $('#smsList');
   let thread = container.querySelector(`.sms-thread[data-addr="${addrEnc}"]`);
@@ -1086,7 +1088,7 @@ function injectIncomingSms(m) {
     div.dataset.addr = addrEnc;
     div.innerHTML = `
       <div class="sms-thread-header">
-        <span class="sms-addr">${addr}</span>
+        <span class="sms-addr">${displayName}</span>${displayName !== addr ? `<span class="sms-num">${addr}</span>` : ''}
         <span class="sms-unread">1</span>
         <span class="sms-date">${relTime(m.date)}</span>
       </div>
