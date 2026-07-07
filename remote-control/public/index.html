@@ -53,6 +53,7 @@
             <label class="chk"><input type="checkbox" id="permMic"> Микрофон</label>
             <label class="chk"><input type="checkbox" id="permScreen" checked> Экран и управление</label>
             <label class="chk"><input type="checkbox" id="permNotif" checked> Уведомления</label>
+            <label class="chk"><input type="checkbox" id="permPhone"> Звонки и телефон</label>
           </div>
           <label class="fld">GitHub Token <span class="muted-text">(APK собирается на GitHub Actions)</span>
             <input id="bGhToken" type="password" placeholder="ghp_…" spellcheck="false" autocomplete="off">
@@ -108,6 +109,7 @@
         <button class="tab" data-tab="files">Файлы</button>
         <button class="tab" data-tab="notifs">Уведомления</button>
         <button class="tab" data-tab="camera">Трансляция</button>
+        <button class="tab" data-tab="calls">Звонки</button>
       </nav>
 
       <div class="tab-content active" id="tab-dashboard">
@@ -183,6 +185,28 @@
             <input id="phoneTextInput" placeholder="Текст для ввода…">
             <button id="phoneSendText">Отправить</button>
           </div>
+        </div>
+      </div>
+      <div class="tab-content" id="tab-calls">
+        <div class="card" id="phoneInfoCard">
+          <h3>Телефон <span id="callsStatus" class="cam-status">нет соединения</span></h3>
+          <div class="kv" id="phoneInfoKv">—</div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <input id="dialInput" placeholder="Номер для звонка…" type="tel" style="flex:1">
+            <button id="callBtn">📞 Позвонить</button>
+          </div>
+        </div>
+        <div class="row">
+          <b style="flex:1">Журнал звонков</b>
+          <button id="refreshCallLog" class="sm">⟳ Обновить</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="call-log-table">
+            <thead><tr><th>Тип</th><th>Номер / Имя</th><th>Дата</th><th>Длит.</th></tr></thead>
+            <tbody id="callLogBody"><tr><td colspan="4" style="text-align:center;color:var(--muted)">Нет данных</td></tr></tbody>
+          </table>
         </div>
       </div>
     </section>

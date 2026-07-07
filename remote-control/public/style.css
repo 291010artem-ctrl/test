@@ -318,3 +318,23 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .dpad-row { display: flex; gap: 3px; align-items: center; }
 .dpad-btn { width: 38px; height: 38px; padding: 0; font-size: 15px; border-radius: 6px; }
 .dpad-center { width: 38px; height: 38px; }
+
+/* ----- Журнал звонков ----- */
+.call-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.call-log-table th,
+.call-log-table td {
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.call-log-table th { color: var(--muted); font-weight: 600; }
+.call-log-table tr:last-child td { border-bottom: none; }
+.call-log-table .type-missed { color: var(--danger); }
+.call-log-table .type-incoming { color: var(--accent); }
+.call-log-table .type-outgoing { color: var(--accent2); }
+.call-log-table td small { color: var(--muted); font-size: 11px; display: block; }

