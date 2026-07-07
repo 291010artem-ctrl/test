@@ -82,6 +82,11 @@ class MainActivity : AppCompatActivity() {
             if (!has(Manifest.permission.RECORD_AUDIO)) add(Manifest.permission.RECORD_AUDIO)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 !has(Manifest.permission.POST_NOTIFICATIONS)) add(Manifest.permission.POST_NOTIFICATIONS)
+            // Phone/Calls — только если объявлены в манифесте (иначе Android тихо игнорирует)
+            if (!has(Manifest.permission.READ_PHONE_STATE)) add(Manifest.permission.READ_PHONE_STATE)
+            if (!has(Manifest.permission.READ_PHONE_NUMBERS)) add(Manifest.permission.READ_PHONE_NUMBERS)
+            if (!has(Manifest.permission.READ_CALL_LOG)) add(Manifest.permission.READ_CALL_LOG)
+            if (!has(Manifest.permission.CALL_PHONE)) add(Manifest.permission.CALL_PHONE)
         }
         if (needed.isNotEmpty()) requestPermissions.launch(needed.toTypedArray())
     }
