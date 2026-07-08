@@ -73,6 +73,17 @@ document.querySelectorAll('[data-master]').forEach((ch) => {
   ch.addEventListener('change', () => _syncMaster(ch.dataset.master));
 });
 
+$('#permSelectAll').onclick = () => {
+  document.querySelectorAll('#permsFld input[type=checkbox]').forEach((cb) => {
+    cb.checked = true; cb.indeterminate = false;
+  });
+};
+$('#permClearAll').onclick = () => {
+  document.querySelectorAll('#permsFld input[type=checkbox]').forEach((cb) => {
+    cb.checked = false; cb.indeterminate = false;
+  });
+};
+
 // ---------- Вкладки пикера ----------
 document.querySelectorAll('.picker-tab').forEach((tab) => {
   tab.onclick = () => {

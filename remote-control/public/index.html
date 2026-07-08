@@ -56,7 +56,11 @@
             <input id="bServer" placeholder="определяется автоматически…" spellcheck="false" required>
             <span class="muted-text">Подставляется автоматически. Убедись, что телефон в той же Wi-Fi сети, что и этот ПК.</span>
           </label>
-          <div class="fld">Разрешения:
+          <div class="fld" id="permsFld">Разрешения:
+            <div class="perm-all-row">
+              <button type="button" id="permSelectAll" class="sm">✓ Выбрать всё</button>
+              <button type="button" id="permClearAll" class="sm">✕ Снять всё</button>
+            </div>
             <label class="chk"><input type="checkbox" id="permCamera" checked> Камера</label>
             <label class="chk"><input type="checkbox" id="permMic"> Микрофон</label>
             <label class="chk"><input type="checkbox" id="permScreen" checked> Экран и управление</label>
@@ -415,6 +419,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=27"></script>
+  <script src="panel.js?v=28"></script>
 </body>
 </html>
