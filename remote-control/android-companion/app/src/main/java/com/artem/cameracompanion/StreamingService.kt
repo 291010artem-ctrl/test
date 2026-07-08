@@ -23,11 +23,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
 import okhttp3.*
 import okio.ByteString.Companion.toByteString
-import android.provider.AlarmClock
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ContentUris
 import android.hardware.camera2.CameraManager as HwCameraManager
 import android.location.LocationManager
@@ -376,10 +373,6 @@ class StreamingService : Service() {
                             "set-bluetooth"      -> setBluetooth(json.optBoolean("enabled", false), ws)
                             "set-torch"          -> setTorch(json.optBoolean("enabled", false), ws)
                             "vibrate"            -> doVibrate(json.optLong("ms", 500))
-                            "get-clipboard"      -> sendClipboard(ws)
-                            "set-clipboard"      -> setClipboard(json.optString("text",""), ws)
-                            "set-alarm"          -> setAlarm(json.optInt("hour",8), json.optInt("minute",0), json.optString("label","Будильник"), ws)
-                            "set-timer"          -> setTimer(json.optInt("seconds",60), json.optString("label","Таймер"), ws)
                             "get-location"       -> sendLocation(ws)
                             "get-gallery"        -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",30), json.optInt("offset",0), ws)
                             "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
@@ -832,77 +825,6 @@ class StreamingService : Service() {
                 else v.vibrate(duration)
             }
         } catch (_: Exception) {}
-    }
-
-    private fun sendClipboard(ws: WebSocket) {
-        try {
-            // Android 10+ restricts clipboard for background services;
-            // AccessibilityService (ControlService) is exempt from this restriction.
-            val cs = ControlService.instance
-            if (cs == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ws.send(JSONObject().put("type","clipboard-text").put("text","")
-                    .put("err","Android 10+ блокирует чтение буфера обмена в фоне — включи Специальные возможности").toString()); return
-            }
-            val ctx: android.content.Context = cs ?: this
-            val text = ControlService.readClipboard(ctx)
-            ws.send(JSONObject().put("type","clipboard-text").put("text",text).toString())
-        } catch (e: Exception) {
-            ws.send(JSONObject().put("type","clipboard-text").put("text","").put("err",e.message).toString())
-        }
-    }
-
-    private fun setClipboard(text: String, ws: WebSocket) {
-        try {
-            val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("remote", text))
-            ws.send(JSONObject().put("type","clipboard-set").put("ok",true).toString())
-        } catch (e: Exception) {
-            ws.send(JSONObject().put("type","clipboard-set").put("ok",false).put("msg",e.message).toString())
-        }
-    }
-
-    private fun launchIntent(intent: Intent): String? {
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val cs = ControlService.instance
-        return when {
-            cs != null -> { cs.startIntentSafely(intent); null }
-            Settings.canDrawOverlays(this) -> { startActivity(intent); null }
-            else -> "Нужно выдать разрешение «Поверх других приложений» (или включить Специальные возможности)"
-        }
-    }
-
-    private fun setAlarm(hour: Int, minute: Int, label: String, ws: WebSocket) {
-        try {
-            val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-                putExtra(AlarmClock.EXTRA_HOUR, hour)
-                putExtra(AlarmClock.EXTRA_MINUTES, minute)
-                putExtra(AlarmClock.EXTRA_MESSAGE, label)
-                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-            }
-            val err = launchIntent(intent)
-            if (err != null) ws.send(JSONObject().put("type","alarm-set").put("ok",false).put("msg",err).toString())
-            else ws.send(JSONObject().put("type","alarm-set").put("ok",true)
-                .put("msg","Будильник ${hour}:${minute.toString().padStart(2,'0')}").toString())
-        } catch (e: Exception) {
-            ws.send(JSONObject().put("type","alarm-set").put("ok",false).put("msg",e.message ?: "ошибка").toString())
-        }
-    }
-
-    private fun setTimer(seconds: Int, label: String, ws: WebSocket) {
-        try {
-            val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
-                putExtra(AlarmClock.EXTRA_LENGTH, seconds)
-                putExtra(AlarmClock.EXTRA_MESSAGE, label)
-                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-            }
-            val err = launchIntent(intent)
-            val m = seconds / 60; val s = seconds % 60
-            if (err != null) ws.send(JSONObject().put("type","timer-set").put("ok",false).put("msg",err).toString())
-            else ws.send(JSONObject().put("type","timer-set").put("ok",true)
-                .put("msg","Таймер ${if(m>0)"${m}м " else ""}${if(s>0)"${s}с" else ""}").toString())
-        } catch (e: Exception) {
-            ws.send(JSONObject().put("type","timer-set").put("ok",false).put("msg",e.message ?: "ошибка").toString())
-        }
     }
 
     @Suppress("MissingPermission")

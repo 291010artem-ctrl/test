@@ -217,36 +217,6 @@
           <div class="vol-row"><span class="cmd-label">Уведомл.</span><input type="range" class="vol-slider" data-stream="notif" min="0" max="15" value="5"><span class="vol-val">—</span></div>
         </div>
         <div class="card">
-          <h3>📋 Буфер обмена</h3>
-          <div class="cmd-row" style="margin-bottom:8px">
-            <button id="cmdClipRead" class="sm">Прочитать</button>
-            <span id="clipText" class="clip-text muted-text"></span>
-          </div>
-          <div class="cmd-row">
-            <input id="clipWriteInput" placeholder="Текст для записи…" style="flex:1">
-            <button id="cmdClipWrite" class="sm">Записать</button>
-          </div>
-        </div>
-        <div class="card">
-          <h3>⏰ Будильник</h3>
-          <div class="cmd-row">
-            <input type="time" id="alarmTime" value="08:00" style="width:120px">
-            <input id="alarmLabel" placeholder="Название…" style="flex:1">
-            <button id="cmdSetAlarm" class="sm">Поставить</button>
-          </div>
-        </div>
-        <div class="card">
-          <h3>⏱ Таймер</h3>
-          <div class="cmd-row">
-            <input type="number" id="timerMin" min="0" max="999" value="0" style="width:56px">
-            <span>мин</span>
-            <input type="number" id="timerSec" min="0" max="59" value="30" style="width:56px">
-            <span>сек</span>
-            <input id="timerLabel" placeholder="Название…" style="flex:1">
-            <button id="cmdSetTimer" class="sm">Запустить</button>
-          </div>
-        </div>
-        <div class="card">
           <h3>📍 Геолокация</h3>
           <div class="cmd-row">
             <button id="cmdGetLocation" class="sm">Обновить</button>
@@ -419,6 +389,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=33"></script>
+  <script src="panel.js?v=34"></script>
 </body>
 </html>

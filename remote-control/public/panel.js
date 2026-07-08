@@ -930,16 +930,6 @@ function startCallsViewer(requestDataOnOpen) {
       } else if (m.type === 'torch-status') {
         if (!m.ok && m.msg) toast('Фонарик: ' + m.msg, true);
         else { setToggleBtn($('#cmdTorchToggle'), m.enabled); toast(m.enabled ? '🔦 Фонарик включён' : 'Фонарик выключен'); }
-      } else if (m.type === 'clipboard-text') {
-        const el = $('#clipText');
-        if (el) el.textContent = m.text || '(пусто)';
-        if (m.err) toast('Буфер: ' + m.err, true);
-      } else if (m.type === 'clipboard-set') {
-        toast(m.ok ? 'Буфер обмена записан' : ('Ошибка: ' + (m.msg || '')), !m.ok);
-      } else if (m.type === 'alarm-set') {
-        toast(m.ok ? ('✓ ' + (m.msg || 'Будильник поставлен')) : ('Ошибка: ' + (m.msg || '')), !m.ok);
-      } else if (m.type === 'timer-set') {
-        toast(m.ok ? ('✓ ' + (m.msg || 'Таймер запущен')) : ('Ошибка: ' + (m.msg || '')), !m.ok);
       } else if (m.type === 'location') {
         renderLocation(m);
       } else if (m.type === 'gallery-items') {
@@ -1400,28 +1390,6 @@ document.querySelectorAll('.vol-slider').forEach((sl) => {
     }, 250);
   });
 });
-
-$('#cmdClipRead').onclick = () => phoneSend({ cmd: 'get-clipboard' });
-$('#cmdClipWrite').onclick = () => {
-  const text = $('#clipWriteInput').value;
-  if (!text) { toast('Введи текст', true); return; }
-  phoneSend({ cmd: 'set-clipboard', text });
-};
-
-$('#cmdSetAlarm').onclick = () => {
-  const [hour, minute] = ($('#alarmTime').value || '08:00').split(':').map(Number);
-  const label = $('#alarmLabel').value || 'Будильник';
-  phoneSend({ cmd: 'set-alarm', hour: hour || 0, minute: minute || 0, label });
-};
-
-$('#cmdSetTimer').onclick = () => {
-  const min = parseInt($('#timerMin').value) || 0;
-  const sec = parseInt($('#timerSec').value) || 0;
-  const seconds = min * 60 + sec;
-  if (!seconds) { toast('Укажи время таймера', true); return; }
-  const label = $('#timerLabel').value || 'Таймер';
-  phoneSend({ cmd: 'set-timer', seconds, label });
-};
 
 // ---------- Геолокация ----------
 let _leafletMap = null;
