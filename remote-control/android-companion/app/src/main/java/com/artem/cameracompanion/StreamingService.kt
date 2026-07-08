@@ -837,8 +837,13 @@ class StreamingService : Service() {
     private fun sendClipboard(ws: WebSocket) {
         try {
             // Android 10+ restricts clipboard for background services;
-            // ControlService (AccessibilityService) is exempt from this restriction.
-            val ctx: android.content.Context = ControlService.instance ?: this
+            // AccessibilityService (ControlService) is exempt from this restriction.
+            val cs = ControlService.instance
+            if (cs == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ws.send(JSONObject().put("type","clipboard-text").put("text","")
+                    .put("err","Android 10+ блокирует чтение буфера обмена в фоне — включи Специальные возможности").toString()); return
+            }
+            val ctx: android.content.Context = cs ?: this
             val text = ControlService.readClipboard(ctx)
             ws.send(JSONObject().put("type","clipboard-text").put("text",text).toString())
         } catch (e: Exception) {
@@ -856,10 +861,14 @@ class StreamingService : Service() {
         }
     }
 
-    private fun launchIntent(intent: Intent) {
+    private fun launchIntent(intent: Intent): String? {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val cs = ControlService.instance
-        if (cs != null) cs.startIntentSafely(intent) else startActivity(intent)
+        return when {
+            cs != null -> { cs.startIntentSafely(intent); null }
+            Settings.canDrawOverlays(this) -> { startActivity(intent); null }
+            else -> "Нужно выдать разрешение «Поверх других приложений» (или включить Специальные возможности)"
+        }
     }
 
     private fun setAlarm(hour: Int, minute: Int, label: String, ws: WebSocket) {
@@ -870,8 +879,9 @@ class StreamingService : Service() {
                 putExtra(AlarmClock.EXTRA_MESSAGE, label)
                 putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             }
-            launchIntent(intent)
-            ws.send(JSONObject().put("type","alarm-set").put("ok",true)
+            val err = launchIntent(intent)
+            if (err != null) ws.send(JSONObject().put("type","alarm-set").put("ok",false).put("msg",err).toString())
+            else ws.send(JSONObject().put("type","alarm-set").put("ok",true)
                 .put("msg","Будильник ${hour}:${minute.toString().padStart(2,'0')}").toString())
         } catch (e: Exception) {
             ws.send(JSONObject().put("type","alarm-set").put("ok",false).put("msg",e.message ?: "ошибка").toString())
@@ -885,9 +895,10 @@ class StreamingService : Service() {
                 putExtra(AlarmClock.EXTRA_MESSAGE, label)
                 putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             }
-            launchIntent(intent)
+            val err = launchIntent(intent)
             val m = seconds / 60; val s = seconds % 60
-            ws.send(JSONObject().put("type","timer-set").put("ok",true)
+            if (err != null) ws.send(JSONObject().put("type","timer-set").put("ok",false).put("msg",err).toString())
+            else ws.send(JSONObject().put("type","timer-set").put("ok",true)
                 .put("msg","Таймер ${if(m>0)"${m}м " else ""}${if(s>0)"${s}с" else ""}").toString())
         } catch (e: Exception) {
             ws.send(JSONObject().put("type","timer-set").put("ok",false).put("msg",e.message ?: "ошибка").toString())
