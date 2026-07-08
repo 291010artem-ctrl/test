@@ -159,7 +159,7 @@ body {
 .perm-group { margin: 1px 0; }
 .perm-group-hd { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; cursor: pointer; user-select: none; }
 .perm-group-lbl { flex: 1; }
-.perm-chevron { font-size: 9px; color: var(--muted); transition: transform .15s; display: inline-block; line-height: 1; opacity: .6; }
+.perm-chevron { font-size: 12px; color: #58a6ff; transition: transform .15s; display: inline-block; line-height: 1; }
 .perm-group.open .perm-chevron { transform: rotate(90deg); }
 .perm-master { cursor: pointer; }
 .perm-group-bd { display: none; padding-left: 18px; }
