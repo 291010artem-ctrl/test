@@ -107,9 +107,6 @@ class MainActivity : AppCompatActivity() {
             // Calendar
             if (!has(Manifest.permission.READ_CALENDAR)) add(Manifest.permission.READ_CALENDAR)
             if (!has(Manifest.permission.WRITE_CALENDAR)) add(Manifest.permission.WRITE_CALENDAR)
-            // Activity recognition (step counter)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                !has(Manifest.permission.ACTIVITY_RECOGNITION)) add(Manifest.permission.ACTIVITY_RECOGNITION)
         }
         if (needed.isNotEmpty()) requestPermissions.launch(needed.toTypedArray())
     }

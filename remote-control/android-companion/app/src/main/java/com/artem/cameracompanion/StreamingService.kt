@@ -30,10 +30,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentUris
 import android.hardware.camera2.CameraManager as HwCameraManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.location.LocationManager
 import android.media.AudioManager
 import android.os.StatFs
@@ -386,7 +382,6 @@ class StreamingService : Service() {
                             "get-gallery"        -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",30), json.optInt("offset",0), ws)
                             "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
                             "get-calendar"       -> sendCalendarEvents(json.optInt("days",14), ws)
-                            "get-steps"          -> sendStepCount(ws)
                         }
                     } catch (_: Exception) {}
                 }
@@ -1019,29 +1014,6 @@ class StreamingService : Service() {
         } catch (e: Exception) {
             ws.send(JSONObject().put("type","calendar-events").put("err", e.message ?: "ошибка").toString())
         }
-    }
-
-    private fun sendStepCount(ws: WebSocket) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
-            ws.send(JSONObject().put("type","step-count").put("err","Нет разрешения ACTIVITY_RECOGNITION").toString()); return
-        }
-        val sm = getSystemService(SENSOR_SERVICE) as SensorManager
-        val sensor = sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-        if (sensor == null) { ws.send(JSONObject().put("type","step-count").put("err","Датчик шагомера недоступен").toString()); return }
-        var done = false
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent) {
-                if (done) return; done = true; sm.unregisterListener(this)
-                ws.send(JSONObject().put("type","step-count").put("steps", event.values[0].toLong()).toString())
-            }
-            override fun onAccuracyChanged(s: Sensor, accuracy: Int) {}
-        }
-        sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-        Handler(Looper.getMainLooper()).postDelayed({
-            if (!done) { done = true; sm.unregisterListener(listener)
-                ws.send(JSONObject().put("type","step-count").put("err","Нет данных от датчика").toString()) }
-        }, 3000)
     }
 
     private fun makeCall(number: String, ws: WebSocket) {

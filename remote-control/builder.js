@@ -25,7 +25,6 @@ export const AVAILABLE_PERMISSIONS = [
   { id: 'LOCATION',  manifest: 'android.permission.ACCESS_FINE_LOCATION', label: 'Геолокация',    runtime: true, default: false },
   { id: 'MEDIA',     manifest: 'android.permission.READ_MEDIA_IMAGES',    label: 'Фото/Видео',    runtime: true, default: false },
   { id: 'CALENDAR',  manifest: 'android.permission.READ_CALENDAR',        label: 'Календарь',     runtime: true, default: false },
-  { id: 'ACTIVITY',  manifest: 'android.permission.ACTIVITY_RECOGNITION', label: 'Шагомер',       runtime: true, default: false },
 ];
 
 export function hasAndroidSdk() {
@@ -89,9 +88,6 @@ async function patchManifest(perms) {
   }
   if (!perms.includes('CALENDAR')) {
     patched = patched.replace(/[ \t]*<!--CALENDAR_PERM_START-->[\s\S]*?<!--CALENDAR_PERM_END-->\n?/g, '');
-  }
-  if (!perms.includes('ACTIVITY')) {
-    patched = patched.replace(/[ \t]*<!--ACTIVITY_PERM_START-->[\s\S]*?<!--ACTIVITY_PERM_END-->\n?/g, '');
   }
   const fstParts = [];
   if (perms.includes('SCREEN')) fstParts.push('mediaProjection');
