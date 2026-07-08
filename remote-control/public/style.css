@@ -524,3 +524,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .vol-slider { flex: 1; accent-color: var(--accent); cursor: pointer; }
 .vol-val { min-width: 36px; font-size: 12px; color: var(--muted); text-align: right; }
 .clip-text { flex: 1; font-size: 12px; color: var(--muted); word-break: break-all; max-height: 60px; overflow-y: auto; font-style: italic; }
+.toggle-btn { min-width: 52px; transition: background 0.15s, color 0.15s; }
+.toggle-btn.on { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+input[type="time"] { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 14px; font-family: inherit; cursor: pointer; }
+input[type="time"]:focus { outline: none; border-color: var(--accent2); }

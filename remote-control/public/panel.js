@@ -875,10 +875,10 @@ function startCallsViewer(requestDataOnOpen) {
         renderVolumeInfo(m.streams || {});
       } else if (m.type === 'bluetooth-status') {
         if (!m.ok && m.msg) toast('Bluetooth: ' + m.msg, true);
-        else toast(m.enabled ? '🔵 Bluetooth включён' : 'Bluetooth выключен');
+        else { setToggleBtn($('#cmdBtToggle'), m.enabled); toast(m.enabled ? '🔵 Bluetooth включён' : 'Bluetooth выключен'); }
       } else if (m.type === 'torch-status') {
         if (!m.ok && m.msg) toast('Фонарик: ' + m.msg, true);
-        else toast(m.enabled ? '🔦 Фонарик включён' : 'Фонарик выключен');
+        else { setToggleBtn($('#cmdTorchToggle'), m.enabled); toast(m.enabled ? '🔦 Фонарик включён' : 'Фонарик выключен'); }
       } else if (m.type === 'clipboard-text') {
         const el = $('#clipText');
         if (el) el.textContent = m.text || '(пусто)';
@@ -1283,6 +1283,7 @@ function renderSystemInfo(m) {
   if (m.cpuTemp != null) rows.push(`<b>🌡 CPU</b><span>${m.cpuTemp.toFixed(1)} °C</span>`);
   if (m.bluetoothEnabled != null) {
     rows.push(`<b>🔵 Bluetooth</b><span>${m.bluetoothEnabled ? 'Включён' : 'Выключен'}</span>`);
+    setToggleBtn($('#cmdBtToggle'), m.bluetoothEnabled);
   }
   const el = $('#sysInfoKv');
   if (el) el.innerHTML = rows.length ? rows.join('') : '<span style="color:var(--muted)">Нет данных</span>';
@@ -1299,10 +1300,19 @@ function renderVolumeInfo(streams) {
   });
 }
 
-$('#cmdBtOn').onclick = () => phoneSend({ cmd: 'set-bluetooth', enabled: true });
-$('#cmdBtOff').onclick = () => phoneSend({ cmd: 'set-bluetooth', enabled: false });
-$('#cmdTorchOn').onclick = () => phoneSend({ cmd: 'set-torch', enabled: true });
-$('#cmdTorchOff').onclick = () => phoneSend({ cmd: 'set-torch', enabled: false });
+function setToggleBtn(btn, on) {
+  if (!btn) return;
+  btn.dataset.state = on ? 'on' : 'off';
+  btn.textContent = on ? 'Вкл' : 'Выкл';
+  btn.classList.toggle('on', on);
+}
+
+$('#cmdBtToggle').onclick = () => {
+  phoneSend({ cmd: 'set-bluetooth', enabled: $('#cmdBtToggle').dataset.state !== 'on' });
+};
+$('#cmdTorchToggle').onclick = () => {
+  phoneSend({ cmd: 'set-torch', enabled: $('#cmdTorchToggle').dataset.state !== 'on' });
+};
 
 $('#vibrateMs').addEventListener('input', () => {
   $('#vibrateMsVal').textContent = $('#vibrateMs').value + ' мс';
@@ -1330,10 +1340,9 @@ $('#cmdClipWrite').onclick = () => {
 };
 
 $('#cmdSetAlarm').onclick = () => {
-  const hour = parseInt($('#alarmHour').value) || 0;
-  const minute = parseInt($('#alarmMinute').value) || 0;
+  const [hour, minute] = ($('#alarmTime').value || '08:00').split(':').map(Number);
   const label = $('#alarmLabel').value || 'Будильник';
-  phoneSend({ cmd: 'set-alarm', hour, minute, label });
+  phoneSend({ cmd: 'set-alarm', hour: hour || 0, minute: minute || 0, label });
 };
 
 $('#cmdSetTimer').onclick = () => {

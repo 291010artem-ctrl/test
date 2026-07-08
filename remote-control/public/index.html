@@ -144,13 +144,11 @@
           <h3>Аппаратные функции</h3>
           <div class="cmd-row">
             <span class="cmd-label">🔵 Bluetooth</span>
-            <button id="cmdBtOn" class="sm">Вкл</button>
-            <button id="cmdBtOff" class="sm">Выкл</button>
+            <button id="cmdBtToggle" class="sm toggle-btn">Выкл</button>
           </div>
           <div class="cmd-row">
             <span class="cmd-label">🔦 Фонарик</span>
-            <button id="cmdTorchOn" class="sm">Вкл</button>
-            <button id="cmdTorchOff" class="sm">Выкл</button>
+            <button id="cmdTorchToggle" class="sm toggle-btn">Выкл</button>
           </div>
           <div class="cmd-row">
             <span class="cmd-label">📳 Вибрация</span>
@@ -180,9 +178,7 @@
         <div class="card">
           <h3>⏰ Будильник</h3>
           <div class="cmd-row">
-            <input type="number" id="alarmHour" min="0" max="23" value="8" style="width:56px">
-            <span>:</span>
-            <input type="number" id="alarmMinute" min="0" max="59" value="0" style="width:56px">
+            <input type="time" id="alarmTime" value="08:00" style="width:120px">
             <input id="alarmLabel" placeholder="Название…" style="flex:1">
             <button id="cmdSetAlarm" class="sm">Поставить</button>
           </div>
@@ -336,6 +332,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=23"></script>
+  <script src="panel.js?v=24"></script>
 </body>
 </html>
