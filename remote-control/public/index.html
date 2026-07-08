@@ -61,11 +61,30 @@
             <label class="chk"><input type="checkbox" id="permMic"> Микрофон</label>
             <label class="chk"><input type="checkbox" id="permScreen" checked> Экран и управление</label>
             <label class="chk"><input type="checkbox" id="permNotif" checked> Уведомления</label>
-            <label class="chk"><input type="checkbox" id="permPhone" checked> Звонки и телефон</label>
-            <label class="chk"><input type="checkbox" id="permSms" checked> СМС</label>
-            <label class="chk"><input type="checkbox" id="permBluetooth" checked> Bluetooth</label>
+            <div class="perm-group">
+              <span class="perm-group-label">📞 Телефон</span>
+              <label class="chk"><input type="checkbox" id="permPhoneState" checked> Инфо о телефоне (IMEI, оператор)</label>
+              <label class="chk"><input type="checkbox" id="permCallLog" checked> Журнал звонков</label>
+              <label class="chk"><input type="checkbox" id="permCallPhone" checked> Совершать звонки</label>
+              <label class="chk"><input type="checkbox" id="permContacts" checked> Контакты</label>
+            </div>
+            <div class="perm-group">
+              <span class="perm-group-label">✉️ SMS</span>
+              <label class="chk"><input type="checkbox" id="permReadSms" checked> Читать SMS</label>
+              <label class="chk"><input type="checkbox" id="permSendSms" checked> Отправлять SMS</label>
+              <label class="chk"><input type="checkbox" id="permReceiveSms" checked> Получать SMS</label>
+            </div>
+            <div class="perm-group">
+              <span class="perm-group-label">🔵 Bluetooth</span>
+              <label class="chk"><input type="checkbox" id="permBtConnect" checked> Подключение к устройствам</label>
+              <label class="chk"><input type="checkbox" id="permBtScan" checked> Поиск Bluetooth-устройств</label>
+            </div>
+            <div class="perm-group">
+              <span class="perm-group-label">🖼 Медиа</span>
+              <label class="chk"><input type="checkbox" id="permMediaImages"> Фото (галерея)</label>
+              <label class="chk"><input type="checkbox" id="permMediaVideo"> Видео (галерея)</label>
+            </div>
             <label class="chk"><input type="checkbox" id="permLocation"> Геолокация</label>
-            <label class="chk"><input type="checkbox" id="permMedia"> Фото/Видео</label>
             <label class="chk"><input type="checkbox" id="permCalendar"> Календарь</label>
           </div>
           <label class="fld">GitHub Token <span class="muted-text">(APK собирается на GitHub Actions)</span>
@@ -372,6 +391,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=25"></script>
+  <script src="panel.js?v=26"></script>
 </body>
 </html>

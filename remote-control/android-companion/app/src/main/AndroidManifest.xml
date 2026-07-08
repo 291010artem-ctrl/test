@@ -13,33 +13,49 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!--PHONE_PERM_START-->
+    <!--PHONE_STATE_PERM_START-->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    <!--PHONE_STATE_PERM_END-->
+    <!--CALL_LOG_PERM_START-->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!--CALL_LOG_PERM_END-->
+    <!--CALL_PHONE_PERM_START-->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!--CALL_PHONE_PERM_END-->
+    <!--CONTACTS_PERM_START-->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <!--PHONE_PERM_END-->
-    <!--SMS_PERM_START-->
+    <!--CONTACTS_PERM_END-->
+    <!--READ_SMS_PERM_START-->
     <uses-permission android:name="android.permission.READ_SMS" />
+    <!--READ_SMS_PERM_END-->
+    <!--SEND_SMS_PERM_START-->
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <!--SEND_SMS_PERM_END-->
+    <!--RECEIVE_SMS_PERM_START-->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <!--SMS_PERM_END-->
-    <!--BT_PERM_START-->
+    <!--RECEIVE_SMS_PERM_END-->
+    <!--BT_CONNECT_PERM_START-->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!--BT_CONNECT_PERM_END-->
+    <!--BT_SCAN_PERM_START-->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-    <!--BT_PERM_END-->
+    <!--BT_SCAN_PERM_END-->
     <!--LOCATION_PERM_START-->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!--LOCATION_PERM_END-->
-    <!--MEDIA_PERM_START-->
+    <!--MEDIA_IMG_PERM_START-->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!--MEDIA_IMG_PERM_END-->
+    <!--MEDIA_VID_PERM_START-->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!--MEDIA_VID_PERM_END-->
+    <!--MEDIA_LEGACY_PERM_START-->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <!--MEDIA_PERM_END-->
+    <!--MEDIA_LEGACY_PERM_END-->
     <!--CALENDAR_PERM_START-->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />

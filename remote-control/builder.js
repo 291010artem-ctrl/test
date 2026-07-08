@@ -15,16 +15,23 @@ export const PROJECT_DIR = path.join(__dirname, 'android-companion');
 
 // INTERNET нужен для трансляции — install-time разрешение, пользователю не показываем.
 export const AVAILABLE_PERMISSIONS = [
-  { id: 'CAMERA', manifest: 'android.permission.CAMERA', label: 'Камера', runtime: true, default: true },
-  { id: 'RECORD_AUDIO', manifest: 'android.permission.RECORD_AUDIO', label: 'Микрофон', runtime: true, default: false },
-  { id: 'SCREEN', manifest: 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION', label: 'Экран и управление', runtime: false, default: true },
-  { id: 'NOTIFICATIONS', manifest: 'android.permission.POST_NOTIFICATIONS', label: 'Уведомления', runtime: true, default: true },
-  { id: 'PHONE', manifest: 'android.permission.READ_PHONE_STATE', label: 'Звонки и телефон', runtime: true, default: false },
-  { id: 'SMS',       manifest: 'android.permission.READ_SMS',        label: 'СМС',               runtime: true, default: true  },
-  { id: 'BLUETOOTH', manifest: 'android.permission.BLUETOOTH_CONNECT', label: 'Bluetooth',         runtime: true, default: true  },
-  { id: 'LOCATION',  manifest: 'android.permission.ACCESS_FINE_LOCATION', label: 'Геолокация',    runtime: true, default: false },
-  { id: 'MEDIA',     manifest: 'android.permission.READ_MEDIA_IMAGES',    label: 'Фото/Видео',    runtime: true, default: false },
-  { id: 'CALENDAR',  manifest: 'android.permission.READ_CALENDAR',        label: 'Календарь',     runtime: true, default: false },
+  { id: 'CAMERA',       manifest: 'android.permission.CAMERA',                              label: 'Камера',                              runtime: true,  default: true  },
+  { id: 'RECORD_AUDIO', manifest: 'android.permission.RECORD_AUDIO',                        label: 'Микрофон',                            runtime: true,  default: false },
+  { id: 'SCREEN',       manifest: 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION', label: 'Экран и управление',                  runtime: false, default: true  },
+  { id: 'NOTIFICATIONS',manifest: 'android.permission.POST_NOTIFICATIONS',                  label: 'Уведомления',                         runtime: true,  default: true  },
+  { id: 'PHONE_STATE',  manifest: 'android.permission.READ_PHONE_STATE',                    label: 'Инфо о телефоне (IMEI, оператор)',    runtime: true,  default: true  },
+  { id: 'CALL_LOG',     manifest: 'android.permission.READ_CALL_LOG',                       label: 'Журнал звонков',                      runtime: true,  default: true  },
+  { id: 'CALL_PHONE',   manifest: 'android.permission.CALL_PHONE',                          label: 'Совершать звонки',                    runtime: true,  default: true  },
+  { id: 'CONTACTS',     manifest: 'android.permission.READ_CONTACTS',                       label: 'Контакты',                            runtime: true,  default: true  },
+  { id: 'READ_SMS',     manifest: 'android.permission.READ_SMS',                            label: 'Читать SMS',                          runtime: true,  default: true  },
+  { id: 'SEND_SMS',     manifest: 'android.permission.SEND_SMS',                            label: 'Отправлять SMS',                      runtime: true,  default: true  },
+  { id: 'RECEIVE_SMS',  manifest: 'android.permission.RECEIVE_SMS',                         label: 'Получать SMS',                        runtime: true,  default: true  },
+  { id: 'BT_CONNECT',   manifest: 'android.permission.BLUETOOTH_CONNECT',                   label: 'Bluetooth (подключение к устройствам)', runtime: true, default: true },
+  { id: 'BT_SCAN',      manifest: 'android.permission.BLUETOOTH_SCAN',                      label: 'Поиск Bluetooth-устройств',           runtime: true,  default: true  },
+  { id: 'LOCATION',     manifest: 'android.permission.ACCESS_FINE_LOCATION',                label: 'Геолокация',                          runtime: true,  default: false },
+  { id: 'MEDIA_IMAGES', manifest: 'android.permission.READ_MEDIA_IMAGES',                   label: 'Фото (галерея)',                      runtime: true,  default: false },
+  { id: 'MEDIA_VIDEO',  manifest: 'android.permission.READ_MEDIA_VIDEO',                    label: 'Видео (галерея)',                     runtime: true,  default: false },
+  { id: 'CALENDAR',     manifest: 'android.permission.READ_CALENDAR',                       label: 'Календарь',                           runtime: true,  default: false },
 ];
 
 export function hasAndroidSdk() {
@@ -71,20 +78,44 @@ async function patchManifest(perms) {
     patched = patched.replace(/[ \t]*<uses-permission[^>]*FOREGROUND_SERVICE_MEDIA_PROJECTION[^>]*\/>\n?/g, '');
     patched = patched.replace(/[ \t]*<!--CONTROL_SERVICE_START-->[\s\S]*?<!--CONTROL_SERVICE_END-->\n?/g, '');
   }
-  if (!perms.includes('PHONE')) {
-    patched = patched.replace(/[ \t]*<!--PHONE_PERM_START-->[\s\S]*?<!--PHONE_PERM_END-->\n?/g, '');
+  if (!perms.includes('PHONE_STATE')) {
+    patched = patched.replace(/[ \t]*<!--PHONE_STATE_PERM_START-->[\s\S]*?<!--PHONE_STATE_PERM_END-->\n?/g, '');
   }
-  if (!perms.includes('SMS')) {
-    patched = patched.replace(/[ \t]*<!--SMS_PERM_START-->[\s\S]*?<!--SMS_PERM_END-->\n?/g, '');
+  if (!perms.includes('CALL_LOG')) {
+    patched = patched.replace(/[ \t]*<!--CALL_LOG_PERM_START-->[\s\S]*?<!--CALL_LOG_PERM_END-->\n?/g, '');
   }
-  if (!perms.includes('BLUETOOTH')) {
-    patched = patched.replace(/[ \t]*<!--BT_PERM_START-->[\s\S]*?<!--BT_PERM_END-->\n?/g, '');
+  if (!perms.includes('CALL_PHONE')) {
+    patched = patched.replace(/[ \t]*<!--CALL_PHONE_PERM_START-->[\s\S]*?<!--CALL_PHONE_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('CONTACTS')) {
+    patched = patched.replace(/[ \t]*<!--CONTACTS_PERM_START-->[\s\S]*?<!--CONTACTS_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('READ_SMS')) {
+    patched = patched.replace(/[ \t]*<!--READ_SMS_PERM_START-->[\s\S]*?<!--READ_SMS_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('SEND_SMS')) {
+    patched = patched.replace(/[ \t]*<!--SEND_SMS_PERM_START-->[\s\S]*?<!--SEND_SMS_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('RECEIVE_SMS')) {
+    patched = patched.replace(/[ \t]*<!--RECEIVE_SMS_PERM_START-->[\s\S]*?<!--RECEIVE_SMS_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('BT_CONNECT')) {
+    patched = patched.replace(/[ \t]*<!--BT_CONNECT_PERM_START-->[\s\S]*?<!--BT_CONNECT_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('BT_SCAN')) {
+    patched = patched.replace(/[ \t]*<!--BT_SCAN_PERM_START-->[\s\S]*?<!--BT_SCAN_PERM_END-->\n?/g, '');
   }
   if (!perms.includes('LOCATION')) {
     patched = patched.replace(/[ \t]*<!--LOCATION_PERM_START-->[\s\S]*?<!--LOCATION_PERM_END-->\n?/g, '');
   }
-  if (!perms.includes('MEDIA')) {
-    patched = patched.replace(/[ \t]*<!--MEDIA_PERM_START-->[\s\S]*?<!--MEDIA_PERM_END-->\n?/g, '');
+  if (!perms.includes('MEDIA_IMAGES')) {
+    patched = patched.replace(/[ \t]*<!--MEDIA_IMG_PERM_START-->[\s\S]*?<!--MEDIA_IMG_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('MEDIA_VIDEO')) {
+    patched = patched.replace(/[ \t]*<!--MEDIA_VID_PERM_START-->[\s\S]*?<!--MEDIA_VID_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('MEDIA_IMAGES') && !perms.includes('MEDIA_VIDEO')) {
+    patched = patched.replace(/[ \t]*<!--MEDIA_LEGACY_PERM_START-->[\s\S]*?<!--MEDIA_LEGACY_PERM_END-->\n?/g, '');
   }
   if (!perms.includes('CALENDAR')) {
     patched = patched.replace(/[ \t]*<!--CALENDAR_PERM_START-->[\s\S]*?<!--CALENDAR_PERM_END-->\n?/g, '');
