@@ -158,9 +158,9 @@ body {
 .perm-all-row { display: flex; gap: 6px; margin: 4px 0 8px; }
 .perm-group { margin: 1px 0; }
 .perm-group-hd { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; cursor: pointer; user-select: none; }
-.perm-group-lbl { flex: 1; }
-.perm-chevron { font-size: 12px; color: #58a6ff; transition: transform .15s; display: inline-block; line-height: 1; }
-.perm-group.open .perm-chevron { transform: rotate(90deg); }
+.perm-group-lbl { }
+.perm-chevron { font-size: 10px; color: #58a6ff; transition: transform .15s; display: inline-block; line-height: 1; }
+.perm-group.open .perm-chevron { transform: rotate(180deg); }
 .perm-master { cursor: pointer; }
 .perm-group-bd { display: none; padding-left: 18px; }
 .perm-group.open .perm-group-bd { display: block; }
