@@ -942,19 +942,23 @@ function startCallsViewer(requestDataOnOpen) {
         renderGalleryStats(m);
       } else if (m.type === 'bulk-start') {
         _bulkState = { total: m.total, done: 0, totalBytes: m.totalBytes || 0, bytesDone: 0 };
+        _bulkZip = new JSZip(); _bulkZipPart = 0; _bulkZipSize = 0;
         const cb = $('#dlCancelBtn'); if (cb) cb.style.display = '';
         ['dlAllBtn','dlPhotosBtn','dlVideosBtn'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = true; });
         _updateBulkProgress();
       } else if (m.type === 'bulk-progress') {
         if (_bulkState) { _bulkState.done = m.done; _updateBulkProgress(); }
       } else if (m.type === 'bulk-done') {
-        const prev = _bulkState;
         _bulkState = null;
         const cb = $('#dlCancelBtn'); if (cb) cb.style.display = 'none';
         ['dlAllBtn','dlPhotosBtn','dlVideosBtn'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = false; });
-        if (m.cancelled) toast('Загрузка отменена');
-        else if (m.err) toast('Ошибка: ' + m.err, true);
-        else toast(`✓ Скачано ${m.done} файлов`);
+        if (m.cancelled) { toast('Загрузка отменена'); if (_bulkZip && _bulkZipSize > 0) _flushZipAsync(); _bulkZip = null; }
+        else if (m.err) { toast('Ошибка: ' + m.err, true); _bulkZip = null; }
+        else {
+          if (_bulkZip && _bulkZipSize > 0) _flushZipAsync();
+          else toast(`✓ Скачано ${m.done} файлов`);
+          _bulkZip = null;
+        }
         const area = $('#bulkProgressArea');
         if (area) setTimeout(() => { if (!_bulkState) area.style.display = 'none'; }, 4000);
       } else if (m.type === 'file-chunk') {
@@ -978,16 +982,18 @@ function startCallsViewer(requestDataOnOpen) {
         toast(`⬇ ${dl.name} — ${pct}%${info ? ' · ' + info : ''}`);
         if (got === dl.total) {
           _fileDl.delete(m.requestId);
-          if (m.requestId && m.requestId.startsWith('bulk_') && _bulkState) {
-            _bulkState.bytesDone += dl.size || 0;
-          }
           const parts = dl.chunks.map((c) => { const b = atob(c); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; });
           const blob = new Blob(parts, { type: dl.mime || 'application/octet-stream' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a'); a.href = url; a.download = dl.name || 'file';
-          document.body.appendChild(a); a.click(); document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(url), 2000);
-          if (!m.requestId || !m.requestId.startsWith('bulk_')) toast('✓ Скачан: ' + dl.name);
+          if (m.requestId && m.requestId.startsWith('bulk_')) {
+            if (_bulkState) _bulkState.bytesDone += dl.size || 0;
+            _addToBulkZip(dl.name || 'file', blob);
+          } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = dl.name || 'file';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            toast('✓ Скачан: ' + dl.name);
+          }
         }
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
@@ -1502,6 +1508,49 @@ const _fileDl = new Map(); // requestId → { chunks, name, mime, total, size, s
 let _bulkStats = null;  // из gallery-stats: {imageCount, imageSize, videoCount, videoSize}
 let _bulkState = null;  // активная загрузка: {total, done, totalBytes, bytesDone}
 
+// ZIP-архив для массового скачивания
+const ZIP_PART_MAX = 1024 * 1024 * 1024; // 1 ГБ на часть
+let _bulkZip = null;
+let _bulkZipPart = 0;
+let _bulkZipSize = 0;
+let _bulkZipName = 'gallery';
+
+async function _flushZipAsync() {
+  const zip = _bulkZip;         // захватываем ссылку до сброса
+  const partNum = ++_bulkZipPart;
+  _bulkZip = new JSZip();       // сразу создаём новый — новые файлы идут сюда
+  _bulkZipSize = 0;
+  try {
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${_bulkZipName}_часть${partNum}.zip`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(`✓ Архив часть ${partNum} скачан`);
+  } catch (e) { toast('Ошибка архива: ' + e.message, true); }
+}
+
+function _addToBulkZip(name, blob) {
+  if (!_bulkZip) return;
+  // если добавление превысит лимит — сбрасываем текущую часть
+  if (_bulkZipSize > 0 && _bulkZipSize + blob.size > ZIP_PART_MAX) {
+    _flushZipAsync();
+  }
+  // уникальное имя внутри архива
+  let fname = name || 'file';
+  if (_bulkZip.files[fname]) {
+    const dot = fname.lastIndexOf('.');
+    const base = dot >= 0 ? fname.slice(0, dot) : fname;
+    const ext  = dot >= 0 ? fname.slice(dot) : '';
+    let i = 1;
+    while (_bulkZip.files[`${base}_${i}${ext}`]) i++;
+    fname = `${base}_${i}${ext}`;
+  }
+  _bulkZip.file(fname, blob);
+  _bulkZipSize += blob.size;
+}
+
 // Скользящее окно скорости — храним {ts, bytes} за последние 5 с
 const _speedWindow = [];
 function _trackSpeed(bytes) {
@@ -1679,17 +1728,20 @@ $('#videoSlider').addEventListener('input', _updateSliderLabels);
 
 $('#dlPhotosBtn').onclick = () => {
   const limit = parseInt($('#photoSlider').value) || 0;
+  _bulkZipName = 'photos';
   phoneSend({ cmd: 'get-bulk-download', mediaType: 'images', photoLimit: limit, videoLimit: 0 });
   toast('Начинаю загрузку фото…');
 };
 $('#dlVideosBtn').onclick = () => {
   const limit = parseInt($('#videoSlider').value) || 0;
+  _bulkZipName = 'videos';
   phoneSend({ cmd: 'get-bulk-download', mediaType: 'videos', photoLimit: 0, videoLimit: limit });
   toast('Начинаю загрузку видео…');
 };
 $('#dlAllBtn').onclick = () => {
   const pl = parseInt($('#photoSlider').value) || 0;
   const vl = parseInt($('#videoSlider').value) || 0;
+  _bulkZipName = 'gallery';
   phoneSend({ cmd: 'get-bulk-download', mediaType: 'all', photoLimit: pl, videoLimit: vl });
   toast('Начинаю загрузку всего…');
 };
