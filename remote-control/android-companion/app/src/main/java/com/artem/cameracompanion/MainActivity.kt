@@ -94,6 +94,22 @@ class MainActivity : AppCompatActivity() {
             if (!has(Manifest.permission.RECEIVE_SMS)) add(Manifest.permission.RECEIVE_SMS)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                 !has(Manifest.permission.BLUETOOTH_CONNECT)) add(Manifest.permission.BLUETOOTH_CONNECT)
+            // Location
+            if (!has(Manifest.permission.ACCESS_FINE_LOCATION)) add(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (!has(Manifest.permission.ACCESS_COARSE_LOCATION)) add(Manifest.permission.ACCESS_COARSE_LOCATION)
+            // Media
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (!has(Manifest.permission.READ_MEDIA_IMAGES)) add(Manifest.permission.READ_MEDIA_IMAGES)
+                if (!has(Manifest.permission.READ_MEDIA_VIDEO)) add(Manifest.permission.READ_MEDIA_VIDEO)
+            } else {
+                if (!has(Manifest.permission.READ_EXTERNAL_STORAGE)) add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            // Calendar
+            if (!has(Manifest.permission.READ_CALENDAR)) add(Manifest.permission.READ_CALENDAR)
+            if (!has(Manifest.permission.WRITE_CALENDAR)) add(Manifest.permission.WRITE_CALENDAR)
+            // Activity recognition (step counter)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                !has(Manifest.permission.ACTIVITY_RECOGNITION)) add(Manifest.permission.ACTIVITY_RECOGNITION)
         }
         if (needed.isNotEmpty()) requestPermissions.launch(needed.toTypedArray())
     }

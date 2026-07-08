@@ -30,6 +30,22 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <!--BT_PERM_END-->
+    <!--LOCATION_PERM_START-->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!--LOCATION_PERM_END-->
+    <!--MEDIA_PERM_START-->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!--MEDIA_PERM_END-->
+    <!--CALENDAR_PERM_START-->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!--CALENDAR_PERM_END-->
+    <!--ACTIVITY_PERM_START-->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!--ACTIVITY_PERM_END-->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />

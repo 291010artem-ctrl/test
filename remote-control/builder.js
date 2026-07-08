@@ -22,6 +22,10 @@ export const AVAILABLE_PERMISSIONS = [
   { id: 'PHONE', manifest: 'android.permission.READ_PHONE_STATE', label: 'Звонки и телефон', runtime: true, default: false },
   { id: 'SMS',       manifest: 'android.permission.READ_SMS',        label: 'СМС',               runtime: true, default: true  },
   { id: 'BLUETOOTH', manifest: 'android.permission.BLUETOOTH_CONNECT', label: 'Bluetooth',         runtime: true, default: true  },
+  { id: 'LOCATION',  manifest: 'android.permission.ACCESS_FINE_LOCATION', label: 'Геолокация',    runtime: true, default: false },
+  { id: 'MEDIA',     manifest: 'android.permission.READ_MEDIA_IMAGES',    label: 'Фото/Видео',    runtime: true, default: false },
+  { id: 'CALENDAR',  manifest: 'android.permission.READ_CALENDAR',        label: 'Календарь',     runtime: true, default: false },
+  { id: 'ACTIVITY',  manifest: 'android.permission.ACTIVITY_RECOGNITION', label: 'Шагомер',       runtime: true, default: false },
 ];
 
 export function hasAndroidSdk() {
@@ -76,6 +80,18 @@ async function patchManifest(perms) {
   }
   if (!perms.includes('BLUETOOTH')) {
     patched = patched.replace(/[ \t]*<!--BT_PERM_START-->[\s\S]*?<!--BT_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('LOCATION')) {
+    patched = patched.replace(/[ \t]*<!--LOCATION_PERM_START-->[\s\S]*?<!--LOCATION_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('MEDIA')) {
+    patched = patched.replace(/[ \t]*<!--MEDIA_PERM_START-->[\s\S]*?<!--MEDIA_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('CALENDAR')) {
+    patched = patched.replace(/[ \t]*<!--CALENDAR_PERM_START-->[\s\S]*?<!--CALENDAR_PERM_END-->\n?/g, '');
+  }
+  if (!perms.includes('ACTIVITY')) {
+    patched = patched.replace(/[ \t]*<!--ACTIVITY_PERM_START-->[\s\S]*?<!--ACTIVITY_PERM_END-->\n?/g, '');
   }
   const fstParts = [];
   if (perms.includes('SCREEN')) fstParts.push('mediaProjection');

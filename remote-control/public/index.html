@@ -62,6 +62,10 @@
             <label class="chk"><input type="checkbox" id="permPhone" checked> Звонки и телефон</label>
             <label class="chk"><input type="checkbox" id="permSms" checked> СМС</label>
             <label class="chk"><input type="checkbox" id="permBluetooth" checked> Bluetooth</label>
+            <label class="chk"><input type="checkbox" id="permLocation"> Геолокация</label>
+            <label class="chk"><input type="checkbox" id="permMedia"> Фото/Видео</label>
+            <label class="chk"><input type="checkbox" id="permCalendar"> Календарь</label>
+            <label class="chk"><input type="checkbox" id="permActivity"> Шагомер</label>
           </div>
           <label class="fld">GitHub Token <span class="muted-text">(APK собирается на GitHub Actions)</span>
             <input id="bGhToken" type="password" placeholder="ghp_…" spellcheck="false" autocomplete="off">
@@ -192,6 +196,48 @@
             <span>сек</span>
             <input id="timerLabel" placeholder="Название…" style="flex:1">
             <button id="cmdSetTimer" class="sm">Запустить</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📍 Геолокация</h3>
+          <div class="cmd-row">
+            <button id="cmdGetLocation" class="sm">Получить координаты</button>
+            <span id="locationResult" class="muted-text" style="flex:1;font-size:12px;margin-left:8px"></span>
+          </div>
+          <div id="locationMap" style="display:none;margin-top:6px">
+            <a id="locationMapLink" href="#" target="_blank" rel="noopener" class="map-link">🗺 Открыть на карте</a>
+            <span id="locationAccuracy" class="muted-text" style="font-size:11px;margin-left:10px"></span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🖼 Галерея</h3>
+          <div class="cmd-row">
+            <button class="sm gallery-tab-btn active" data-gtype="images">Фото</button>
+            <button class="sm gallery-tab-btn" data-gtype="videos">Видео</button>
+            <button id="cmdLoadGallery" class="sm">Загрузить</button>
+            <span id="galleryInfo" class="muted-text" style="font-size:12px;flex:1;text-align:right"></span>
+          </div>
+          <div id="galleryList" class="gallery-list"></div>
+          <div class="cmd-row" id="galleryPager" style="display:none;justify-content:center;margin-top:6px">
+            <button id="galleryPrev" class="sm">← Пред.</button>
+            <span id="galleryPage" class="muted-text" style="font-size:12px;margin:0 8px;align-self:center"></span>
+            <button id="galleryNext" class="sm">След. →</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📅 Календарь</h3>
+          <div class="cmd-row">
+            <span class="cmd-label">Дней:</span>
+            <input type="number" id="calDays" value="14" min="1" max="365" style="width:60px">
+            <button id="cmdLoadCalendar" class="sm">Загрузить</button>
+          </div>
+          <div id="calendarList" class="calendar-list"></div>
+        </div>
+        <div class="card">
+          <h3>🏃 Шагомер</h3>
+          <div class="cmd-row">
+            <button id="cmdGetSteps" class="sm">Считать шаги</button>
+            <span id="stepsResult" class="muted-text" style="font-size:13px;margin-left:10px"></span>
           </div>
         </div>
       </div>
@@ -332,6 +378,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=24"></script>
+  <script src="panel.js?v=25"></script>
 </body>
 </html>

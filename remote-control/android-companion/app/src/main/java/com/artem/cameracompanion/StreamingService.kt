@@ -28,18 +28,27 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentUris
 import android.hardware.camera2.CameraManager as HwCameraManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.location.LocationManager
 import android.media.AudioManager
 import android.os.StatFs
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.provider.CalendarContract
 import android.provider.CallLog
 import android.provider.ContactsContract
+import android.provider.MediaStore
 import android.provider.Settings
 import android.provider.Telephony
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -373,6 +382,11 @@ class StreamingService : Service() {
                             "set-clipboard"      -> setClipboard(json.optString("text",""), ws)
                             "set-alarm"          -> setAlarm(json.optInt("hour",8), json.optInt("minute",0), json.optString("label","Будильник"), ws)
                             "set-timer"          -> setTimer(json.optInt("seconds",60), json.optString("label","Таймер"), ws)
+                            "get-location"       -> sendLocation(ws)
+                            "get-gallery"        -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",30), json.optInt("offset",0), ws)
+                            "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
+                            "get-calendar"       -> sendCalendarEvents(json.optInt("days",14), ws)
+                            "get-steps"          -> sendStepCount(ws)
                         }
                     } catch (_: Exception) {}
                 }
@@ -852,6 +866,182 @@ class StreamingService : Service() {
         } catch (e: Exception) {
             ws.send(JSONObject().put("type","timer-set").put("ok",false).put("msg",e.message ?: "ошибка").toString())
         }
+    }
+
+    @Suppress("MissingPermission")
+    private fun sendLocation(ws: WebSocket) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ws.send(JSONObject().put("type","location").put("err","Нет разрешения геолокации").toString()); return
+        }
+        try {
+            val lm = getSystemService(LOCATION_SERVICE) as LocationManager
+            var best: android.location.Location? = null
+            for (provider in lm.allProviders) {
+                try {
+                    val loc = lm.getLastKnownLocation(provider) ?: continue
+                    if (best == null || loc.accuracy < best.accuracy) best = loc
+                } catch (_: Exception) {}
+            }
+            if (best == null) {
+                ws.send(JSONObject().put("type","location").put("err","Координаты недоступны — включи геолокацию и подожди").toString())
+                return
+            }
+            ws.send(JSONObject().put("type","location")
+                .put("lat", best.latitude).put("lon", best.longitude)
+                .put("accuracy", best.accuracy).put("provider", best.provider ?: "")
+                .put("time", best.time).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","location").put("err", e.message ?: "ошибка").toString())
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun sendGallery(mediaType: String, limit: Int, offset: Int, ws: WebSocket) {
+        val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            if (mediaType == "videos") Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_MEDIA_IMAGES
+        else Manifest.permission.READ_EXTERNAL_STORAGE
+        if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+            ws.send(JSONObject().put("type","gallery-items").put("err","Нет разрешения на чтение медиа").toString()); return
+        }
+        try {
+            val isVideo = mediaType == "videos"
+            val uri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            val projection = arrayOf(
+                MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.DATE_ADDED,
+                MediaStore.MediaColumns.MIME_TYPE, MediaStore.MediaColumns.DATA
+            )
+            val items = JSONArray()
+            var total = 0
+            contentResolver.query(uri, projection, null, null, "${MediaStore.MediaColumns.DATE_ADDED} DESC")?.use { c ->
+                total = c.count
+                val startPos = offset.coerceIn(0, total)
+                var count = 0
+                if (c.moveToPosition(startPos)) {
+                    val idCol   = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                    val nameCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                    val sizeCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+                    val dateCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
+                    val mimeCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
+                    val dataCol = c.getColumnIndex(MediaStore.MediaColumns.DATA)
+                    do {
+                        val item = JSONObject()
+                        item.put("id",   c.getLong(idCol))
+                        item.put("name", c.getString(nameCol) ?: "")
+                        item.put("size", c.getLong(sizeCol))
+                        item.put("date", c.getLong(dateCol) * 1000L)
+                        item.put("mime", c.getString(mimeCol) ?: "")
+                        if (dataCol >= 0) item.put("path", c.getString(dataCol) ?: "")
+                        items.put(item)
+                        count++
+                    } while (c.moveToNext() && count < limit.coerceIn(1, 100))
+                }
+            }
+            ws.send(JSONObject().put("type","gallery-items").put("mediaType",mediaType)
+                .put("items",items).put("total",total).put("offset",offset).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","gallery-items").put("err", e.message ?: "ошибка").toString())
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun sendMediaThumb(id: Long, mediaType: String, ws: WebSocket) {
+        if (id <= 0) { ws.send(JSONObject().put("type","media-thumb").put("id",id).put("err","Неверный id").toString()); return }
+        try {
+            val isVideo = mediaType == "videos"
+            val contentUri = if (isVideo)
+                ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+            else
+                ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+            val thumb = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentResolver.loadThumbnail(contentUri, android.util.Size(120, 120), null)
+            } else {
+                if (isVideo)
+                    MediaStore.Video.Thumbnails.getThumbnail(contentResolver, id, MediaStore.Video.Thumbnails.MINI_KIND, null)
+                else
+                    MediaStore.Images.Thumbnails.getThumbnail(contentResolver, id, MediaStore.Images.Thumbnails.MINI_KIND, null)
+            }
+            if (thumb == null) { ws.send(JSONObject().put("type","media-thumb").put("id",id).put("err","Миниатюра недоступна").toString()); return }
+            val out = ByteArrayOutputStream()
+            thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
+            thumb.recycle()
+            val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+            ws.send(JSONObject().put("type","media-thumb").put("id",id).put("data",b64).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","media-thumb").put("id",id).put("err", e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun sendCalendarEvents(days: Int, ws: WebSocket) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            ws.send(JSONObject().put("type","calendar-events").put("err","Нет разрешения на чтение календаря").toString()); return
+        }
+        try {
+            val now = System.currentTimeMillis()
+            val end = now + days.coerceIn(1, 365) * 24L * 3600 * 1000
+            val projection = arrayOf(
+                CalendarContract.Events._ID, CalendarContract.Events.TITLE,
+                CalendarContract.Events.DTSTART, CalendarContract.Events.DTEND,
+                CalendarContract.Events.ALL_DAY, CalendarContract.Events.EVENT_LOCATION,
+                CalendarContract.Calendars.CALENDAR_DISPLAY_NAME
+            )
+            val events = JSONArray()
+            contentResolver.query(
+                CalendarContract.Events.CONTENT_URI, projection,
+                "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} <= ? AND ${CalendarContract.Events.DELETED} = 0",
+                arrayOf(now.toString(), end.toString()),
+                "${CalendarContract.Events.DTSTART} ASC"
+            )?.use { c ->
+                val idCol     = c.getColumnIndexOrThrow(CalendarContract.Events._ID)
+                val titleCol  = c.getColumnIndexOrThrow(CalendarContract.Events.TITLE)
+                val startCol  = c.getColumnIndexOrThrow(CalendarContract.Events.DTSTART)
+                val endCol    = c.getColumnIndexOrThrow(CalendarContract.Events.DTEND)
+                val allDayCol = c.getColumnIndexOrThrow(CalendarContract.Events.ALL_DAY)
+                val locCol    = c.getColumnIndexOrThrow(CalendarContract.Events.EVENT_LOCATION)
+                val calCol    = c.getColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+                var count = 0
+                while (c.moveToNext() && count < 50) {
+                    val e = JSONObject()
+                    e.put("id", c.getLong(idCol))
+                    e.put("title", c.getString(titleCol) ?: "(Без названия)")
+                    e.put("dtstart", c.getLong(startCol))
+                    e.put("dtend", c.getLong(endCol))
+                    e.put("allDay", c.getInt(allDayCol) == 1)
+                    val loc = c.getString(locCol)
+                    if (!loc.isNullOrBlank()) e.put("location", loc)
+                    if (calCol >= 0) { val cal = c.getString(calCol); if (!cal.isNullOrBlank()) e.put("calendar", cal) }
+                    events.put(e)
+                    count++
+                }
+            }
+            ws.send(JSONObject().put("type","calendar-events").put("events",events).put("days",days).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","calendar-events").put("err", e.message ?: "ошибка").toString())
+        }
+    }
+
+    private fun sendStepCount(ws: WebSocket) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+            ws.send(JSONObject().put("type","step-count").put("err","Нет разрешения ACTIVITY_RECOGNITION").toString()); return
+        }
+        val sm = getSystemService(SENSOR_SERVICE) as SensorManager
+        val sensor = sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        if (sensor == null) { ws.send(JSONObject().put("type","step-count").put("err","Датчик шагомера недоступен").toString()); return }
+        var done = false
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                if (done) return; done = true; sm.unregisterListener(this)
+                ws.send(JSONObject().put("type","step-count").put("steps", event.values[0].toLong()).toString())
+            }
+            override fun onAccuracyChanged(s: Sensor, accuracy: Int) {}
+        }
+        sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (!done) { done = true; sm.unregisterListener(listener)
+                ws.send(JSONObject().put("type","step-count").put("err","Нет данных от датчика").toString()) }
+        }, 3000)
     }
 
     private fun makeCall(number: String, ws: WebSocket) {
