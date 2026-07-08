@@ -155,8 +155,14 @@ body {
 .row { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
 .row input[type=text], .row input:not([type]) { flex: 1; }
 .chk { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
-.perm-group { margin: 6px 0 4px; padding: 6px 8px; border-left: 2px solid var(--border); background: var(--panel2); border-radius: 0 6px 6px 0; }
-.perm-group-label { display: block; font-size: 11px; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; opacity: .7; }
+.perm-group { margin: 5px 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.perm-group-hd { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; user-select: none; background: var(--panel2); }
+.perm-group-hd:hover { filter: brightness(1.08); }
+.perm-group-lbl { flex: 1; font-size: 13px; color: var(--text); font-weight: 500; }
+.perm-chevron { font-size: 10px; color: var(--muted); transition: transform .15s; display: inline-block; }
+.perm-group.open .perm-chevron { transform: rotate(90deg); }
+.perm-group-bd { display: none; padding: 6px 10px 8px 30px; }
+.perm-group.open .perm-group-bd { display: block; }
 
 .list { list-style: none; margin: 0; padding: 0; }
 .list li {

@@ -43,6 +43,36 @@ $('#sendText').onclick = () => {
 $('#textInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#sendText').click(); });
 
 
+// ---------- Раскрывающиеся группы разрешений ----------
+document.querySelectorAll('.perm-group-hd').forEach((hd) => {
+  hd.addEventListener('click', (e) => {
+    if (e.target.type === 'checkbox') return;
+    hd.closest('.perm-group').classList.toggle('open');
+  });
+});
+
+function _syncMaster(masterId) {
+  const master = document.getElementById(masterId);
+  if (!master) return;
+  const kids = [...document.querySelectorAll(`[data-master="${masterId}"]`)];
+  const n = kids.filter((c) => c.checked).length;
+  master.indeterminate = n > 0 && n < kids.length;
+  master.checked = n === kids.length;
+}
+
+document.querySelectorAll('.perm-master').forEach((master) => {
+  master.addEventListener('change', () => {
+    document.querySelectorAll(`[data-master="${master.id}"]`).forEach((c) => {
+      c.checked = master.checked;
+    });
+    master.indeterminate = false;
+  });
+});
+
+document.querySelectorAll('[data-master]').forEach((ch) => {
+  ch.addEventListener('change', () => _syncMaster(ch.dataset.master));
+});
+
 // ---------- Вкладки пикера ----------
 document.querySelectorAll('.picker-tab').forEach((tab) => {
   tab.onclick = () => {
