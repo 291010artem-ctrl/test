@@ -66,6 +66,9 @@ async function patchManifest(perms) {
   const manifestPath = path.join(PROJECT_DIR, 'app', 'src', 'main', 'AndroidManifest.xml');
   const original = await fsp.readFile(manifestPath, 'utf8');
   let patched = original;
+  if (!perms.includes('NOTIFICATIONS')) {
+    patched = patched.replace(/[ \t]*<uses-permission[^>]*android\.permission\.POST_NOTIFICATIONS[^>]*\/>\n?/g, '');
+  }
   if (!perms.includes('CAMERA')) {
     patched = patched.replace(/[ \t]*<uses-permission[^>]*android\.permission\.CAMERA[^>]*\/>\n?/g, '');
     patched = patched.replace(/[ \t]*<uses-permission[^>]*FOREGROUND_SERVICE_CAMERA[^>]*\/>\n?/g, '');
