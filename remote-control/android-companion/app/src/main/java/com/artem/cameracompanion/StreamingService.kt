@@ -23,7 +23,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.*
 import okhttp3.*
 import okio.ByteString.Companion.toByteString
-import android.app.AlarmClock
+import android.provider.AlarmClock
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.ClipData
