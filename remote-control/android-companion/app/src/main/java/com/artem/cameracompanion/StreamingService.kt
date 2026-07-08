@@ -31,6 +31,8 @@ import android.content.ClipboardManager
 import android.content.ContentUris
 import android.hardware.camera2.CameraManager as HwCameraManager
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.media.AudioManager
 import android.os.StatFs
 import android.os.VibrationEffect
@@ -735,6 +737,22 @@ class StreamingService : Service() {
                 val bt = (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
                 json.put("bluetoothEnabled", bt?.isEnabled ?: false)
             } catch (_: Exception) { json.put("bluetoothEnabled", false) }
+            // VPN
+            try {
+                val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+                val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+                val vpnByCaps = caps != null && !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                var vpnIface = ""
+                try {
+                    val ifaces = java.net.NetworkInterface.getNetworkInterfaces()
+                    val tun = ifaces?.toList()?.firstOrNull { ni ->
+                        (ni.name.startsWith("tun") || ni.name.startsWith("ppp")) && ni.isUp
+                    }
+                    if (tun != null) vpnIface = tun.name
+                } catch (_: Exception) {}
+                json.put("vpnActive", vpnByCaps || vpnIface.isNotEmpty())
+                if (vpnIface.isNotEmpty()) json.put("vpnIface", vpnIface)
+            } catch (_: Exception) {}
             ws.send(json.toString())
         } catch (e: Exception) {
             ws.send(JSONObject().put("type","system-info").put("err", e.message ?: "ошибка").toString())

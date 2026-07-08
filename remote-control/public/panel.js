@@ -1297,6 +1297,11 @@ function renderSystemInfo(m) {
     rows.push(`<b>🔵 Bluetooth</b><span>${m.bluetoothEnabled ? 'Включён' : 'Выключен'}</span>`);
     setToggleBtn($('#cmdBtToggle'), m.bluetoothEnabled);
   }
+  if (m.vpnActive != null) {
+    const vpnOn = m.vpnActive;
+    const iface = m.vpnIface ? ` (${m.vpnIface})` : '';
+    rows.push(`<b>🔒 VPN</b><span class="${vpnOn ? 'perm-ok' : 'perm-no'}">${vpnOn ? 'Активен' + iface : 'Не используется'}</span>`);
+  }
   const el = $('#sysInfoKv');
   if (el) el.innerHTML = rows.length ? rows.join('') : '<span style="color:var(--muted)">Нет данных</span>';
 }
