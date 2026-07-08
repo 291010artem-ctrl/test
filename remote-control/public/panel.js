@@ -1269,6 +1269,7 @@ $('#refreshSms').onclick = () => phoneSend({ cmd: 'get-sms' });
 function loadCommandsTab() {
   phoneSend({ cmd: 'get-system-info' });
   phoneSend({ cmd: 'get-volume' });
+  if (_leafletMap) setTimeout(() => _leafletMap.invalidateSize(), 100);
 }
 
 function renderSystemInfo(m) {
@@ -1366,31 +1367,57 @@ $('#cmdSetTimer').onclick = () => {
 };
 
 // ---------- Геолокация ----------
+let _leafletMap = null;
+let _locDot = null;
+let _locCircle = null;
+
 $('#cmdGetLocation').onclick = () => {
-  const el = $('#locationResult');
-  if (el) el.textContent = 'Запрос координат…';
-  const mapEl = $('#locationMap');
-  if (mapEl) mapEl.style.display = 'none';
+  const el = $('#locationCoords');
+  if (el) el.textContent = 'Запрос…';
   phoneSend({ cmd: 'get-location' });
 };
 
 function renderLocation(m) {
-  const el = $('#locationResult');
-  const mapEl = $('#locationMap');
-  if (!el) return;
+  const coordsEl = $('#locationCoords');
   if (m.err) {
-    el.textContent = 'Ошибка: ' + m.err;
-    if (mapEl) mapEl.style.display = 'none';
+    if (coordsEl) coordsEl.textContent = 'Ошибка: ' + m.err;
     return;
   }
-  el.textContent = `${m.lat.toFixed(6)}, ${m.lon.toFixed(6)}`;
-  if (mapEl) mapEl.style.display = '';
-  const mapLink = $('#locationMapLink');
-  if (mapLink) mapLink.href = `https://maps.google.com/?q=${m.lat},${m.lon}`;
-  const accEl = $('#locationAccuracy');
-  if (accEl) {
-    const ago = m.time ? relTime(m.time) : '';
-    accEl.textContent = `точность: ${m.accuracy ? m.accuracy.toFixed(0) + ' м' : '—'}${m.provider ? ', ' + m.provider : ''}${ago ? ', ' + ago : ''}`;
+  const acc = m.accuracy ? m.accuracy.toFixed(0) + ' м' : '?';
+  const ago = m.time ? relTime(m.time) : '';
+  if (coordsEl) coordsEl.textContent = `${m.lat.toFixed(6)}, ${m.lon.toFixed(6)} · ±${acc}${ago ? ' · ' + ago : ''}`;
+
+  const ph = $('#locationMapPh');
+  const mapDiv = $('#leafletMap');
+  if (!ph || !mapDiv) return;
+  ph.style.display = 'none';
+  mapDiv.style.display = 'block';
+
+  if (!_leafletMap) {
+    _leafletMap = L.map('leafletMap', { zoomControl: true, attributionControl: false })
+      .setView([m.lat, m.lon], 16);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      subdomains: 'abcd'
+    }).addTo(_leafletMap);
+    _locDot = L.circleMarker([m.lat, m.lon], {
+      radius: 9, fillColor: '#3fb950', color: '#fff', weight: 2, fillOpacity: 1
+    }).addTo(_leafletMap);
+    if (m.accuracy) {
+      _locCircle = L.circle([m.lat, m.lon], {
+        radius: m.accuracy, color: '#388bfd', weight: 1, fillOpacity: 0.12
+      }).addTo(_leafletMap);
+    }
+  } else {
+    _leafletMap.setView([m.lat, m.lon], _leafletMap.getZoom());
+    if (_locDot) _locDot.setLatLng([m.lat, m.lon]);
+    if (_locCircle) { _locCircle.remove(); _locCircle = null; }
+    if (m.accuracy) {
+      _locCircle = L.circle([m.lat, m.lon], {
+        radius: m.accuracy, color: '#388bfd', weight: 1, fillOpacity: 0.12
+      }).addTo(_leafletMap);
+    }
+    setTimeout(() => _leafletMap.invalidateSize(), 50);
   }
 }
 

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Android Remote Panel</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -200,12 +202,12 @@
         <div class="card">
           <h3>📍 Геолокация</h3>
           <div class="cmd-row">
-            <button id="cmdGetLocation" class="sm">Получить координаты</button>
-            <span id="locationResult" class="muted-text" style="flex:1;font-size:12px;margin-left:8px"></span>
+            <button id="cmdGetLocation" class="sm">Обновить</button>
+            <span id="locationCoords" class="muted-text" style="flex:1;font-size:12px;margin-left:8px"></span>
           </div>
-          <div id="locationMap" style="display:none;margin-top:6px">
-            <a id="locationMapLink" href="#" target="_blank" rel="noopener" class="map-link">🗺 Открыть на карте</a>
-            <span id="locationAccuracy" class="muted-text" style="font-size:11px;margin-left:10px"></span>
+          <div class="location-map-wrap">
+            <div id="locationMapPh" class="location-map-ph">Нажми «Обновить» для получения координат</div>
+            <div id="leafletMap" class="leaflet-map-div" style="display:none"></div>
           </div>
         </div>
         <div class="card">

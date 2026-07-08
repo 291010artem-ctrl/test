@@ -529,9 +529,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 input[type="time"] { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 14px; font-family: inherit; cursor: pointer; }
 input[type="time"]:focus { outline: none; border-color: var(--accent2); }
 
-/* ----- Геолокация ----- */
-.map-link { color: var(--accent2); text-decoration: none; font-size: 13px; }
-.map-link:hover { text-decoration: underline; }
+/* ----- Геолокация / Карта ----- */
+.location-map-wrap { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background: var(--panel2); margin-top: 8px; }
+.location-map-ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; pointer-events: none; }
+.leaflet-map-div { height: 100%; width: 100%; }
 
 /* ----- Галерея ----- */
 .gallery-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
