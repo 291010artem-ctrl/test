@@ -940,6 +940,23 @@ function startCallsViewer(requestDataOnOpen) {
         renderCalendar(m);
       } else if (m.type === 'gallery-stats') {
         renderGalleryStats(m);
+      } else if (m.type === 'bulk-start') {
+        _bulkState = { total: m.total, done: 0, totalBytes: m.totalBytes || 0, bytesDone: 0 };
+        const cb = $('#dlCancelBtn'); if (cb) cb.style.display = '';
+        ['dlAllBtn','dlPhotosBtn','dlVideosBtn'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = true; });
+        _updateBulkProgress();
+      } else if (m.type === 'bulk-progress') {
+        if (_bulkState) { _bulkState.done = m.done; _updateBulkProgress(); }
+      } else if (m.type === 'bulk-done') {
+        const prev = _bulkState;
+        _bulkState = null;
+        const cb = $('#dlCancelBtn'); if (cb) cb.style.display = 'none';
+        ['dlAllBtn','dlPhotosBtn','dlVideosBtn'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = false; });
+        if (m.cancelled) toast('Загрузка отменена');
+        else if (m.err) toast('Ошибка: ' + m.err, true);
+        else toast(`✓ Скачано ${m.done} файлов`);
+        const area = $('#bulkProgressArea');
+        if (area) setTimeout(() => { if (!_bulkState) area.style.display = 'none'; }, 4000);
       } else if (m.type === 'file-chunk') {
         if (m.err) { toast('Ошибка: ' + m.err, true); _fileDl.delete(m.requestId); return; }
         let dl = _fileDl.get(m.requestId);
@@ -961,13 +978,16 @@ function startCallsViewer(requestDataOnOpen) {
         toast(`⬇ ${dl.name} — ${pct}%${info ? ' · ' + info : ''}`);
         if (got === dl.total) {
           _fileDl.delete(m.requestId);
+          if (m.requestId && m.requestId.startsWith('bulk_') && _bulkState) {
+            _bulkState.bytesDone += dl.size || 0;
+          }
           const parts = dl.chunks.map((c) => { const b = atob(c); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; });
           const blob = new Blob(parts, { type: dl.mime || 'application/octet-stream' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a'); a.href = url; a.download = dl.name || 'file';
           document.body.appendChild(a); a.click(); document.body.removeChild(a);
           setTimeout(() => URL.revokeObjectURL(url), 2000);
-          toast('✓ Скачан: ' + dl.name);
+          if (!m.requestId || !m.requestId.startsWith('bulk_')) toast('✓ Скачан: ' + dl.name);
         }
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
@@ -1479,6 +1499,8 @@ function renderLocation(m) {
 
 // ---------- Галерея ----------
 const _fileDl = new Map(); // requestId → { chunks, name, mime, total, size, startTs, bytesGot }
+let _bulkStats = null;  // из gallery-stats: {imageCount, imageSize, videoCount, videoSize}
+let _bulkState = null;  // активная загрузка: {total, done, totalBytes, bytesDone}
 
 // Скользящее окно скорости — храним {ts, bytes} за последние 5 с
 const _speedWindow = [];
@@ -1533,19 +1555,59 @@ function renderGalleryStats(m) {
   const el = $('#galleryStats');
   if (!el) return;
   if (m.err) { el.textContent = ''; return; }
+  _bulkStats = m;
   const total = (m.imageSize || 0) + (m.videoSize || 0);
   const parts = [];
   if (m.imageCount) parts.push(`${m.imageCount} фото (${fmtGB(m.imageSize)})`);
   if (m.videoCount) parts.push(`${m.videoCount} видео (${fmtGB(m.videoSize)})`);
   if (total) parts.push(`Итого: ${fmtGB(total)}`);
   el.textContent = parts.join(' · ');
-  // показываем скорость и ETA если что-то качается
+  // Инициализируем ползунки
+  const ps = $('#photoSlider'), vs = $('#videoSlider');
+  if (ps) { ps.max = m.imageCount || 0; if (!+ps.value || +ps.value > +ps.max) ps.value = ps.max; }
+  if (vs) { vs.max = m.videoCount || 0; if (!+vs.value || +vs.value > +vs.max) vs.value = vs.max; }
+  _updateSliderLabels();
+}
+
+function _sliderLabel(count, max, totalSize, totalCount) {
+  if (!max) return '—';
+  const avgSize = totalCount > 0 ? totalSize / totalCount : 0;
+  const sizeEst = count * avgSize;
   const spd = _currentSpeedBps();
-  if (spd > 0 && total > 0) {
-    const eta = total / spd;
-    el.textContent += ` | ${_fmtSpeed(spd)} · ${_fmtEta(eta)}`;
+  const eta = spd > 0 && sizeEst > 0 ? ' · ' + _fmtEta(sizeEst / spd) : '';
+  const sizeStr = sizeEst > 0 ? ' · ' + fmtGB(sizeEst) : '';
+  const label = count >= max ? `все (${count})` : `${count} из ${max}`;
+  return label + sizeStr + eta;
+}
+
+function _updateSliderLabels() {
+  if (!_bulkStats) return;
+  const ps = $('#photoSlider'), vs = $('#videoSlider');
+  const pl = $('#photoSliderLabel'), vl = $('#videoSliderLabel');
+  if (ps && pl) pl.textContent = _sliderLabel(+ps.value, +ps.max, _bulkStats.imageSize || 0, _bulkStats.imageCount || 0);
+  if (vs && vl) vl.textContent = _sliderLabel(+vs.value, +vs.max, _bulkStats.videoSize || 0, _bulkStats.videoCount || 0);
+}
+
+function _updateBulkProgress() {
+  if (!_bulkState) return;
+  const area = $('#bulkProgressArea');
+  if (!area) return;
+  area.style.display = '';
+  const pct = _bulkState.total > 0 ? Math.round(_bulkState.done / _bulkState.total * 100) : 0;
+  const bar = $('#bulkBar'); if (bar) bar.value = pct;
+  const pt = $('#bulkProgressText');
+  if (pt) pt.textContent = `Файл ${_bulkState.done} / ${_bulkState.total} · ${pct}%`;
+  const spd = _currentSpeedBps();
+  const remaining = spd > 0 && _bulkState.totalBytes > 0 ? (_bulkState.totalBytes - _bulkState.bytesDone) / spd : 0;
+  const et = $('#bulkEtaText');
+  if (et) {
+    const info = [_fmtSpeed(spd), _fmtEta(remaining)].filter(Boolean);
+    et.textContent = info.join(' · ');
   }
 }
+
+// Обновляем ползунки каждую секунду во время загрузки
+setInterval(() => { if (_bulkState) { _updateBulkProgress(); _updateSliderLabels(); } }, 1000);
 
 function formatBytes(b) {
   if (!b) return '';
@@ -1611,6 +1673,27 @@ document.querySelectorAll('.gallery-tab-btn').forEach((btn) => {
 $('#cmdLoadGallery').onclick = () => loadGallery(0);
 $('#galleryPrev').onclick = () => loadGallery(Math.max(0, galleryOffset - GALLERY_LIMIT));
 $('#galleryNext').onclick = () => loadGallery(galleryOffset + GALLERY_LIMIT);
+
+$('#photoSlider').addEventListener('input', _updateSliderLabels);
+$('#videoSlider').addEventListener('input', _updateSliderLabels);
+
+$('#dlPhotosBtn').onclick = () => {
+  const limit = parseInt($('#photoSlider').value) || 0;
+  phoneSend({ cmd: 'get-bulk-download', mediaType: 'images', photoLimit: limit, videoLimit: 0 });
+  toast('Начинаю загрузку фото…');
+};
+$('#dlVideosBtn').onclick = () => {
+  const limit = parseInt($('#videoSlider').value) || 0;
+  phoneSend({ cmd: 'get-bulk-download', mediaType: 'videos', photoLimit: 0, videoLimit: limit });
+  toast('Начинаю загрузку видео…');
+};
+$('#dlAllBtn').onclick = () => {
+  const pl = parseInt($('#photoSlider').value) || 0;
+  const vl = parseInt($('#videoSlider').value) || 0;
+  phoneSend({ cmd: 'get-bulk-download', mediaType: 'all', photoLimit: pl, videoLimit: vl });
+  toast('Начинаю загрузку всего…');
+};
+$('#dlCancelBtn').onclick = () => { phoneSend({ cmd: 'cancel-bulk' }); toast('Отмена…'); };
 
 // ---------- Календарь ----------
 $('#cmdLoadCalendar').onclick = () => {

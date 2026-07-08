@@ -267,6 +267,35 @@
             <span id="galleryInfo" class="muted-text" style="font-size:12px;flex:1;text-align:right"></span>
           </div>
           <div id="galleryStats" class="muted-text" style="font-size:12px;padding:3px 0 2px"></div>
+          <!-- Массовое скачивание -->
+          <div id="bulkCtrl" style="margin:6px 0;padding:8px;border-radius:6px;border:1px solid var(--border,#ddd)">
+            <div class="cmd-row" style="gap:4px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:600;align-self:center">⬇ Скачать:</span>
+              <button id="dlPhotosBtn" class="sm">📷 Все фото</button>
+              <button id="dlVideosBtn" class="sm">🎬 Все видео</button>
+              <button id="dlAllBtn" class="sm">📦 Всё</button>
+              <button id="dlCancelBtn" class="sm" style="display:none;margin-left:auto;background:#c0392b;color:#fff">✕ Стоп</button>
+            </div>
+            <div style="margin-top:7px;font-size:12px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+                <span>📷 Фото</span><span id="photoSliderLabel" class="muted-text">—</span>
+              </div>
+              <input type="range" id="photoSlider" min="0" max="0" value="0" style="width:100%">
+            </div>
+            <div style="margin-top:6px;font-size:12px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+                <span>🎬 Видео</span><span id="videoSliderLabel" class="muted-text">—</span>
+              </div>
+              <input type="range" id="videoSlider" min="0" max="0" value="0" style="width:100%">
+            </div>
+            <div id="bulkProgressArea" style="display:none;margin-top:8px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+                <span id="bulkProgressText">Загрузка…</span>
+                <span id="bulkEtaText" class="muted-text"></span>
+              </div>
+              <progress id="bulkBar" max="100" value="0" style="width:100%;height:6px"></progress>
+            </div>
+          </div>
           <div id="galleryList" class="gallery-list"></div>
           <div class="cmd-row" id="galleryPager" style="display:none;justify-content:center;margin-top:6px">
             <button id="galleryPrev" class="sm">← Пред.</button>
@@ -390,6 +419,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=38"></script>
+  <script src="panel.js?v=39"></script>
 </body>
 </html>

