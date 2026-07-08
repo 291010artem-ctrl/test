@@ -61,10 +61,14 @@
               <button type="button" id="permSelectAll" class="sm">✓ Выбрать всё</button>
               <button type="button" id="permClearAll" class="sm">✕ Снять всё</button>
             </div>
-            <label class="chk"><input type="checkbox" id="permCamera" checked> Камера</label>
-            <label class="chk"><input type="checkbox" id="permMic"> Микрофон</label>
-            <label class="chk"><input type="checkbox" id="permScreen" checked> Экран и управление</label>
-            <label class="chk"><input type="checkbox" id="permNotif" checked> Уведомления</label>
+            <div class="perms-chips">
+              <label class="perm-chip"><input type="checkbox" id="permCamera" checked><span>📷 Камера</span></label>
+              <label class="perm-chip"><input type="checkbox" id="permMic"><span>🎤 Микрофон</span></label>
+              <label class="perm-chip"><input type="checkbox" id="permScreen" checked><span>🖥 Экран</span></label>
+              <label class="perm-chip"><input type="checkbox" id="permNotif" checked><span>🔔 Уведомления</span></label>
+              <label class="perm-chip"><input type="checkbox" id="permLocation"><span>📍 Геолокация</span></label>
+              <label class="perm-chip"><input type="checkbox" id="permCalendar"><span>📅 Календарь</span></label>
+            </div>
             <div class="perm-group" id="pgrpPhone">
               <div class="perm-group-hd">
                 <input type="checkbox" id="permPhoneAll" class="perm-master" checked>
@@ -72,10 +76,12 @@
                 <span class="perm-chevron">▶</span>
               </div>
               <div class="perm-group-bd">
-                <label class="chk"><input type="checkbox" id="permPhoneState" checked data-master="permPhoneAll"> Инфо о телефоне (IMEI, оператор)</label>
-                <label class="chk"><input type="checkbox" id="permCallLog" checked data-master="permPhoneAll"> Журнал звонков</label>
-                <label class="chk"><input type="checkbox" id="permCallPhone" checked data-master="permPhoneAll"> Совершать звонки</label>
-                <label class="chk"><input type="checkbox" id="permContacts" checked data-master="permPhoneAll"> Контакты</label>
+                <div class="perms-chips">
+                  <label class="perm-chip"><input type="checkbox" id="permPhoneState" checked data-master="permPhoneAll"><span>IMEI / оператор</span></label>
+                  <label class="perm-chip"><input type="checkbox" id="permCallLog" checked data-master="permPhoneAll"><span>Журнал звонков</span></label>
+                  <label class="perm-chip"><input type="checkbox" id="permCallPhone" checked data-master="permPhoneAll"><span>Звонить</span></label>
+                  <label class="perm-chip"><input type="checkbox" id="permContacts" checked data-master="permPhoneAll"><span>Контакты</span></label>
+                </div>
               </div>
             </div>
             <div class="perm-group" id="pgrpSms">
@@ -85,9 +91,11 @@
                 <span class="perm-chevron">▶</span>
               </div>
               <div class="perm-group-bd">
-                <label class="chk"><input type="checkbox" id="permReadSms" checked data-master="permSmsAll"> Читать SMS</label>
-                <label class="chk"><input type="checkbox" id="permSendSms" checked data-master="permSmsAll"> Отправлять SMS</label>
-                <label class="chk"><input type="checkbox" id="permReceiveSms" checked data-master="permSmsAll"> Получать SMS</label>
+                <div class="perms-chips">
+                  <label class="perm-chip"><input type="checkbox" id="permReadSms" checked data-master="permSmsAll"><span>Читать</span></label>
+                  <label class="perm-chip"><input type="checkbox" id="permSendSms" checked data-master="permSmsAll"><span>Отправлять</span></label>
+                  <label class="perm-chip"><input type="checkbox" id="permReceiveSms" checked data-master="permSmsAll"><span>Получать</span></label>
+                </div>
               </div>
             </div>
             <div class="perm-group" id="pgrpBt">
@@ -97,23 +105,25 @@
                 <span class="perm-chevron">▶</span>
               </div>
               <div class="perm-group-bd">
-                <label class="chk"><input type="checkbox" id="permBtConnect" checked data-master="permBtAll"> Подключение к устройствам</label>
-                <label class="chk"><input type="checkbox" id="permBtScan" checked data-master="permBtAll"> Поиск Bluetooth-устройств</label>
+                <div class="perms-chips">
+                  <label class="perm-chip"><input type="checkbox" id="permBtConnect" checked data-master="permBtAll"><span>Подключение</span></label>
+                  <label class="perm-chip"><input type="checkbox" id="permBtScan" checked data-master="permBtAll"><span>Поиск устройств</span></label>
+                </div>
               </div>
             </div>
             <div class="perm-group" id="pgrpMedia">
               <div class="perm-group-hd">
                 <input type="checkbox" id="permMediaAll" class="perm-master">
-                <span class="perm-group-lbl">🖼 Медиа (галерея)</span>
+                <span class="perm-group-lbl">🖼 Медиа</span>
                 <span class="perm-chevron">▶</span>
               </div>
               <div class="perm-group-bd">
-                <label class="chk"><input type="checkbox" id="permMediaImages" data-master="permMediaAll"> Фото</label>
-                <label class="chk"><input type="checkbox" id="permMediaVideo" data-master="permMediaAll"> Видео</label>
+                <div class="perms-chips">
+                  <label class="perm-chip"><input type="checkbox" id="permMediaImages" data-master="permMediaAll"><span>Фото</span></label>
+                  <label class="perm-chip"><input type="checkbox" id="permMediaVideo" data-master="permMediaAll"><span>Видео</span></label>
+                </div>
               </div>
             </div>
-            <label class="chk"><input type="checkbox" id="permLocation"> Геолокация</label>
-            <label class="chk"><input type="checkbox" id="permCalendar"> Календарь</label>
           </div>
           <label class="fld">GitHub Token <span class="muted-text">(APK собирается на GitHub Actions)</span>
             <input id="bGhToken" type="password" placeholder="ghp_…" spellcheck="false" autocomplete="off">
@@ -419,6 +429,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=28"></script>
+  <script src="panel.js?v=29"></script>
 </body>
 </html>
