@@ -228,21 +228,6 @@
           </div>
         </div>
         <div class="card">
-          <h3>🖼 Галерея</h3>
-          <div class="cmd-row">
-            <button class="sm gallery-tab-btn active" data-gtype="images">Фото</button>
-            <button class="sm gallery-tab-btn" data-gtype="videos">Видео</button>
-            <button id="cmdLoadGallery" class="sm">Загрузить</button>
-            <span id="galleryInfo" class="muted-text" style="font-size:12px;flex:1;text-align:right"></span>
-          </div>
-          <div id="galleryList" class="gallery-list"></div>
-          <div class="cmd-row" id="galleryPager" style="display:none;justify-content:center;margin-top:6px">
-            <button id="galleryPrev" class="sm">← Пред.</button>
-            <span id="galleryPage" class="muted-text" style="font-size:12px;margin:0 8px;align-self:center"></span>
-            <button id="galleryNext" class="sm">След. →</button>
-          </div>
-        </div>
-        <div class="card">
           <h3>📅 Календарь</h3>
           <div class="cmd-row">
             <span class="cmd-label">Дней:</span>
@@ -273,6 +258,21 @@
           <button id="uploadBtn">Загрузить сюда</button>
         </div>
         <ul id="fileList" class="list"></ul>
+        <div class="card" style="margin-top:12px">
+          <h3>🖼 Галерея</h3>
+          <div class="cmd-row">
+            <button class="sm gallery-tab-btn active" data-gtype="images">Фото</button>
+            <button class="sm gallery-tab-btn" data-gtype="videos">Видео</button>
+            <button id="cmdLoadGallery" class="sm">Загрузить</button>
+            <span id="galleryInfo" class="muted-text" style="font-size:12px;flex:1;text-align:right"></span>
+          </div>
+          <div id="galleryList" class="gallery-list"></div>
+          <div class="cmd-row" id="galleryPager" style="display:none;justify-content:center;margin-top:6px">
+            <button id="galleryPrev" class="sm">← Пред.</button>
+            <span id="galleryPage" class="muted-text" style="font-size:12px;margin:0 8px;align-self:center"></span>
+            <button id="galleryNext" class="sm">След. →</button>
+          </div>
+        </div>
       </div>
 
       <div class="tab-content" id="tab-notifs">
@@ -389,6 +389,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="panel.js?v=34"></script>
+  <script src="panel.js?v=35"></script>
 </body>
 </html>
