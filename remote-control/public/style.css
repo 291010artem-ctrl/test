@@ -156,24 +156,13 @@ body {
 .row input[type=text], .row input:not([type]) { flex: 1; }
 .chk { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
 .perm-all-row { display: flex; gap: 6px; margin: 4px 0 8px; }
-
-/* chips */
-.perms-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 4px; }
-.perm-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 20px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; transition: border-color .12s, background .12s, color .12s; white-space: nowrap; }
-.perm-chip:hover { border-color: #58a6ff; color: var(--text); }
-.perm-chip:has(input:checked) { border-color: #3fb950; background: rgba(63,185,80,.13); color: var(--text); }
-.perm-chip input[type=checkbox] { width: 12px; height: 12px; margin: 0; accent-color: #3fb950; cursor: pointer; flex-shrink: 0; }
-
-/* accordion groups */
-.perm-group { margin: 5px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.perm-group-hd { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; user-select: none; background: var(--panel2); transition: background .12s; }
-.perm-group-hd:hover { background: color-mix(in srgb, var(--panel2) 60%, var(--border)); }
-.perm-group.open .perm-group-hd { border-bottom: 1px solid var(--border); }
-.perm-group-lbl { flex: 1; font-size: 12.5px; font-weight: 500; color: var(--text); }
-.perm-chevron { font-size: 9px; color: var(--muted); transition: transform .15s; display: inline-block; line-height: 1; }
+.perm-group { margin: 1px 0; }
+.perm-group-hd { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; cursor: pointer; user-select: none; }
+.perm-group-lbl { flex: 1; }
+.perm-chevron { font-size: 9px; color: var(--muted); transition: transform .15s; display: inline-block; line-height: 1; opacity: .6; }
 .perm-group.open .perm-chevron { transform: rotate(90deg); }
-.perm-master { width: 13px; height: 13px; margin: 0; accent-color: #3fb950; cursor: pointer; flex-shrink: 0; }
-.perm-group-bd { display: none; padding: 8px 10px; }
+.perm-master { cursor: pointer; }
+.perm-group-bd { display: none; padding-left: 18px; }
 .perm-group.open .perm-group-bd { display: block; }
 
 .list { list-style: none; margin: 0; padding: 0; }
