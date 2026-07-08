@@ -938,13 +938,27 @@ function startCallsViewer(requestDataOnOpen) {
         applyMediaThumb(m);
       } else if (m.type === 'calendar-events') {
         renderCalendar(m);
+      } else if (m.type === 'gallery-stats') {
+        renderGalleryStats(m);
       } else if (m.type === 'file-chunk') {
         if (m.err) { toast('Ошибка: ' + m.err, true); _fileDl.delete(m.requestId); return; }
         let dl = _fileDl.get(m.requestId);
-        if (!dl) { dl = { chunks: [], name: m.name, mime: m.mime, total: m.total }; _fileDl.set(m.requestId, dl); }
+        if (!dl) {
+          dl = { chunks: [], name: m.name, mime: m.mime, total: m.total, size: m.size || 0, startTs: Date.now(), bytesGot: 0 };
+          _fileDl.set(m.requestId, dl);
+        }
         dl.chunks[m.index] = m.data;
+        const chunkBytes = m.data ? Math.round(m.data.length * 3 / 4) : 0;
+        dl.bytesGot += chunkBytes;
+        _trackSpeed(chunkBytes);
         const got = dl.chunks.filter(Boolean).length;
-        toast(`⬇ ${dl.name} — ${Math.round(got / dl.total * 100)}%`);
+        const pct = Math.round(got / dl.total * 100);
+        const spd = _currentSpeedBps();
+        const remaining = spd > 0 && dl.size > 0 ? (dl.size - dl.bytesGot) / spd : 0;
+        const spdStr = _fmtSpeed(spd);
+        const etaStr = _fmtEta(remaining);
+        const info = [spdStr, etaStr].filter(Boolean).join(' · ');
+        toast(`⬇ ${dl.name} — ${pct}%${info ? ' · ' + info : ''}`);
         if (got === dl.total) {
           _fileDl.delete(m.requestId);
           const parts = dl.chunks.map((c) => { const b = atob(c); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; });
@@ -1464,7 +1478,37 @@ function renderLocation(m) {
 }
 
 // ---------- Галерея ----------
-const _fileDl = new Map(); // requestId → { chunks, name, mime, total }
+const _fileDl = new Map(); // requestId → { chunks, name, mime, total, size, startTs, bytesGot }
+
+// Скользящее окно скорости — храним {ts, bytes} за последние 5 с
+const _speedWindow = [];
+function _trackSpeed(bytes) {
+  const now = Date.now();
+  _speedWindow.push({ ts: now, bytes });
+  // удаляем записи старше 5 с
+  const cutoff = now - 5000;
+  while (_speedWindow.length && _speedWindow[0].ts < cutoff) _speedWindow.shift();
+}
+function _currentSpeedBps() {
+  if (_speedWindow.length < 2) return 0;
+  const span = (_speedWindow[_speedWindow.length - 1].ts - _speedWindow[0].ts) / 1000;
+  if (span <= 0) return 0;
+  const bytes = _speedWindow.slice(1).reduce((s, e) => s + e.bytes, 0);
+  return bytes / span;
+}
+function _fmtSpeed(bps) {
+  if (bps <= 0) return '';
+  if (bps >= 1024 * 1024) return (bps / 1024 / 1024).toFixed(1) + ' МБ/с';
+  return (bps / 1024).toFixed(0) + ' КБ/с';
+}
+function _fmtEta(seconds) {
+  if (!isFinite(seconds) || seconds <= 0) return '';
+  seconds = Math.round(seconds);
+  if (seconds < 60) return `~${seconds} с`;
+  const m = Math.floor(seconds / 60), s = seconds % 60;
+  if (m < 60) return `~${m} мин ${s} с`;
+  return `~${Math.floor(m / 60)} ч ${m % 60} мин`;
+}
 let galleryOffset = 0;
 let galleryType = 'images';
 const GALLERY_LIMIT = 20;
@@ -1473,8 +1517,34 @@ let galleryTotal = 0;
 function loadGallery(offset) {
   galleryOffset = offset || 0;
   phoneSend({ cmd: 'get-gallery', mediaType: galleryType, limit: GALLERY_LIMIT, offset: galleryOffset });
+  if (galleryOffset === 0) phoneSend({ cmd: 'get-gallery-stats' });
   const el = $('#galleryList');
   if (el) el.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Загрузка…</div>';
+}
+
+function fmtGB(bytes) {
+  if (!bytes) return '0 Б';
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' ГБ';
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(0) + ' МБ';
+  return (bytes / 1024).toFixed(0) + ' КБ';
+}
+
+function renderGalleryStats(m) {
+  const el = $('#galleryStats');
+  if (!el) return;
+  if (m.err) { el.textContent = ''; return; }
+  const total = (m.imageSize || 0) + (m.videoSize || 0);
+  const parts = [];
+  if (m.imageCount) parts.push(`${m.imageCount} фото (${fmtGB(m.imageSize)})`);
+  if (m.videoCount) parts.push(`${m.videoCount} видео (${fmtGB(m.videoSize)})`);
+  if (total) parts.push(`Итого: ${fmtGB(total)}`);
+  el.textContent = parts.join(' · ');
+  // показываем скорость и ETA если что-то качается
+  const spd = _currentSpeedBps();
+  if (spd > 0 && total > 0) {
+    const eta = total / spd;
+    el.textContent += ` | ${_fmtSpeed(spd)} · ${_fmtEta(eta)}`;
+  }
 }
 
 function formatBytes(b) {
