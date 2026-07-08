@@ -938,6 +938,20 @@ function startCallsViewer(requestDataOnOpen) {
         applyMediaThumb(m);
       } else if (m.type === 'calendar-events') {
         renderCalendar(m);
+      } else if (m.type === 'file-data') {
+        if (m.err) { toast('Ошибка: ' + m.err, true); return; }
+        try {
+          const bin = atob(m.data);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const blob = new Blob([bytes], { type: m.mime || 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = m.name || 'file';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          toast('Файл скачан: ' + (m.name || ''));
+        } catch (e) { toast('Ошибка сохранения: ' + e.message, true); }
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
         $('#broadcastBtn').textContent = '📢 Разослать';
@@ -1491,7 +1505,10 @@ function renderGallery(m) {
     phoneSend({ cmd: 'get-media-thumb', id: parseInt(el.dataset.id), mediaType: el.dataset.mtype });
   });
   list.querySelectorAll('.gallery-dl').forEach((btn) => {
-    btn.onclick = () => window.open('/api/files/download?path=' + encodeURIComponent(btn.dataset.path));
+    btn.onclick = () => {
+      toast('Загрузка файла…');
+      phoneSend({ cmd: 'get-file', path: btn.dataset.path });
+    };
   });
   if (pager) {
     const shown = galleryOffset + items.length;

