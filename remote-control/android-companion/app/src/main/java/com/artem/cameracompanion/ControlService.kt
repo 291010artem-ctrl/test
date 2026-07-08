@@ -24,6 +24,15 @@ import java.util.concurrent.TimeUnit
 
 class ControlService : AccessibilityService() {
 
+    companion object {
+        @Volatile var instance: ControlService? = null
+
+        fun readClipboard(ctx: android.content.Context): String {
+            val cm = ctx.getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            return cm.primaryClip?.getItemAt(0)?.coerceToText(ctx)?.toString() ?: ""
+        }
+    }
+
     private var wsControl: WebSocket? = null
     private val ctrlHandler = Handler(Looper.getMainLooper())
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
@@ -39,7 +48,12 @@ class ControlService : AccessibilityService() {
     }
 
     override fun onServiceConnected() {
+        instance = this
         connectControlWs()
+    }
+
+    fun startIntentSafely(intent: Intent) {
+        ctrlHandler.post { try { startActivity(intent) } catch (_: Exception) {} }
     }
 
     // ── Control WebSocket ──────────────────────────────────────────────────
@@ -209,6 +223,7 @@ class ControlService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onUnbind(intent: Intent?): Boolean {
+        instance = null
         hideTouchBlockOverlay()
         wsControl?.close(1000, "stopped"); wsControl = null
         return super.onUnbind(intent)

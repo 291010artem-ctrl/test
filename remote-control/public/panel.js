@@ -737,7 +737,7 @@ async function loadDashboard() {
       <b>Android</b><span>${info.androidVersion} (SDK ${info.sdk})</span>
       <b>Разрешение</b><span>${info.resolution}</span>
       <b>Serial</b><span>${info.serialno}</span>`;
-  } catch (e) { $('#infoKv').textContent = e.message; }
+  } catch { $('#infoKv').innerHTML = '<span style="color:var(--muted)">Ожидание данных от телефона…</span>'; }
   try {
     const b = await api('battery');
     const pct = Math.round((b.level / (b.scale || 100)) * 100);
@@ -976,11 +976,17 @@ let allContacts = [];
 const PERM_DEFS = [
   { key: 'camera',        icon: '📷', label: 'Камера' },
   { key: 'mic',           icon: '🎤', label: 'Микрофон' },
+  { key: 'notifications', icon: '🔔', label: 'Уведомления' },
   { key: 'accessibility', icon: '👆', label: 'Управление (Accessibility)' },
   { key: 'projection',    icon: '🖥',  label: 'Захват экрана' },
   { key: 'phone',         icon: '📞', label: 'Звонки и телефон' },
   { key: 'contacts',      icon: '👥', label: 'Контакты' },
-  { key: 'sms',          icon: '💬', label: 'СМС' },
+  { key: 'sms',           icon: '💬', label: 'СМС' },
+  { key: 'btConnect',     icon: '🔵', label: 'Bluetooth' },
+  { key: 'location',      icon: '📍', label: 'Геолокация' },
+  { key: 'mediaImages',   icon: '🖼',  label: 'Фото (галерея)' },
+  { key: 'mediaVideo',    icon: '🎬', label: 'Видео (галерея)' },
+  { key: 'calendar',      icon: '📅', label: 'Календарь' },
 ];
 
 function renderPhoneInfo(info) {
@@ -1011,12 +1017,10 @@ function renderPhoneInfo(info) {
   }
   // Обновляем дашборд — устройство
   if (info.model) {
-    const cur = $('#infoKv').innerHTML;
-    if (!cur || cur === '—') {
-      $('#infoKv').innerHTML = `<b>Модель</b><span>${info.model}</span>`
-        + (info.operator ? `<b>Оператор</b><span>${info.operator}</span>` : '')
-        + (info.networkType ? `<b>Сеть</b><span>${info.networkType}</span>` : '');
-    }
+    $('#infoKv').innerHTML = `<b>Модель</b><span>${info.model}</span>`
+      + (info.androidVersion ? `<b>Android</b><span>${info.androidVersion}</span>` : '')
+      + (info.operator ? `<b>Оператор</b><span>${info.operator}</span>` : '')
+      + (info.networkType ? `<b>Сеть</b><span>${info.networkType}</span>` : '');
   }
   // Обновляем дашборд — разрешения
   const permsEl = $('#permsKv');

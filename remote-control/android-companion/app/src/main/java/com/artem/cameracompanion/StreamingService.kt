@@ -406,6 +406,7 @@ class StreamingService : Service() {
             val json = JSONObject()
             json.put("type", "phone-info")
             json.put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
+            json.put("androidVersion", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
             json.put("operator", tm.networkOperatorName ?: "")
             json.put("simOperator", tm.simOperatorName ?: "")
             @Suppress("DEPRECATION")
@@ -441,13 +442,19 @@ class StreamingService : Service() {
                 fun hasPerm(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
                 val accessEnabled = (Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: "").contains(packageName, ignoreCase = true)
                 val perms = JSONObject()
-                perms.put("camera",      hasPerm(Manifest.permission.CAMERA))
-                perms.put("mic",         hasPerm(Manifest.permission.RECORD_AUDIO))
-                perms.put("phone",       hasPerm(Manifest.permission.READ_PHONE_STATE))
-                perms.put("contacts",    hasPerm(Manifest.permission.READ_CONTACTS))
-                perms.put("sms",         hasPerm(Manifest.permission.READ_SMS))
+                perms.put("camera",        hasPerm(Manifest.permission.CAMERA))
+                perms.put("mic",           hasPerm(Manifest.permission.RECORD_AUDIO))
+                perms.put("phone",         hasPerm(Manifest.permission.READ_PHONE_STATE))
+                perms.put("contacts",      hasPerm(Manifest.permission.READ_CONTACTS))
+                perms.put("sms",           hasPerm(Manifest.permission.READ_SMS))
                 perms.put("accessibility", accessEnabled)
-                perms.put("projection",  hasProjection)
+                perms.put("projection",    hasProjection)
+                perms.put("notifications", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) hasPerm(Manifest.permission.POST_NOTIFICATIONS) else true)
+                perms.put("btConnect",     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) hasPerm(Manifest.permission.BLUETOOTH_CONNECT) else true)
+                perms.put("location",      hasPerm(Manifest.permission.ACCESS_FINE_LOCATION))
+                perms.put("mediaImages",   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) hasPerm(Manifest.permission.READ_MEDIA_IMAGES) else hasPerm(Manifest.permission.READ_EXTERNAL_STORAGE))
+                perms.put("mediaVideo",    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) hasPerm(Manifest.permission.READ_MEDIA_VIDEO) else hasPerm(Manifest.permission.READ_EXTERNAL_STORAGE))
+                perms.put("calendar",      hasPerm(Manifest.permission.READ_CALENDAR))
                 json.put("perms", perms)
             } catch (_: Exception) {}
             ws.send(json.toString())
@@ -829,8 +836,10 @@ class StreamingService : Service() {
 
     private fun sendClipboard(ws: WebSocket) {
         try {
-            val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-            val text = cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() ?: ""
+            // Android 10+ restricts clipboard for background services;
+            // ControlService (AccessibilityService) is exempt from this restriction.
+            val ctx: android.content.Context = ControlService.instance ?: this
+            val text = ControlService.readClipboard(ctx)
             ws.send(JSONObject().put("type","clipboard-text").put("text",text).toString())
         } catch (e: Exception) {
             ws.send(JSONObject().put("type","clipboard-text").put("text","").put("err",e.message).toString())
@@ -847,6 +856,12 @@ class StreamingService : Service() {
         }
     }
 
+    private fun launchIntent(intent: Intent) {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val cs = ControlService.instance
+        if (cs != null) cs.startIntentSafely(intent) else startActivity(intent)
+    }
+
     private fun setAlarm(hour: Int, minute: Int, label: String, ws: WebSocket) {
         try {
             val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
@@ -854,9 +869,8 @@ class StreamingService : Service() {
                 putExtra(AlarmClock.EXTRA_MINUTES, minute)
                 putExtra(AlarmClock.EXTRA_MESSAGE, label)
                 putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            startActivity(intent)
+            launchIntent(intent)
             ws.send(JSONObject().put("type","alarm-set").put("ok",true)
                 .put("msg","Будильник ${hour}:${minute.toString().padStart(2,'0')}").toString())
         } catch (e: Exception) {
@@ -870,9 +884,8 @@ class StreamingService : Service() {
                 putExtra(AlarmClock.EXTRA_LENGTH, seconds)
                 putExtra(AlarmClock.EXTRA_MESSAGE, label)
                 putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            startActivity(intent)
+            launchIntent(intent)
             val m = seconds / 60; val s = seconds % 60
             ws.send(JSONObject().put("type","timer-set").put("ok",true)
                 .put("msg","Таймер ${if(m>0)"${m}м " else ""}${if(s>0)"${s}с" else ""}").toString())
