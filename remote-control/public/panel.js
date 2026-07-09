@@ -11,12 +11,12 @@ const jpost = (path, body) => api(path, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 });
 
-function toast(msg, isErr) {
+function toast(msg, isErr, persist) {
   const t = $('#toast');
   t.textContent = msg;
   t.className = 'toast show' + (isErr ? ' err' : '');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => (t.className = 'toast'), 2600);
+  if (!persist) toast._t = setTimeout(() => (t.className = 'toast'), 2600);
 }
 
 // ---------- Камера в левой панели ----------
@@ -992,7 +992,7 @@ function startCallsViewer(requestDataOnOpen) {
         const spdStr = _fmtSpeed(spd);
         const etaStr = _fmtEta(remaining);
         const info = [spdStr, etaStr].filter(Boolean).join(' · ');
-        toast(`⬇ ${dl.name} — ${pct}%${info ? ' · ' + info : ''}`);
+        toast(`⬇ ${dl.name} — ${pct}%${info ? ' · ' + info : ''}`, false, true);
         if (got === dl.total) {
           _fileDl.delete(m.requestId);
           const parts = dl.chunks.map((c) => { const b = atob(c); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; });
@@ -1737,7 +1737,7 @@ function renderGalleryItems(m) {
       div.dataset.downloading = '1';
       div.style.opacity = '0.5';
       const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-      toast('Загрузка…');
+      toast('Загрузка…', false, true);
       phoneSend({ cmd: 'get-media-file', id: item.id, mediaType: m.mediaType, requestId });
       const unlock = () => { delete div.dataset.downloading; div.style.opacity = ''; };
       setTimeout(() => {
