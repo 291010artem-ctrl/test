@@ -110,7 +110,6 @@ async function loadAll() {
 
 function renderOverview() {
   const nonAdmins = _users.filter(u => !u.admin);
-  const unassigned = _phones.filter(p => !p.owner);
   const userOpts = nonAdmins.map(u => `<option value="${esc(u.username)}">${esc(u.username)}</option>`).join('');
 
   const sections = nonAdmins.map(u => {

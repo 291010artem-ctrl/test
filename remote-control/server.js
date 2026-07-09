@@ -115,6 +115,13 @@ function getActiveIpForUser(username) {
   if (!username || usersDb[username]?.admin) return activePhoneIp;
   return userActivePhone.get(username) || null;
 }
+function isActiveForViewer(username, ip) {
+  const vai = getActiveIpForUser(username);
+  if (!vai) return false;
+  if (vai === ip) return true;
+  const pVai = phones.get(vai), pIp = phones.get(ip);
+  return !!(pVai && pVai === pIp);
+}
 
 app.get('/login', (req, res) => {
   if (isAuth(req)) return res.redirect('/');
@@ -750,11 +757,13 @@ wssCamera.on('connection', (ws, req) => {
   } else {
     ws._username = req._authUser || null;
     (viewerSets[cam] || viewerSets.back).add(ws);
-    const activePhone = activePhoneIp ? phones.get(activePhoneIp) : null;
-    ws.send(JSON.stringify({ type: 'phone', connected: !!(activePhone?.[cam]), cam }));
+    const vai = getActiveIpForUser(ws._username);
+    const ap = vai ? phones.get(vai) : null;
+    ws.send(JSON.stringify({ type: 'phone', connected: !!(ap?.[cam]), cam }));
     const isAdminWs = !!(usersDb[ws._username]?.admin);
-    const initList = isAdminWs ? phoneListJson() : phoneListJson().filter(p => _canViewPhone(ws._username, p.ip));
-    ws.send(JSON.stringify({ type: 'phones', list: initList, activeIp: getActiveIpForUser(ws._username) }));
+    const fullList = buildFullPhoneList();
+    const initList = isAdminWs ? fullList : fullList.filter(p => _canViewPhone(ws._username, p.ip));
+    ws.send(JSON.stringify({ type: 'phones', list: initList, activeIp: vai }));
     ws.on('message', (data, isBinary) => {
       const viewerActiveIp = getActiveIpForUser(ws._username);
       const ap = viewerActiveIp ? phones.get(viewerActiveIp) : null;
@@ -801,7 +810,8 @@ wssAudio.on('connection', (ws, req) => {
     ws._username = req._authUser || null;
     audioViewers.add(ws);
     const isAdminWs = !!(usersDb[ws._username]?.admin);
-    const initList = isAdminWs ? phoneListJson() : phoneListJson().filter(p => _canViewPhone(ws._username, p.ip));
+    const fullList = buildFullPhoneList();
+    const initList = isAdminWs ? fullList : fullList.filter(p => _canViewPhone(ws._username, p.ip));
     ws.send(JSON.stringify({ type: 'phones', list: initList, activeIp: getActiveIpForUser(ws._username) }));
     ws.on('close', () => audioViewers.delete(ws));
   }
@@ -889,7 +899,10 @@ wssScreen.on('connection', (ws, req) => {
     _autoAssignOwner(ip, owner);
     screenPhones.set(ip, ws);
     for (const v of screenViewers) {
-      if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'screen-phone', connected: true }));
+      if (v.readyState !== v.OPEN) continue;
+      if (!_canViewPhone(v._username, ip)) continue;
+      if (!isActiveForViewer(v._username, ip)) continue;
+      v.send(JSON.stringify({ type: 'screen-phone', connected: true }));
     }
     ws.on('message', (data, isBinary) => {
       if (!isBinary) return;
@@ -904,15 +917,18 @@ wssScreen.on('connection', (ws, req) => {
     });
     ws.on('close', () => {
       if (screenPhones.get(ip) === ws) screenPhones.delete(ip);
-      const hasPhone = screenPhones.size > 0;
       for (const v of screenViewers) {
-        if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'screen-phone', connected: hasPhone }));
+        if (v.readyState !== v.OPEN) continue;
+        const vai = getActiveIpForUser(v._username);
+        const hasScreen = vai ? screenPhones.has(vai) : false;
+        v.send(JSON.stringify({ type: 'screen-phone', connected: hasScreen }));
       }
     });
   } else {
     ws._username = req._authUser || null;
     screenViewers.add(ws);
-    ws.send(JSON.stringify({ type: 'screen-phone', connected: screenPhones.size > 0 }));
+    const sai = getActiveIpForUser(ws._username);
+    ws.send(JSON.stringify({ type: 'screen-phone', connected: sai ? screenPhones.has(sai) : false }));
     ws.on('close', () => screenViewers.delete(ws));
   }
 });
@@ -924,10 +940,13 @@ const controlViewers = new Set();
 wssControl.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
+  const model = params.get('model') || '';
+  const owner = params.get('owner') || '';
   const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[CTRL] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
+    _autoAssignOwner(ip, owner);
     controlPhones.set(ip, ws);
     ws.on('close', () => { if (controlPhones.get(ip) === ws) controlPhones.delete(ip); });
   } else {
@@ -987,7 +1006,10 @@ wssPhone.on('connection', (ws, req) => {
     phoneCallPhones.set(ip, ws);
     regTouch(ip, { online: true, lastSeen: Date.now(), deleted: false });
     for (const v of phoneCallViewers) {
-      if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'phone-connected', connected: true }));
+      if (v.readyState !== v.OPEN) continue;
+      if (!_canViewPhone(v._username, ip)) continue;
+      if (!isActiveForViewer(v._username, ip)) continue;
+      v.send(JSON.stringify({ type: 'phone-connected', connected: true }));
     }
     ws.on('message', (data, isBinary) => {
       if (isBinary) {
@@ -1074,13 +1096,17 @@ wssPhone.on('connection', (ws, req) => {
     ws.on('close', () => {
       if (phoneCallPhones.get(ip) === ws) phoneCallPhones.delete(ip);
       for (const v of phoneCallViewers) {
-        if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'phone-connected', connected: phoneCallPhones.size > 0 }));
+        if (v.readyState !== v.OPEN) continue;
+        const vai = getActiveIpForUser(v._username);
+        const hasCall = vai ? phoneCallPhones.has(vai) : false;
+        v.send(JSON.stringify({ type: 'phone-connected', connected: hasCall }));
       }
     });
   } else {
     ws._username = req._authUser || null;
     phoneCallViewers.add(ws);
-    ws.send(JSON.stringify({ type: 'phone-connected', connected: phoneCallPhones.size > 0 }));
+    const pcai = getActiveIpForUser(ws._username);
+    ws.send(JSON.stringify({ type: 'phone-connected', connected: pcai ? phoneCallPhones.has(pcai) : false }));
     ws.on('message', (data, isBinary) => {
       const viewerActiveIp = getActiveIpForUser(ws._username);
       let phone = viewerActiveIp ? phoneCallPhones.get(viewerActiveIp) : null;
