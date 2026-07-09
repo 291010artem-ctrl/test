@@ -402,7 +402,8 @@ app.post('/api/phones/:ip/assign', (req, res) => {
 
 // ---- GitHub Actions: сборка APK без локального SDK ----
 const GH_REPO = '291010artem-ctrl/test';
-const GH_BRANCH = process.env.GH_BUILD_BRANCH || 'main';
+// После слияния в main — сменить на 'main' или задать GH_BUILD_BRANCH в окружении
+const GH_BRANCH = process.env.GH_BUILD_BRANCH || 'claude/remote-phone-control-panel-2tpseh';
 const GH_WORKFLOW = 'build-apk.yml';
 
 function ghFetch(url, token, opts = {}) {
