@@ -1732,11 +1732,7 @@ function renderGalleryItems(m) {
       e.stopPropagation();
       const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
       toast('Загрузка…');
-      if (item.path) {
-        phoneSend({ cmd: 'get-file', path: item.path, requestId });
-      } else {
-        phoneSend({ cmd: 'get-media-file', id: item.id, mediaType: m.mediaType, requestId });
-      }
+      phoneSend({ cmd: 'get-media-file', id: item.id, mediaType: m.mediaType, requestId });
     };
     grid.appendChild(div);
     phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });

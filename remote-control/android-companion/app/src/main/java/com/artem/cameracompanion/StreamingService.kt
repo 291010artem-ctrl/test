@@ -1194,6 +1194,9 @@ class StreamingService : Service() {
                 if (sc >= 0) fileSize = c.getLong(sc)
             }
         }
+        if (fileSize <= 0L) {
+            try { contentResolver.openFileDescriptor(contentUri, "r")?.use { pfd -> fileSize = pfd.statSize } } catch (_: Exception) {}
+        }
         if (fileSize <= 0L) { err("Не удалось определить размер файла"); return }
         val chunkSize = 512 * 1024
         val totalChunks = ((fileSize + chunkSize - 1) / chunkSize).toInt().coerceAtLeast(1)
