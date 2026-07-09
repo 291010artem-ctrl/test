@@ -1727,16 +1727,14 @@ function renderGalleryItems(m) {
   items.forEach((item) => {
     const div = document.createElement('div');
     div.className = 'gp-item';
-    div.innerHTML = `<div class="gp-thumb" data-thumb-id="${item.id}" data-mtype="${m.mediaType}"><div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div></div><button class="gp-dl" title="Скачать">⬇</button>`;
-    div.querySelector('.gp-dl').onclick = (e) => {
-      e.stopPropagation();
+    div.innerHTML = `<div class="gp-thumb" data-thumb-id="${item.id}" data-mtype="${m.mediaType}"><div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div></div><div class="gp-dl-overlay">⬇ Скачать</div>`;
+    div.onclick = () => {
       const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
       toast('Загрузка…');
       phoneSend({ cmd: 'get-media-file', id: item.id, mediaType: m.mediaType, requestId });
     };
     grid.appendChild(div);
     phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });
-
   });
 }
 
