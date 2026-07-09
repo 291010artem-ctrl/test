@@ -694,6 +694,15 @@ wssPhone.on('connection', (ws, req) => {
     }
     ws.on('message', (data, isBinary) => {
       if (isBinary) {
+        // Логируем первый бинарный чанк file-chunk от телефона
+        try {
+          const hLen = data.readUInt32BE(0);
+          const hJson = JSON.parse(data.slice(4, 4 + hLen).toString());
+          if (hJson.type === 'file-chunk') {
+            if (hJson.index === 0) console.log(`[PHONE→] file-chunk binary requestId=${hJson.requestId} name=${hJson.name} size=${hJson.size} total=${hJson.total}`);
+            else if (hJson.err) console.log(`[PHONE→] file-chunk error requestId=${hJson.requestId} err=${hJson.err}`);
+          }
+        } catch {}
         for (const v of phoneCallViewers) {
           if (v.readyState === v.OPEN) v.send(data, { binary: true });
         }
@@ -703,6 +712,9 @@ wssPhone.on('connection', (ws, req) => {
       // Перехватываем phone-info чтобы сохранить батарею и модель
       try {
         const m = JSON.parse(str);
+        if (m.type === 'file-chunk') {
+          console.log(`[PHONE→] file-chunk text requestId=${m.requestId} err=${m.err || '(none)'}`);
+        }
         if (m.type === 'phone-info') {
           const upd = { lastSeen: Date.now() };
           if (m.battery !== undefined) upd.battery = m.battery;
@@ -736,6 +748,12 @@ wssPhone.on('connection', (ws, req) => {
     ws.on('message', (data, isBinary) => {
       const activePhone = activePhoneIp ? phoneCallPhones.get(activePhoneIp) : null;
       const phone = activePhone || [...phoneCallPhones.values()].find((w) => w.readyState === w.OPEN);
+      if (!isBinary) {
+        try {
+          const m = JSON.parse(data.toString());
+          if (m.cmd === 'get-media-file') console.log(`[→PHONE] get-media-file id=${m.id} type=${m.mediaType} requestId=${m.requestId} phoneFound=${!!phone}`);
+        } catch {}
+      }
       if (phone && phone.readyState === phone.OPEN) phone.send(isBinary ? data : data.toString());
     });
     ws.on('close', () => phoneCallViewers.delete(ws));
