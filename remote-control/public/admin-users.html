@@ -38,15 +38,20 @@
     .pass-form { display: none; align-items: center; gap: 8px; margin-top: 4px; }
     .pass-form.open { display: flex; }
     .pass-form input { width: 160px; }
-    /* телефоны */
-    .phone-row { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid #2a333d; gap: 12px; }
-    .phone-row:last-child { border-bottom: none; }
-    .phone-name { flex: 1; font-size: 14px; }
-    .phone-ip { font-size: 12px; color: #8b98a5; }
-    select { background: #0f1216; border: 1px solid #2a333d; border-radius: 7px; color: #e6edf3; padding: 7px 10px; font-size: 13px; outline: none; cursor: pointer; }
+    select { background: #0f1216; border: 1px solid #2a333d; border-radius: 7px; color: #e6edf3; padding: 6px 10px; font-size: 12px; outline: none; cursor: pointer; }
     select:focus { border-color: #388bfd; }
-    .dot-online { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3fb950; margin-right: 6px; }
-    .dot-offline { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #8b98a5; margin-right: 6px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; flex-shrink: 0; }
+    .dot.on { background: #3fb950; }
+    .dot.off { background: #484f58; }
+    /* обзор */
+    .ov-user { border-bottom: 1px solid #2a333d; }
+    .ov-user:last-child { border-bottom: none; }
+    .ov-user-hd { display: flex; align-items: center; gap: 10px; padding: 13px 20px; background: #1c2128; font-weight: 600; font-size: 14px; }
+    .ov-user-hd .cnt { margin-left: auto; font-size: 12px; color: #8b98a5; font-weight: 400; }
+    .ov-device { display: flex; align-items: center; gap: 10px; padding: 9px 20px 9px 36px; border-top: 1px solid #21262d; font-size: 13px; }
+    .ov-device-name { flex: 1; }
+    .ov-device-ip { font-size: 11px; color: #8b98a5; }
+    .ov-empty { padding: 8px 36px 12px; font-size: 12px; color: #484f58; }
   </style>
 </head>
 <body>
@@ -57,13 +62,13 @@
 
 <div class="wrap">
   <div class="card">
-    <div class="card-hd">Пользователи <span id="countBadge" class="badge"></span></div>
-    <div id="userList"><div class="empty">Загрузка…</div></div>
+    <div class="card-hd">Обзор: пользователи и устройства</div>
+    <div id="overview"><div class="empty">Загрузка…</div></div>
   </div>
 
   <div class="card">
-    <div class="card-hd">Доступ к телефонам <span id="phonesCountBadge" class="badge"></span></div>
-    <div id="phoneList"><div class="empty">Загрузка…</div></div>
+    <div class="card-hd">Пользователи <span id="countBadge" class="badge"></span></div>
+    <div id="userList"><div class="empty">Загрузка…</div></div>
   </div>
 
   <div class="card">
@@ -88,13 +93,90 @@
 </div>
 
 <script>
-async function loadUsers() {
-  const r = await fetch('/api/users');
-  if (!r.ok) { document.getElementById('userList').innerHTML = '<div class="empty err">Нет доступа</div>'; return; }
-  const { users } = await r.json();
-  document.getElementById('countBadge').textContent = users.length;
-  if (!users.length) { document.getElementById('userList').innerHTML = '<div class="empty">Нет пользователей</div>'; return; }
-  document.getElementById('userList').innerHTML = users.map(u => `
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+let _users = [], _phones = [];
+
+async function loadAll() {
+  const [ur, pr] = await Promise.all([fetch('/api/users'), fetch('/api/phones')]);
+  if (!ur.ok) { document.getElementById('overview').innerHTML = '<div class="empty err">Нет доступа</div>'; return; }
+  const { users } = await ur.json();
+  const { phones } = pr.ok ? await pr.json() : { phones: [] };
+  _users = users;
+  _phones = phones.filter(p => !p.deleted);
+  renderOverview();
+  renderUsers();
+}
+
+function renderOverview() {
+  const nonAdmins = _users.filter(u => !u.admin);
+  const unassigned = _phones.filter(p => !p.owner);
+  const userOpts = nonAdmins.map(u => `<option value="${esc(u.username)}">${esc(u.username)}</option>`).join('');
+
+  const sections = nonAdmins.map(u => {
+    const devs = _phones.filter(p => p.owner === u.username);
+    const onlineCnt = devs.filter(p => p.online).length;
+    const devHtml = devs.length
+      ? devs.map(p => deviceRow(p, nonAdmins, userOpts)).join('')
+      : '<div class="ov-empty">Нет устройств</div>';
+    return `<div class="ov-user">
+      <div class="ov-user-hd">
+        <span class="dot ${onlineCnt ? 'on' : 'off'}"></span>
+        ${esc(u.username)}
+        ${u.me ? '<span class="badge me" style="font-size:10px">Вы</span>' : ''}
+        <span class="cnt">${onlineCnt ? `${onlineCnt} онлайн` : ''}${devs.length ? ` / ${devs.length} всего` : 'нет устройств'}</span>
+      </div>
+      ${devHtml}
+    </div>`;
+  });
+
+  if (unassigned.length) {
+    const devHtml = unassigned.map(p => deviceRow(p, nonAdmins, userOpts)).join('');
+    sections.push(`<div class="ov-user">
+      <div class="ov-user-hd" style="color:#8b98a5">
+        <span class="dot off"></span> Без владельца
+        <span class="cnt">${unassigned.filter(p=>p.online).length ? unassigned.filter(p=>p.online).length+' онлайн' : ''}</span>
+      </div>
+      ${devHtml}
+    </div>`);
+  }
+
+  document.getElementById('overview').innerHTML = sections.length
+    ? sections.join('')
+    : '<div class="empty">Нет пользователей и устройств</div>';
+}
+
+function deviceRow(p, nonAdmins, userOpts) {
+  const opts = `<option value="">— Без владельца —</option>` +
+    nonAdmins.map(u => `<option value="${esc(u.username)}" ${p.owner === u.username ? 'selected' : ''}>${esc(u.username)}</option>`).join('');
+  return `<div class="ov-device">
+    <span class="dot ${p.online ? 'on' : 'off'}"></span>
+    <div class="ov-device-name">${esc(p.model || 'Android')} <span class="ov-device-ip">${esc(p.ip)}</span></div>
+    <select onchange="assignPhone('${esc(p.ip)}',this.value,this)">${opts}</select>
+    <span id="asmsg-${CSS.escape(p.ip)}" style="font-size:11px;min-width:16px"></span>
+  </div>`;
+}
+
+async function assignPhone(ip, username, sel) {
+  const msg = document.getElementById('asmsg-' + CSS.escape(ip));
+  const r = await fetch(`/api/phones/${encodeURIComponent(ip)}/assign`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ username: username || null })
+  });
+  const d = await r.json();
+  if (r.ok) {
+    msg.textContent = '✓'; msg.className = 'ok';
+    const ph = _phones.find(p => p.ip === ip);
+    if (ph) ph.owner = username || null;
+    setTimeout(() => { msg.textContent = ''; renderOverview(); }, 1200);
+  } else { msg.textContent = '✗'; msg.className = 'err'; }
+}
+
+function renderUsers() {
+  const el = document.getElementById('userList');
+  const cb = document.getElementById('countBadge');
+  cb.textContent = _users.length;
+  el.innerHTML = _users.map(u => `
     <div class="user-row" id="urow-${CSS.escape(u.username)}">
       <div class="user-name">${esc(u.username)}</div>
       ${u.admin ? '<span class="badge">Администратор</span>' : ''}
@@ -115,89 +197,41 @@ async function loadUsers() {
   `).join('');
 }
 
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-function openPass(u) {
-  document.getElementById('pf-' + CSS.escape(u)).classList.add('open');
-  document.getElementById('pi-' + CSS.escape(u)).focus();
-}
-function closePass(u) {
-  document.getElementById('pf-' + CSS.escape(u)).classList.remove('open');
-  document.getElementById('pi-' + CSS.escape(u)).value = '';
-}
+function openPass(u) { document.getElementById('pf-'+CSS.escape(u)).classList.add('open'); document.getElementById('pi-'+CSS.escape(u)).focus(); }
+function closePass(u) { document.getElementById('pf-'+CSS.escape(u)).classList.remove('open'); document.getElementById('pi-'+CSS.escape(u)).value=''; }
 async function savePass(u) {
-  const pass = document.getElementById('pi-' + CSS.escape(u)).value.trim();
-  const msg = document.getElementById('pmsg-' + CSS.escape(u));
-  if (!pass) { msg.textContent = 'Введите пароль'; msg.className = 'err'; return; }
-  const r = await fetch(`/api/users/${encodeURIComponent(u)}/password`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: pass }) });
+  const pass = document.getElementById('pi-'+CSS.escape(u)).value.trim();
+  const msg = document.getElementById('pmsg-'+CSS.escape(u));
+  if (!pass) { msg.textContent='Введите пароль'; msg.className='err'; return; }
+  const r = await fetch(`/api/users/${encodeURIComponent(u)}/password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass})});
   const d = await r.json();
-  if (r.ok) { msg.textContent = '✓ Сохранено'; msg.className = 'ok'; closePass(u); setTimeout(() => msg.textContent = '', 3000); }
-  else { msg.textContent = d.error || 'Ошибка'; msg.className = 'err'; }
+  if (r.ok) { msg.textContent='✓ Сохранено'; msg.className='ok'; closePass(u); setTimeout(()=>msg.textContent='',3000); }
+  else { msg.textContent=d.error||'Ошибка'; msg.className='err'; }
 }
 async function delUser(u) {
   if (!confirm(`Удалить пользователя «${u}»?`)) return;
-  const r = await fetch(`/api/users/${encodeURIComponent(u)}`, { method: 'DELETE' });
+  const r = await fetch(`/api/users/${encodeURIComponent(u)}`,{method:'DELETE'});
   const d = await r.json();
-  if (r.ok) loadUsers();
-  else alert(d.error || 'Ошибка');
+  if (r.ok) loadAll(); else alert(d.error||'Ошибка');
 }
 async function addUser() {
   const username = document.getElementById('newUser').value.trim();
   const password = document.getElementById('newPass').value;
   const msg = document.getElementById('addMsg');
-  if (!username || !password) { msg.textContent = 'Заполните все поля'; msg.className = 'err'; return; }
-  const r = await fetch('/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password }) });
+  if (!username||!password) { msg.textContent='Заполните все поля'; msg.className='err'; return; }
+  const r = await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
   const d = await r.json();
   if (r.ok) {
-    document.getElementById('newUser').value = '';
-    document.getElementById('newPass').value = '';
-    msg.textContent = '✓ Создан';
-    msg.className = 'ok';
-    setTimeout(() => msg.textContent = '', 3000);
-    loadUsers();
-  } else { msg.textContent = d.error || 'Ошибка'; msg.className = 'err'; }
+    document.getElementById('newUser').value='';
+    document.getElementById('newPass').value='';
+    msg.textContent='✓ Создан'; msg.className='ok';
+    setTimeout(()=>msg.textContent='',3000);
+    loadAll();
+  } else { msg.textContent=d.error||'Ошибка'; msg.className='err'; }
 }
 
-document.getElementById('newPass').addEventListener('keydown', e => { if (e.key === 'Enter') addUser(); });
-
-let _allUsers = [];
-async function loadPhones() {
-  const [pr, ur] = await Promise.all([fetch('/api/phones'), fetch('/api/users')]);
-  if (!pr.ok || !ur.ok) { document.getElementById('phoneList').innerHTML = '<div class="empty err">Нет доступа</div>'; return; }
-  const { phones } = await pr.json();
-  const { users } = await ur.json();
-  _allUsers = users.filter(u => !u.admin);
-  const nonDeleted = phones.filter(p => !p.deleted);
-  document.getElementById('phonesCountBadge').textContent = nonDeleted.length;
-  if (!nonDeleted.length) { document.getElementById('phoneList').innerHTML = '<div class="empty">Нет устройств</div>'; return; }
-  document.getElementById('phoneList').innerHTML = nonDeleted.map(p => {
-    const opts = `<option value="">— Нет владельца —</option>` +
-      _allUsers.map(u => `<option value="${esc(u.username)}" ${p.owner === u.username ? 'selected' : ''}>${esc(u.username)}</option>`).join('');
-    return `<div class="phone-row">
-      <div class="phone-name">
-        <span class="${p.online ? 'dot-online' : 'dot-offline'}"></span>
-        ${esc(p.model || p.ip)}
-        <span class="phone-ip">${esc(p.ip)}</span>
-      </div>
-      <select id="sel-${CSS.escape(p.ip)}" onchange="assignPhone('${esc(p.ip)}',this.value)">${opts}</select>
-      <span id="asmsg-${CSS.escape(p.ip)}" style="font-size:12px;min-width:60px"></span>
-    </div>`;
-  }).join('');
-}
-
-async function assignPhone(ip, username) {
-  const msg = document.getElementById('asmsg-' + CSS.escape(ip));
-  const r = await fetch(`/api/phones/${encodeURIComponent(ip)}/assign`, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ username: username || null })
-  });
-  const d = await r.json();
-  if (r.ok) { msg.textContent = '✓'; msg.className = 'ok'; setTimeout(() => msg.textContent = '', 2000); }
-  else { msg.textContent = d.error || 'Ошибка'; msg.className = 'err'; }
-}
-
-loadUsers();
-loadPhones();
+document.getElementById('newPass').addEventListener('keydown', e => { if (e.key==='Enter') addUser(); });
+loadAll();
 </script>
 </body>
 </html>
