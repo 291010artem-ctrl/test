@@ -1728,15 +1728,17 @@ function renderGalleryItems(m) {
     const div = document.createElement('div');
     div.className = 'gp-item';
     div.dataset.thumbId = item.id;
-    div.innerHTML = `<div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div>${item.path ? `<button class="gp-dl" title="Скачать">⬇</button>` : ''}`;
-    if (item.path) {
-      div.querySelector('.gp-dl').onclick = (e) => {
-        e.stopPropagation();
-        const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-        toast('Загрузка…');
+    div.innerHTML = `<div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div><button class="gp-dl" title="Скачать">⬇</button>`;
+    div.querySelector('.gp-dl').onclick = (e) => {
+      e.stopPropagation();
+      const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      toast('Загрузка…');
+      if (item.path) {
         phoneSend({ cmd: 'get-file', path: item.path, requestId });
-      };
-    }
+      } else {
+        phoneSend({ cmd: 'get-media-file', id: item.id, mediaType: m.mediaType, requestId });
+      }
+    };
     grid.appendChild(div);
     phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });
   });
