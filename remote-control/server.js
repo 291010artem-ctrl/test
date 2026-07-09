@@ -8,6 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 const _dbgLog = fs.createWriteStream('/tmp/panel-debug.log', { flags: 'a' });
 function dbg(...a) { const s = new Date().toISOString().slice(11,19) + ' ' + a.join(' ') + '\n'; _dbgLog.write(s); process.stdout.write(s); }
 import { Readable } from 'node:stream';
@@ -24,31 +25,62 @@ const HOST = process.env.HOST || '0.0.0.0';
 const app = express();
 app.use(express.json());
 
-// ---- Авторизация ----
-const AUTH_USER = process.env.PANEL_USER || 'admin';
-const AUTH_PASS = process.env.PANEL_PASS || 'admin';
-const sessions = new Set();
+// ---- Авторизация и управление пользователями ----
+const USERS_FILE = path.join(__dirname, 'users.json');
+let usersDb = {};
+
+function hashPass(pass, salt) {
+  return crypto.scryptSync(pass, salt, 64).toString('hex');
+}
+function verifyPass(pass, userEntry) {
+  if (!userEntry) return false;
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(hashPass(pass, userEntry.salt), 'hex'),
+      Buffer.from(userEntry.hash, 'hex')
+    );
+  } catch { return false; }
+}
+function saveUsers() {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(usersDb, null, 2));
+}
+(function loadUsers() {
+  try { usersDb = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch {}
+  if (Object.keys(usersDb).length === 0) {
+    const defaultUser = process.env.PANEL_USER || 'admin';
+    const defaultPass = process.env.PANEL_PASS || 'admin';
+    const salt = crypto.randomBytes(16).toString('hex');
+    usersDb[defaultUser] = { hash: hashPass(defaultPass, salt), salt, admin: true };
+    saveUsers();
+  }
+})();
+
+const sessions = new Map(); // token → { username }
 
 function genToken() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  return crypto.randomBytes(32).toString('hex');
 }
 function getSessionCookie(req) {
   for (const part of (req.headers.cookie || '').split(';')) {
-    const [k, v] = part.trim().split('=');
-    if (k === 'panel_sid') return v;
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    if (part.slice(0, eq).trim() === 'panel_sid') return part.slice(eq + 1).trim();
   }
   return null;
 }
 function isAuth(req) { const t = getSessionCookie(req); return t && sessions.has(t); }
+function getSessionUser(req) { const t = getSessionCookie(req); return t ? sessions.get(t) : null; }
+function isAdmin(req) { const s = getSessionUser(req); return s ? !!(usersDb[s.username]?.admin) : false; }
 
 app.get('/login', (req, res) => {
   if (isAuth(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
-  if (req.body.user === AUTH_USER && req.body.pass === AUTH_PASS) {
+  const userEntry = usersDb[req.body.user];
+  if (verifyPass(req.body.pass, userEntry)) {
     const token = genToken();
-    sessions.add(token);
+    sessions.set(token, { username: req.body.user });
     res.setHeader('Set-Cookie', `panel_sid=${token}; Path=/; HttpOnly; SameSite=Strict`);
     return res.redirect('/');
   }
@@ -60,6 +92,54 @@ app.get('/logout', (req, res) => {
   res.setHeader('Set-Cookie', 'panel_sid=; Path=/; Max-Age=0');
   res.redirect('/login');
 });
+
+// ---- Управление пользователями (только для администраторов) ----
+app.get('/api/users', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+  const me = getSessionUser(req)?.username;
+  res.json({ users: Object.entries(usersDb).map(([u, d]) => ({ username: u, admin: !!d.admin, me: u === me })) });
+});
+app.post('/api/users', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'username и password обязательны' });
+  if (usersDb[username]) return res.status(409).json({ error: 'Пользователь уже существует' });
+  const salt = crypto.randomBytes(16).toString('hex');
+  usersDb[username] = { hash: hashPass(password, salt), salt, admin: false };
+  saveUsers();
+  res.json({ ok: true });
+});
+app.delete('/api/users/:username', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+  const { username } = req.params;
+  const me = getSessionUser(req)?.username;
+  if (username === me) return res.status(400).json({ error: 'Нельзя удалить самого себя' });
+  if (!usersDb[username]) return res.status(404).json({ error: 'Пользователь не найден' });
+  delete usersDb[username];
+  saveUsers();
+  for (const [token, s] of sessions.entries()) {
+    if (s.username === username) sessions.delete(token);
+  }
+  res.json({ ok: true });
+});
+app.post('/api/users/:username/password', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+  const { username } = req.params;
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'password обязателен' });
+  if (!usersDb[username]) return res.status(404).json({ error: 'Пользователь не найден' });
+  const salt = crypto.randomBytes(16).toString('hex');
+  usersDb[username].hash = hashPass(password, salt);
+  usersDb[username].salt = salt;
+  saveUsers();
+  res.json({ ok: true });
+});
+app.get('/api/me', (req, res) => {
+  const s = getSessionUser(req);
+  if (!s) return res.status(401).json({ error: 'Unauthorized' });
+  res.json({ username: s.username, admin: !!(usersDb[s.username]?.admin) });
+});
+
 app.use((req, res, next) => {
   if (req.path === '/login') return next();
   if (isAuth(req)) return next();

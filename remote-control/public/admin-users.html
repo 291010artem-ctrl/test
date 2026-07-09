@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Пользователи — Remote Panel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0f1216; color: #e6edf3; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
+    header { background: #171c22; border-bottom: 1px solid #2a333d; padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+    header a { color: #8b98a5; text-decoration: none; font-size: 14px; }
+    header a:hover { color: #e6edf3; }
+    header .title { font-weight: 700; font-size: 16px; flex: 1; }
+    .wrap { max-width: 640px; margin: 32px auto; padding: 0 16px; }
+    .card { background: #171c22; border: 1px solid #2a333d; border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+    .card-hd { padding: 16px 20px; border-bottom: 1px solid #2a333d; font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: space-between; }
+    .user-row { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid #2a333d; gap: 12px; }
+    .user-row:last-child { border-bottom: none; }
+    .user-name { flex: 1; font-size: 14px; font-weight: 600; }
+    .badge { background: #1f2b3d; color: #388bfd; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+    .badge.me { background: #1d3a24; color: #3fb950; }
+    button { background: #388bfd; color: #fff; border: none; border-radius: 7px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+    button:hover { background: #2f7de0; }
+    button.danger { background: #3d1f22; color: #f85149; }
+    button.danger:hover { background: #5a1f24; }
+    button.sec { background: #2a333d; color: #e6edf3; }
+    button.sec:hover { background: #38434f; }
+    .add-form { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    input { width: 100%; background: #0f1216; border: 1px solid #2a333d; border-radius: 7px; color: #e6edf3; padding: 9px 12px; font-size: 14px; outline: none; transition: border-color .15s; }
+    input:focus { border-color: #388bfd; }
+    label { font-size: 12px; color: #8b98a5; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 4px; }
+    .err { color: #f85149; font-size: 13px; }
+    .ok { color: #3fb950; font-size: 13px; }
+    .empty { padding: 24px 20px; color: #8b98a5; font-size: 14px; text-align: center; }
+
+    /* пароль инлайн */
+    .pass-form { display: none; align-items: center; gap: 8px; margin-top: 4px; }
+    .pass-form.open { display: flex; }
+    .pass-form input { width: 160px; }
+  </style>
+</head>
+<body>
+<header>
+  <a href="/">← Панель</a>
+  <div class="title">Управление пользователями</div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <div class="card-hd">Пользователи <span id="countBadge" class="badge"></span></div>
+    <div id="userList"><div class="empty">Загрузка…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Добавить пользователя</div>
+    <div class="add-form">
+      <div class="row2">
+        <div>
+          <label>Логин</label>
+          <input id="newUser" placeholder="username" autocomplete="off">
+        </div>
+        <div>
+          <label>Пароль</label>
+          <input id="newPass" type="password" placeholder="••••••••" autocomplete="new-password">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="addBtn" onclick="addUser()">Создать</button>
+        <span id="addMsg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadUsers() {
+  const r = await fetch('/api/users');
+  if (!r.ok) { document.getElementById('userList').innerHTML = '<div class="empty err">Нет доступа</div>'; return; }
+  const { users } = await r.json();
+  document.getElementById('countBadge').textContent = users.length;
+  if (!users.length) { document.getElementById('userList').innerHTML = '<div class="empty">Нет пользователей</div>'; return; }
+  document.getElementById('userList').innerHTML = users.map(u => `
+    <div class="user-row" id="urow-${CSS.escape(u.username)}">
+      <div class="user-name">${esc(u.username)}</div>
+      ${u.admin ? '<span class="badge">Администратор</span>' : ''}
+      ${u.me ? '<span class="badge me">Вы</span>' : ''}
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <div style="display:flex;gap:6px">
+          <button class="sec" onclick="openPass('${esc(u.username)}')">Сменить пароль</button>
+          ${!u.me ? `<button class="danger" onclick="delUser('${esc(u.username)}')">Удалить</button>` : ''}
+        </div>
+        <div class="pass-form" id="pf-${CSS.escape(u.username)}">
+          <input type="password" placeholder="Новый пароль" id="pi-${CSS.escape(u.username)}" autocomplete="new-password">
+          <button onclick="savePass('${esc(u.username)}')">Сохранить</button>
+          <button class="sec" onclick="closePass('${esc(u.username)}')">Отмена</button>
+        </div>
+        <span id="pmsg-${CSS.escape(u.username)}" style="font-size:12px"></span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function openPass(u) {
+  document.getElementById('pf-' + CSS.escape(u)).classList.add('open');
+  document.getElementById('pi-' + CSS.escape(u)).focus();
+}
+function closePass(u) {
+  document.getElementById('pf-' + CSS.escape(u)).classList.remove('open');
+  document.getElementById('pi-' + CSS.escape(u)).value = '';
+}
+async function savePass(u) {
+  const pass = document.getElementById('pi-' + CSS.escape(u)).value.trim();
+  const msg = document.getElementById('pmsg-' + CSS.escape(u));
+  if (!pass) { msg.textContent = 'Введите пароль'; msg.className = 'err'; return; }
+  const r = await fetch(`/api/users/${encodeURIComponent(u)}/password`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: pass }) });
+  const d = await r.json();
+  if (r.ok) { msg.textContent = '✓ Сохранено'; msg.className = 'ok'; closePass(u); setTimeout(() => msg.textContent = '', 3000); }
+  else { msg.textContent = d.error || 'Ошибка'; msg.className = 'err'; }
+}
+async function delUser(u) {
+  if (!confirm(`Удалить пользователя «${u}»?`)) return;
+  const r = await fetch(`/api/users/${encodeURIComponent(u)}`, { method: 'DELETE' });
+  const d = await r.json();
+  if (r.ok) loadUsers();
+  else alert(d.error || 'Ошибка');
+}
+async function addUser() {
+  const username = document.getElementById('newUser').value.trim();
+  const password = document.getElementById('newPass').value;
+  const msg = document.getElementById('addMsg');
+  if (!username || !password) { msg.textContent = 'Заполните все поля'; msg.className = 'err'; return; }
+  const r = await fetch('/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password }) });
+  const d = await r.json();
+  if (r.ok) {
+    document.getElementById('newUser').value = '';
+    document.getElementById('newPass').value = '';
+    msg.textContent = '✓ Создан';
+    msg.className = 'ok';
+    setTimeout(() => msg.textContent = '', 3000);
+    loadUsers();
+  } else { msg.textContent = d.error || 'Ошибка'; msg.className = 'err'; }
+}
+
+document.getElementById('newPass').addEventListener('keydown', e => { if (e.key === 'Enter') addUser(); });
+loadUsers();
+</script>
+</body>
+</html>

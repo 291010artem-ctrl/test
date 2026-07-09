@@ -2027,5 +2027,9 @@ function renderCalendar(m) {
 }
 
 // ---------- Старт ----------
+fetch('/api/me').then(r => r.json()).then(d => {
+  if (d.admin) { const l = document.getElementById('adminLink'); if (l) l.style.display = ''; }
+}).catch(() => {});
+
 loadDashboard();
 showPicker();

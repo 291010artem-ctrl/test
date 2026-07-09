@@ -33,7 +33,11 @@ body {
   flex-wrap: wrap;
 }
 
-.brand { font-weight: 700; font-size: 18px; }
+.brand { font-weight: 700; font-size: 18px; flex: 1; }
+
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.hdr-link { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.hdr-link:hover { color: var(--text); }
 
 .device-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
