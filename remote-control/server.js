@@ -8,6 +8,8 @@ import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+const _dbgLog = fs.createWriteStream('/tmp/panel-debug.log', { flags: 'a' });
+function dbg(...a) { const s = new Date().toISOString().slice(11,19) + ' ' + a.join(' ') + '\n'; _dbgLog.write(s); process.stdout.write(s); }
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import * as adb from './adb.js';
@@ -232,7 +234,7 @@ app.post('/api/build/github', h(async (req, res) => {
     const errBody = await trigRes.text().catch(() => '');
     let errMsg = `HTTP ${trigRes.status}`;
     try { const j = JSON.parse(errBody); errMsg += ': ' + (j.message || errBody); } catch { errMsg += ': ' + errBody; }
-    console.error('[build/github] dispatch failed', errMsg);
+    dbg('[build/github] dispatch failed', errMsg);
     return res.status(trigRes.status).json({ error: errMsg });
   }
 
@@ -699,8 +701,8 @@ wssPhone.on('connection', (ws, req) => {
           const hLen = data.readUInt32BE(0);
           const hJson = JSON.parse(data.slice(4, 4 + hLen).toString());
           if (hJson.type === 'file-chunk') {
-            if (hJson.index === 0) console.log(`[PHONE→] file-chunk binary requestId=${hJson.requestId} name=${hJson.name} size=${hJson.size} total=${hJson.total}`);
-            else if (hJson.err) console.log(`[PHONE→] file-chunk error requestId=${hJson.requestId} err=${hJson.err}`);
+            if (hJson.index === 0) dbg(`[PHONE→] file-chunk binary requestId=${hJson.requestId} name=${hJson.name} size=${hJson.size} total=${hJson.total}`);
+            else if (hJson.err) dbg(`[PHONE→] file-chunk error requestId=${hJson.requestId} err=${hJson.err}`);
           }
         } catch {}
         for (const v of phoneCallViewers) {
@@ -713,7 +715,7 @@ wssPhone.on('connection', (ws, req) => {
       try {
         const m = JSON.parse(str);
         if (m.type === 'file-chunk') {
-          console.log(`[PHONE→] file-chunk text requestId=${m.requestId} err=${m.err || '(none)'}`);
+          dbg(`[PHONE→] file-chunk text requestId=${m.requestId} err=${m.err || '(none)'}`);
         }
         if (m.type === 'phone-info') {
           const upd = { lastSeen: Date.now() };
@@ -751,7 +753,7 @@ wssPhone.on('connection', (ws, req) => {
       if (!isBinary) {
         try {
           const m = JSON.parse(data.toString());
-          if (m.cmd === 'get-media-file') console.log(`[→PHONE] get-media-file id=${m.id} type=${m.mediaType} requestId=${m.requestId} phoneFound=${!!phone}`);
+          if (m.cmd === 'get-media-file') dbg(`[→PHONE] get-media-file id=${m.id} type=${m.mediaType} requestId=${m.requestId} phoneFound=${!!phone}`);
         } catch {}
       }
       if (phone && phone.readyState === phone.OPEN) phone.send(isBinary ? data : data.toString());
