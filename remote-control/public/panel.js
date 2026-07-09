@@ -106,7 +106,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.tab === 'dashboard') { loadDashboard(); phoneSend({ cmd: 'get-system-info' }); }
     if (tab.dataset.tab === 'commands') loadCommandsTab();
     if (tab.dataset.tab === 'apps') loadApps();
-    if (tab.dataset.tab === 'files') loadFiles($('#filePath').value);
+    if (tab.dataset.tab === 'files') { const fp = $('#filePath'); if (fp) loadFiles(fp.value); }
     if (tab.dataset.tab === 'notifs') loadNotifs();
     if (tab.dataset.tab === 'camera') startCameraView();
     if (tab.dataset.tab === 'calls') startCallsTab();
@@ -787,10 +787,11 @@ $('#appsAll').onchange = loadApps;
 // ---------- Файлы ----------
 async function loadFiles(p) {
   const list = $('#fileList');
+  if (!list) return;
   list.innerHTML = '<li>Загрузка…</li>';
   try {
     const { path, entries } = await api('files?path=' + encodeURIComponent(p));
-    $('#filePath').value = path;
+    const fp = $('#filePath'); if (fp) fp.value = path;
     list.innerHTML = '';
     for (const e of entries) {
       const li = document.createElement('li');
@@ -813,12 +814,12 @@ async function loadFiles(p) {
     if (!entries.length) list.innerHTML = '<li>Пусто</li>';
   } catch (e) { list.innerHTML = `<li>${e.message}</li>`; }
 }
-$('#goPath').onclick = () => loadFiles($('#filePath').value);
-$('#upPath').onclick = () => {
+if ($('#goPath')) $('#goPath').onclick = () => loadFiles($('#filePath').value);
+if ($('#upPath')) $('#upPath').onclick = () => {
   const p = $('#filePath').value.replace(/\/$/, '');
   loadFiles(p.substring(0, p.lastIndexOf('/')) || '/');
 };
-$('#uploadBtn').onclick = async () => {
+if ($('#uploadBtn')) $('#uploadBtn').onclick = async () => {
   const f = $('#uploadInput').files[0];
   if (!f) return toast('Выбери файл', true);
   const fd = new FormData();
