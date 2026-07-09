@@ -1141,6 +1141,10 @@ function renderCallLog(entries) {
 }
 
 function phoneSend(obj) {
+  if (obj.cmd === 'get-media-file') {
+    const st = wsPhone ? wsPhone.readyState : -1;
+    toast(`DBG: get-media-file id=${obj.id} ws=${st}`, st !== WebSocket.OPEN);
+  }
   if (wsPhone && wsPhone.readyState === WebSocket.OPEN) wsPhone.send(JSON.stringify(obj));
 }
 
