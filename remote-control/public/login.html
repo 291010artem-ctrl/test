@@ -33,6 +33,7 @@
     const p = new URLSearchParams(location.search);
     if (p.get('err') === '1') document.getElementById('errMsg').textContent = 'Неверный логин или пароль';
     if (p.get('err') === '2') document.getElementById('errMsg').textContent = 'Слишком много попыток. Подождите 15 минут.';
+    if (p.get('err') === '3') document.getElementById('errMsg').textContent = 'Аккаунт уже используется. Дождитесь выхода.';
   </script>
 </body>
 </html>

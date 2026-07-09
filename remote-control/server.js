@@ -106,11 +106,12 @@ app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
   }
   const userEntry = usersDb[req.body.user];
   if (verifyPass(req.body.pass, userEntry)) {
-    loginAttempts.delete(ip); // сбросить счётчик при успехе
-    // Удалить все предыдущие сессии этого пользователя — один аккаунт, одна сессия
-    for (const [t, s] of sessions.entries()) {
-      if (s.username === req.body.user) sessions.delete(t);
-    }
+    loginAttempts.delete(ip);
+    // Если уже есть активная сессия — вход запрещён до полного выхода
+    const alreadyActive = [...sessions.values()].some(
+      s => s.username === req.body.user && Date.now() - s.createdAt <= SESSION_TTL
+    );
+    if (alreadyActive) return res.redirect('/login?err=3');
     const token = genToken();
     sessions.set(token, { username: req.body.user, createdAt: Date.now() });
     res.setHeader('Set-Cookie', `panel_sid=${token}; Path=/; HttpOnly; SameSite=Strict`);
