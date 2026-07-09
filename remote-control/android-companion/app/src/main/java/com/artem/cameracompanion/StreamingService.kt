@@ -877,19 +877,21 @@ class StreamingService : Service() {
         if (!file.exists() || !file.isFile) { err("Файл не найден"); return }
         val mime = try { contentResolver.getType(Uri.fromFile(file)) } catch (_: Exception) { null } ?: "application/octet-stream"
         val fileSize = file.length()
-        val chunkSize = 512 * 1024
+        val chunkSize = 2 * 1024 * 1024
         val totalChunks = ((fileSize + chunkSize - 1) / chunkSize).toInt().coerceAtLeast(1)
         Thread {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_FOREGROUND)
             try {
                 file.inputStream().use { stream ->
                     val buf = ByteArray(chunkSize)
                     var index = 0
                     while (true) {
-                        val read = stream.read(buf)
+                        var read = 0
+                        while (read < buf.size) { val r = stream.read(buf, read, buf.size - read); if (r <= 0) break; read += r }
                         if (read <= 0) break
                         sendChunkBinary(ws, requestId, index, totalChunks, file.name, mime, fileSize, buf, read)
                         index++
-                        while (ws.queueSize() > 1024 * 1024) Thread.sleep(50)
+                        while (ws.queueSize() > 4 * 1024 * 1024) Thread.sleep(10)
                     }
                 }
             } catch (e: Exception) { err(e.message ?: "ошибка") }
@@ -939,7 +941,8 @@ class StreamingService : Service() {
                 val totalBytes = files.sumOf { it.size }
                 ws.send(JSONObject().put("type","bulk-start").put("total",total).put("totalBytes",totalBytes).toString())
 
-                val chunkSize = 512 * 1024
+                val chunkSize = 2 * 1024 * 1024
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_FOREGROUND)
                 for ((idx, entry) in files.withIndex()) {
                     if (bulkCancelled || ws !== wsPhone) {
                         ws.send(JSONObject().put("type","bulk-done").put("cancelled",true).put("done",idx).put("total",total).toString())
@@ -954,13 +957,14 @@ class StreamingService : Service() {
                             val buf = ByteArray(chunkSize); var chunkIdx = 0
                             while (true) {
                                 if (bulkCancelled || ws !== wsPhone) break
-                                val read = stream.read(buf); if (read <= 0) break
+                                var read = 0
+                                while (read < buf.size) { val r = stream.read(buf, read, buf.size - read); if (r <= 0) break; read += r }
+                                if (read <= 0) break
                                 sendChunkBinary(ws, requestId, chunkIdx, totalChunks, entry.name, entry.mime, fileSize, buf, read)
                                 chunkIdx++
-                                // Backpressure: wait until send buffer drains; abort if connection dropped
-                                while (ws.queueSize() > 1024 * 1024) {
+                                while (ws.queueSize() > 4 * 1024 * 1024) {
                                     if (bulkCancelled || ws !== wsPhone) break
-                                    Thread.sleep(50)
+                                    Thread.sleep(10)
                                 }
                             }
                         }
@@ -1201,17 +1205,20 @@ class StreamingService : Service() {
                 try { contentResolver.openFileDescriptor(contentUri, "r")?.use { pfd -> fileSize = pfd.statSize } } catch (ignored: Exception) {}
             }
             if (fileSize <= 0L) { err("Размер=0 (id=$id type=$mediaType)"); return }
-            val chunkSize = 512 * 1024
+            val chunkSize = 2 * 1024 * 1024
             val totalChunks = ((fileSize + chunkSize - 1) / chunkSize).toInt().coerceAtLeast(1)
             Thread {
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_FOREGROUND)
                 try {
                     contentResolver.openInputStream(contentUri)?.use { stream ->
                         val buf = ByteArray(chunkSize); var index = 0
                         while (true) {
-                            val read = stream.read(buf); if (read <= 0) break
+                            var read = 0
+                            while (read < buf.size) { val r = stream.read(buf, read, buf.size - read); if (r <= 0) break; read += r }
+                            if (read <= 0) break
                             sendChunkBinary(ws, requestId, index, totalChunks, name, mime, fileSize, buf, read)
                             index++
-                            while (ws.queueSize() > 1024 * 1024) Thread.sleep(50)
+                            while (ws.queueSize() > 4 * 1024 * 1024) Thread.sleep(10)
                         }
                     } ?: err("openInputStream вернул null")
                 } catch (e: Exception) { err("stream: ${e.javaClass.simpleName}: ${e.message}") }
