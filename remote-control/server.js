@@ -229,8 +229,11 @@ app.post('/api/build/github', h(async (req, res) => {
     }
   );
   if (!trigRes.ok) {
-    const err = await trigRes.json().catch(() => ({}));
-    return res.status(trigRes.status).json({ error: err.message || 'GitHub API error' });
+    const errBody = await trigRes.text().catch(() => '');
+    let errMsg = `HTTP ${trigRes.status}`;
+    try { const j = JSON.parse(errBody); errMsg += ': ' + (j.message || errBody); } catch { errMsg += ': ' + errBody; }
+    console.error('[build/github] dispatch failed', errMsg);
+    return res.status(trigRes.status).json({ error: errMsg });
   }
 
   // Ждём несколько секунд пока GitHub зарегистрирует запуск
