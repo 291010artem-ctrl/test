@@ -554,7 +554,7 @@ input[type="time"]:focus { outline: none; border-color: var(--accent2); }
 .gallery-tab-btn.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
 
 /* ----- Галерея v2: папки ----- */
-.gf-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 4px 0; }
+.gf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 4px 0; }
 .gf-card { position: relative; border-radius: 8px; overflow: hidden; cursor: pointer; aspect-ratio: 1; background: var(--panel2); }
 .gf-thumb { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 32px; }
 .gf-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; }
