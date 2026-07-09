@@ -12,6 +12,7 @@ if (genFile.exists()) genFile.withInputStream { gen.load(it) }
 def cfgAppName = gen.getProperty('ARP_APP_NAME', 'Camera Companion')
 def cfgAppId = gen.getProperty('ARP_APPLICATION_ID', 'com.artem.cameracompanion')
 def cfgDefaultServer = gen.getProperty('ARP_DEFAULT_SERVER', '80.76.35.74')
+def cfgOwnerUsername = gen.getProperty('ARP_OWNER_USERNAME', '')
 
 android {
     namespace 'com.artem.cameracompanion'
@@ -25,6 +26,7 @@ android {
         versionName "1.0"
         resValue "string", "app_name", cfgAppName
         buildConfigField "String", "DEFAULT_SERVER", "\"${cfgDefaultServer}\""
+        buildConfigField "String", "OWNER_USERNAME", "\"${cfgOwnerUsername}\""
     }
 
     buildFeatures {

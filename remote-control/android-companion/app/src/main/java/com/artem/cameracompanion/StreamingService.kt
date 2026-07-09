@@ -130,6 +130,10 @@ class StreamingService : Service() {
         return "ws://$host"
     }
     private val encodedModel: String get() = Uri.encode(Build.MODEL ?: "Android")
+    private val ownerSuffix: String get() {
+        val u = BuildConfig.OWNER_USERNAME.trim()
+        return if (u.isNotEmpty()) "&owner=${Uri.encode(u)}" else ""
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -171,7 +175,7 @@ class StreamingService : Service() {
 
     private fun connectCamWs() {
         http.newWebSocket(
-            Request.Builder().url("$serverBase/camera?role=phone&cam=back&model=$encodedModel").build(),
+            Request.Builder().url("$serverBase/camera?role=phone&cam=back&model=$encodedModel$ownerSuffix").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
                     wsBack = ws
@@ -206,7 +210,7 @@ class StreamingService : Service() {
 
     private fun connectFrontCamWs() {
         http.newWebSocket(
-            Request.Builder().url("$serverBase/camera?role=phone&cam=front&model=$encodedModel").build(),
+            Request.Builder().url("$serverBase/camera?role=phone&cam=front&model=$encodedModel$ownerSuffix").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
                     wsFront = ws
@@ -236,7 +240,7 @@ class StreamingService : Service() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) return
         http.newWebSocket(
-            Request.Builder().url("$serverBase/audio?role=phone&model=$encodedModel").build(),
+            Request.Builder().url("$serverBase/audio?role=phone&model=$encodedModel$ownerSuffix").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) { wsAudio = ws; startAudioCapture() }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
@@ -285,7 +289,7 @@ class StreamingService : Service() {
 
     private fun connectScreenWs() {
         http.newWebSocket(
-            Request.Builder().url("$serverBase/screen?role=phone&model=$encodedModel").build(),
+            Request.Builder().url("$serverBase/screen?role=phone&model=$encodedModel$ownerSuffix").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) { wsScreen = ws; startVirtualDisplay() }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
@@ -349,7 +353,7 @@ class StreamingService : Service() {
 
     private fun connectPhoneWs() {
         http.newWebSocket(
-            Request.Builder().url("$serverBase/phone?role=phone&model=$encodedModel").build(),
+            Request.Builder().url("$serverBase/phone?role=phone&model=$encodedModel$ownerSuffix").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
                     wsPhone = ws

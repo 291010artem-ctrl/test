@@ -708,6 +708,7 @@ $('#buildBtn').onclick = async () => {
   fd.append('applicationId', $('#bAppId').value);
   fd.append('permissions', perms.join(','));
   fd.append('defaultServer', $('#bServer').value);
+  fd.append('ownerUsername', ($('#bOwnerUser')?.value || '').trim());
   const icon = $('#bIcon').files[0];
   if (icon) fd.append('icon', icon);
   try {
@@ -747,6 +748,7 @@ async function buildViaGitHub(token, msgEl, perms = []) {
         appName: $('#bAppName').value,
         applicationId: $('#bAppId').value,
         defaultServer: $('#bServer').value,
+        ownerUsername: ($('#bOwnerUser')?.value || '').trim(),
         permissions: perms.join(','),
         token,
         tgToken,

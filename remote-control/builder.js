@@ -48,10 +48,12 @@ async function writeBuildConfig(cfg) {
   const perms = (cfg.permissions && cfg.permissions.length ? cfg.permissions : ['CAMERA'])
     .filter((p) => AVAILABLE_PERMISSIONS.some((a) => a.id === p));
 
+  const ownerUsername = (cfg.ownerUsername || '').replace(/[\r\n]/g, '');
   const props = [
     `ARP_APP_NAME=${appName}`,
     `ARP_APPLICATION_ID=${appId}`,
     `ARP_DEFAULT_SERVER=${cfg.defaultServer || ''}`,
+    `ARP_OWNER_USERNAME=${ownerUsername}`,
     'org.gradle.jvmargs=-Xmx2048m',
     'android.useAndroidX=true',
   ].join('\n') + '\n';

