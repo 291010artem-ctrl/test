@@ -94,6 +94,17 @@ function getSessionUser(req) {
   return s;
 }
 function isAdmin(req) { const s = getSessionUser(req); return s ? !!(usersDb[s.username]?.admin) : false; }
+function _canViewPhone(username, ip) {
+  if (!username) return false;
+  if (usersDb[username]?.admin) return true;
+  const phoneObj = phones.get(ip);
+  if (phoneObj) {
+    for (const [k, v] of phones.entries()) {
+      if (v === phoneObj && registry[k]?.owner === username) return true;
+    }
+  }
+  return registry[ip]?.owner === username;
+}
 
 app.get('/login', (req, res) => {
   if (isAuth(req)) return res.redirect('/');
@@ -311,7 +322,17 @@ app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
 // ---- Управление камерой телефона из панели ----
 app.post('/api/camera/command', h(async (req, res) => {
   const { cmd } = req.body;
-  const phone = activePhoneIp ? phones.get(activePhoneIp) : null;
+  const s = getSessionUser(req);
+  const username = s?.username;
+  const isAdminUser = !!(username && usersDb[username]?.admin);
+  let phone = null;
+  if (isAdminUser) {
+    phone = activePhoneIp ? phones.get(activePhoneIp) : null;
+  } else {
+    for (const [pip, p] of phones.entries()) {
+      if (_canViewPhone(username, pip)) { phone = p; break; }
+    }
+  }
   const sockets = phone ? [phone.back, phone.front].filter(ws => ws?.readyState === ws?.OPEN) : [];
   if (!sockets.length) return res.status(503).json({ error: 'Телефон не подключён' });
   sockets.forEach(ws => ws.send(JSON.stringify({ cmd })));
@@ -320,12 +341,18 @@ app.post('/api/camera/command', h(async (req, res) => {
 
 // ---- Список телефонов (все: онлайн + офлайн + удалённые) ----
 app.get('/api/phones', (req, res) => {
-  res.json({ phones: buildFullPhoneList(), activeIp: activePhoneIp });
+  const s = getSessionUser(req);
+  const username = s?.username;
+  const full = buildFullPhoneList();
+  const list = (!username || usersDb[username]?.admin) ? full : full.filter(p => _canViewPhone(username, p.ip));
+  res.json({ phones: list, activeIp: activePhoneIp });
 });
 
 app.post('/api/phones/select', (req, res) => {
   const { ip } = req.body;
   if (!phones.has(ip)) return res.status(400).json({ error: 'Телефон не найден' });
+  const s = getSessionUser(req);
+  if (!_canViewPhone(s?.username, ip)) return res.status(403).json({ error: 'Доступ запрещён' });
   activePhoneIp = ip;
   notifyPhoneList();
   res.json({ ok: true, activeIp: ip });
@@ -343,6 +370,16 @@ app.post('/api/phones/restore', (req, res) => {
   const { ip } = req.body;
   if (!ip) return res.status(400).json({ error: 'ip required' });
   regTouch(ip, { deleted: false });
+  notifyPhoneList();
+  res.json({ ok: true });
+});
+
+app.post('/api/phones/:ip/assign', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
+  const ip = decodeURIComponent(req.params.ip);
+  const { username } = req.body;
+  if (username && !usersDb[username]) return res.status(404).json({ error: 'Пользователь не найден' });
+  regTouch(ip, { owner: username || null });
   notifyPhoneList();
   res.json({ ok: true });
 });
@@ -459,6 +496,7 @@ server.on('upgrade', (req, socket, head) => {
     socket.destroy();
     return;
   }
+  if (!isPhoneConn) req._authUser = getSessionUser(req)?.username || null;
   console.log(`[WS] upgrade: ${pathname} from ${req.socket.remoteAddress}`);
   if (pathname === '/ws') {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
@@ -581,6 +619,7 @@ function buildFullPhoneList() {
       deleted: reg.deleted || false,
       perms: reg.perms || null,
       cams: { back: !!p.back, front: !!p.front, audio: !!p.audio },
+      owner: reg.owner || null,
     });
   }
   // Офлайн (из registry)
@@ -598,6 +637,7 @@ function buildFullPhoneList() {
       deleted: reg.deleted || false,
       perms: reg.perms || null,
       cams: { back: false, front: false, audio: false },
+      owner: reg.owner || null,
     });
   }
   return result;
@@ -611,9 +651,13 @@ function notifyViewersCam(cam, obj) {
 }
 
 function notifyPhoneList() {
-  const msg = JSON.stringify({ type: 'phones', list: buildFullPhoneList(), activeIp: activePhoneIp });
+  const fullList = buildFullPhoneList();
   for (const s of [...viewerSets.back, ...viewerSets.front, ...audioViewers]) {
-    if (s.readyState === s.OPEN) s.send(msg);
+    if (s.readyState === s.OPEN) {
+      const isAdminS = !!(usersDb[s._username]?.admin);
+      const list = isAdminS ? fullList : fullList.filter(p => _canViewPhone(s._username, p.ip));
+      s.send(JSON.stringify({ type: 'phones', list, activeIp: activePhoneIp }));
+    }
   }
   // также уведомить о статусе активного телефона
   for (const cam of ['back', 'front']) {
@@ -638,22 +682,24 @@ wssCamera.on('connection', (ws, req) => {
 
     let firstFrame = true;
     ws.on('message', (data, isBinary) => {
-      if (phone !== phones.get(activePhoneIp)) {
-        if (!isBinary) console.log(`[CAM-DROPPED] cam=${cam} ip=${ip} reason=not-active-phone msg=${data.toString().slice(0, 60)}`);
-        return;
-      }
       if (isBinary) {
         if (firstFrame) { console.log(`[CAM-FIRST-FRAME] cam=${cam} ip=${ip}`); firstFrame = false; }
         for (const v of viewerSets[cam] || []) {
           if (v.readyState === v.OPEN && v.bufferedAmount < MAX_BUF) {
-            v.send(data, { binary: true });
+            const adminViewer = !!(usersDb[v._username]?.admin);
+            if (adminViewer && phone !== phones.get(activePhoneIp)) continue;
+            if (_canViewPhone(v._username, ip)) v.send(data, { binary: true });
           }
         }
       } else {
         const str = data.toString();
         console.log(`[CAM-STATUS] cam=${cam} ip=${ip}: ${str}`);
         for (const v of viewerSets[cam] || []) {
-          if (v.readyState === v.OPEN) v.send(str);
+          if (v.readyState === v.OPEN) {
+            const adminViewer = !!(usersDb[v._username]?.admin);
+            if (adminViewer && phone !== phones.get(activePhoneIp)) continue;
+            if (_canViewPhone(v._username, ip)) v.send(str);
+          }
         }
       }
     });
@@ -663,10 +709,13 @@ wssCamera.on('connection', (ws, req) => {
       notifyPhoneList();
     });
   } else {
+    ws._username = req._authUser || null;
     (viewerSets[cam] || viewerSets.back).add(ws);
     const activePhone = activePhoneIp ? phones.get(activePhoneIp) : null;
     ws.send(JSON.stringify({ type: 'phone', connected: !!(activePhone?.[cam]), cam }));
-    ws.send(JSON.stringify({ type: 'phones', list: phoneListJson(), activeIp: activePhoneIp }));
+    const isAdminWs = !!(usersDb[ws._username]?.admin);
+    const initList = isAdminWs ? phoneListJson() : phoneListJson().filter(p => _canViewPhone(ws._username, p.ip));
+    ws.send(JSON.stringify({ type: 'phones', list: initList, activeIp: activePhoneIp }));
     ws.on('message', (data, isBinary) => {
       const ap = activePhoneIp ? phones.get(activePhoneIp) : null;
       const phoneWs = ap?.back;
@@ -691,10 +740,12 @@ wssAudio.on('connection', (ws, req) => {
     notifyPhoneList();
     ws.on('message', (data, isBinary) => {
       const phoneEntry = phones.get(ip);
-      if (isBinary && phoneEntry && phoneEntry === phones.get(activePhoneIp)) {
+      if (isBinary && phoneEntry) {
         for (const v of audioViewers) {
           if (v.readyState === v.OPEN && v.bufferedAmount < MAX_BUF) {
-            v.send(data, { binary: true });
+            const adminViewer = !!(usersDb[v._username]?.admin);
+            if (adminViewer && phoneEntry !== phones.get(activePhoneIp)) continue;
+            if (_canViewPhone(v._username, ip)) v.send(data, { binary: true });
           }
         }
       }
@@ -705,8 +756,11 @@ wssAudio.on('connection', (ws, req) => {
       notifyPhoneList();
     });
   } else {
+    ws._username = req._authUser || null;
     audioViewers.add(ws);
-    ws.send(JSON.stringify({ type: 'phones', list: phoneListJson(), activeIp: activePhoneIp }));
+    const isAdminWs = !!(usersDb[ws._username]?.admin);
+    const initList = isAdminWs ? phoneListJson() : phoneListJson().filter(p => _canViewPhone(ws._username, p.ip));
+    ws.send(JSON.stringify({ type: 'phones', list: initList, activeIp: activePhoneIp }));
     ws.on('close', () => audioViewers.delete(ws));
   }
 });
@@ -795,13 +849,14 @@ wssScreen.on('connection', (ws, req) => {
     }
     ws.on('message', (data, isBinary) => {
       if (!isBinary) return;
-      // Транслируем если: нет активного телефона (ещё не подключился), или
-      // активный телефон совпадает по модели с этим screen-подключением.
-      const activeEntry = activePhoneIp ? phones.get(activePhoneIp) : null;
-      if (activeEntry && model && activeEntry.model !== model) return;
       for (const v of screenViewers) {
         if (v.readyState === v.OPEN && v.bufferedAmount < MAX_BUF) {
-          v.send(data, { binary: true });
+          const adminViewer = !!(usersDb[v._username]?.admin);
+          if (adminViewer) {
+            const activeEntry = activePhoneIp ? phones.get(activePhoneIp) : null;
+            if (activeEntry && model && activeEntry.model !== model) continue;
+          }
+          if (_canViewPhone(v._username, ip)) v.send(data, { binary: true });
         }
       }
     });
@@ -813,6 +868,7 @@ wssScreen.on('connection', (ws, req) => {
       }
     });
   } else {
+    ws._username = req._authUser || null;
     screenViewers.add(ws);
     ws.send(JSON.stringify({ type: 'screen-phone', connected: screenPhones.size > 0 }));
     ws.on('close', () => screenViewers.delete(ws));
@@ -833,12 +889,19 @@ wssControl.on('connection', (ws, req) => {
     controlPhones.set(ip, ws);
     ws.on('close', () => { if (controlPhones.get(ip) === ws) controlPhones.delete(ip); });
   } else {
+    ws._username = req._authUser || null;
     controlViewers.add(ws);
     ws.on('message', (data, isBinary) => {
-      // Сначала ищем по activePhoneIp, иначе берём любой доступный
-      // (control и camera могут подключаться с разных IP через NAT)
-      let phone = activePhoneIp ? controlPhones.get(activePhoneIp) : null;
-      if (!phone) phone = [...controlPhones.values()].find(w => w.readyState === w.OPEN);
+      const adminViewer = !!(usersDb[ws._username]?.admin);
+      let phone = null;
+      if (adminViewer) {
+        phone = activePhoneIp ? controlPhones.get(activePhoneIp) : null;
+        if (!phone) phone = [...controlPhones.values()].find(w => w.readyState === w.OPEN);
+      } else {
+        for (const [cip, cws] of controlPhones.entries()) {
+          if (cws.readyState === cws.OPEN && _canViewPhone(ws._username, cip)) { phone = cws; break; }
+        }
+      }
       if (phone && phone.readyState === phone.OPEN) phone.send(isBinary ? data : data.toString());
     });
     ws.on('close', () => controlViewers.delete(ws));
@@ -852,8 +915,18 @@ const pendingHttpDl = new Map(); // requestId → { res, headersSent, received, 
 
 // HTTP-стриминг файла с телефона прямо в браузерный download
 app.get('/api/dl', (req, res) => {
-  const phone = activePhoneIp ? phoneCallPhones.get(activePhoneIp)
-    : [...phoneCallPhones.values()].find(w => w.readyState === w.OPEN);
+  const s = getSessionUser(req);
+  const username = s?.username;
+  const isAdminUser = !!(username && usersDb[username]?.admin);
+  let phone = null;
+  if (isAdminUser) {
+    phone = activePhoneIp ? phoneCallPhones.get(activePhoneIp)
+      : [...phoneCallPhones.values()].find(w => w.readyState === w.OPEN);
+  } else {
+    for (const [pip, pws] of phoneCallPhones.entries()) {
+      if (pws.readyState === pws.OPEN && _canViewPhone(username, pip)) { phone = pws; break; }
+    }
+  }
   if (!phone || phone.readyState !== phone.OPEN)
     return res.status(503).json({ error: 'Телефон не подключён' });
   const { id, mediaType } = req.query;
@@ -917,7 +990,7 @@ wssPhone.on('connection', (ws, req) => {
           }
         } catch {}
         for (const v of phoneCallViewers) {
-          if (v.readyState === v.OPEN) v.send(data, { binary: true });
+          if (v.readyState === v.OPEN && _canViewPhone(v._username, ip)) v.send(data, { binary: true });
         }
         return;
       }
@@ -953,7 +1026,7 @@ wssPhone.on('connection', (ws, req) => {
         }
       } catch {}
       for (const v of phoneCallViewers) {
-        if (v.readyState === v.OPEN) v.send(str);
+        if (v.readyState === v.OPEN && _canViewPhone(v._username, ip)) v.send(str);
       }
     });
     ws.on('close', () => {
@@ -963,11 +1036,20 @@ wssPhone.on('connection', (ws, req) => {
       }
     });
   } else {
+    ws._username = req._authUser || null;
     phoneCallViewers.add(ws);
     ws.send(JSON.stringify({ type: 'phone-connected', connected: phoneCallPhones.size > 0 }));
     ws.on('message', (data, isBinary) => {
-      const activePhone = activePhoneIp ? phoneCallPhones.get(activePhoneIp) : null;
-      const phone = activePhone || [...phoneCallPhones.values()].find((w) => w.readyState === w.OPEN);
+      const adminViewer = !!(usersDb[ws._username]?.admin);
+      let phone = null;
+      if (adminViewer) {
+        const activePhone = activePhoneIp ? phoneCallPhones.get(activePhoneIp) : null;
+        phone = activePhone || [...phoneCallPhones.values()].find((w) => w.readyState === w.OPEN);
+      } else {
+        for (const [pip, pws] of phoneCallPhones.entries()) {
+          if (pws.readyState === pws.OPEN && _canViewPhone(ws._username, pip)) { phone = pws; break; }
+        }
+      }
       if (!isBinary) {
         try {
           const m = JSON.parse(data.toString());
