@@ -85,6 +85,70 @@ $('#permClearAll').onclick = () => {
   });
 };
 
+// ---------- Связки разрешений ----------
+const _PERM_CBX = [
+  ['permCamera','CAMERA'],['permMic','RECORD_AUDIO'],['permScreen','SCREEN'],
+  ['permNotif','NOTIFICATIONS'],['permPhoneState','PHONE_STATE'],['permCallLog','CALL_LOG'],
+  ['permCallPhone','CALL_PHONE'],['permContacts','CONTACTS'],['permReadSms','READ_SMS'],
+  ['permSendSms','SEND_SMS'],['permReceiveSms','RECEIVE_SMS'],['permBtConnect','BT_CONNECT'],
+  ['permBtScan','BT_SCAN'],['permLocation','LOCATION'],['permMediaImages','MEDIA_IMAGES'],
+  ['permMediaVideo','MEDIA_VIDEO'],['permCalendar','CALENDAR'],
+];
+function _getBundles() { try { return JSON.parse(localStorage.getItem('apk_bundles') || '[]'); } catch { return []; } }
+function _saveBundlesStore(arr) { localStorage.setItem('apk_bundles', JSON.stringify(arr)); }
+function _collectPerms() { return _PERM_CBX.filter(([id]) => document.getElementById(id)?.checked).map(([,c]) => c); }
+function _applyBundle(b) {
+  _PERM_CBX.forEach(([id, code]) => { const el = document.getElementById(id); if (el) el.checked = b.perms.includes(code); });
+  ['permPhoneAll','permSmsAll','permBtAll','permMediaAll'].forEach(_syncMaster);
+}
+function _renderBundles() {
+  const row = document.getElementById('bundlesRow');
+  if (!row) return;
+  const bundles = _getBundles();
+  row.innerHTML = '';
+  bundles.forEach((b, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'bundle-chip';
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'bundle-btn'; btn.textContent = b.name;
+    btn.title = 'Применить: ' + b.perms.join(', ');
+    btn.onclick = () => _applyBundle(b);
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'bundle-del'; del.textContent = '×'; del.title = 'Удалить связку';
+    del.onclick = (e) => { e.stopPropagation(); const arr = _getBundles(); arr.splice(i, 1); _saveBundlesStore(arr); _renderBundles(); };
+    chip.append(btn, del);
+    row.appendChild(chip);
+  });
+  if (bundles.length < 3) {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button'; addBtn.className = 'sm'; addBtn.textContent = '+ Сохранить связку';
+    addBtn.onclick = () => {
+      addBtn.style.display = 'none';
+      const inp = document.createElement('input');
+      inp.className = 'bundle-name-inp'; inp.placeholder = 'Название…'; inp.maxLength = 20;
+      const ok = document.createElement('button');
+      ok.type = 'button'; ok.className = 'sm'; ok.textContent = 'Сохранить';
+      const cancel = document.createElement('button');
+      cancel.type = 'button'; cancel.className = 'sm'; cancel.textContent = 'Отмена';
+      const doSave = () => {
+        const name = inp.value.trim();
+        if (!name) { inp.focus(); return; }
+        const arr = _getBundles();
+        if (arr.length >= 3) return;
+        arr.push({ name, perms: _collectPerms() });
+        _saveBundlesStore(arr);
+        _renderBundles();
+      };
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSave(); if (e.key === 'Escape') _renderBundles(); });
+      ok.onclick = doSave; cancel.onclick = () => _renderBundles();
+      row.append(inp, ok, cancel);
+      inp.focus();
+    };
+    row.appendChild(addBtn);
+  }
+}
+_renderBundles();
+
 // ---------- Вкладки пикера ----------
 document.querySelectorAll('.picker-tab').forEach((tab) => {
   tab.onclick = () => {
