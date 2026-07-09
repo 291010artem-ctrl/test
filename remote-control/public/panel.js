@@ -1727,8 +1727,7 @@ function renderGalleryItems(m) {
   items.forEach((item) => {
     const div = document.createElement('div');
     div.className = 'gp-item';
-    div.dataset.thumbId = item.id;
-    div.innerHTML = `<div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div><button class="gp-dl" title="Скачать">⬇</button>`;
+    div.innerHTML = `<div class="gp-thumb" data-thumb-id="${item.id}" data-mtype="${m.mediaType}"><div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div></div><button class="gp-dl" title="Скачать">⬇</button>`;
     div.querySelector('.gp-dl').onclick = (e) => {
       e.stopPropagation();
       const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -1741,6 +1740,7 @@ function renderGalleryItems(m) {
     };
     grid.appendChild(div);
     phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });
+
   });
 }
 
@@ -1818,11 +1818,7 @@ function formatBytes(b) {
 function applyMediaThumb(m) {
   if (!m.data || !m.id) return;
   document.querySelectorAll(`[data-thumb-id="${m.id}"]`).forEach((el) => {
-    const img = document.createElement('img');
-    img.src = `data:image/jpeg;base64,${m.data}`;
-    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit';
-    el.innerHTML = '';
-    el.appendChild(img);
+    el.innerHTML = `<img src="data:image/jpeg;base64,${m.data}" style="width:100%;height:100%;object-fit:cover;display:block">`;
   });
 }
 
