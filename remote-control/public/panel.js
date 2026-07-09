@@ -1149,6 +1149,7 @@ function startCallsTab() {
     phoneSend({ cmd: 'get-phone-info' });
     phoneSend({ cmd: 'get-call-log' });
     phoneSend({ cmd: 'get-contacts' });
+    phoneSend({ cmd: 'get-gallery-stats' });
   } else {
     startCallsViewer(true);
   }
