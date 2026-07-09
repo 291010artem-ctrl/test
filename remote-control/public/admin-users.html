@@ -130,17 +130,6 @@ function renderOverview() {
     </div>`;
   });
 
-  if (unassigned.length) {
-    const devHtml = unassigned.map(p => deviceRow(p, nonAdmins, userOpts)).join('');
-    sections.push(`<div class="ov-user">
-      <div class="ov-user-hd" style="color:#8b98a5">
-        <span class="dot off"></span> Без владельца
-        <span class="cnt">${unassigned.filter(p=>p.online).length ? unassigned.filter(p=>p.online).length+' онлайн' : ''}</span>
-      </div>
-      ${devHtml}
-    </div>`);
-  }
-
   document.getElementById('overview').innerHTML = sections.length
     ? sections.join('')
     : '<div class="empty">Нет пользователей и устройств</div>';
