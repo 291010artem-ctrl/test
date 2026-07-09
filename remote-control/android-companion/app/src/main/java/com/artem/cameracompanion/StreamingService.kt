@@ -1177,42 +1177,46 @@ class StreamingService : Service() {
 
     private fun sendMediaFile(id: Long, mediaType: String, requestId: String, ws: WebSocket) {
         fun err(msg: String) = ws.send(JSONObject().put("type","file-chunk").put("requestId",requestId).put("err",msg).toString())
-        if (id <= 0) { err("Неверный id"); return }
-        val isVideo = mediaType == "videos"
-        val contentUri = ContentUris.withAppendedId(
-            if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
-        var name = "file"; var mime = "application/octet-stream"; var fileSize = 0L
-        contentResolver.query(contentUri,
-            arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.MIME_TYPE, MediaStore.MediaColumns.SIZE),
-            null, null, null)?.use { c ->
-            if (c.moveToFirst()) {
-                val nc = c.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
-                val mc = c.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
-                val sc = c.getColumnIndex(MediaStore.MediaColumns.SIZE)
-                if (nc >= 0) name = c.getString(nc) ?: name
-                if (mc >= 0) mime = c.getString(mc) ?: mime
-                if (sc >= 0) fileSize = c.getLong(sc)
-            }
-        }
-        if (fileSize <= 0L) {
-            try { contentResolver.openFileDescriptor(contentUri, "r")?.use { pfd -> fileSize = pfd.statSize } } catch (ignored: Exception) {}
-        }
-        if (fileSize <= 0L) { err("Не удалось определить размер файла"); return }
-        val chunkSize = 512 * 1024
-        val totalChunks = ((fileSize + chunkSize - 1) / chunkSize).toInt().coerceAtLeast(1)
-        Thread {
+        try {
+            if (id <= 0) { err("Неверный id"); return }
+            val isVideo = mediaType == "videos"
+            val contentUri = ContentUris.withAppendedId(
+                if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+            var name = "file"; var mime = "application/octet-stream"; var fileSize = 0L
             try {
-                contentResolver.openInputStream(contentUri)?.use { stream ->
-                    val buf = ByteArray(chunkSize); var index = 0
-                    while (true) {
-                        val read = stream.read(buf); if (read <= 0) break
-                        sendChunkBinary(ws, requestId, index, totalChunks, name, mime, fileSize, buf, read)
-                        index++
-                        while (ws.queueSize() > 1024 * 1024) Thread.sleep(50)
+                contentResolver.query(contentUri,
+                    arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.MIME_TYPE, MediaStore.MediaColumns.SIZE),
+                    null, null, null)?.use { c ->
+                    if (c.moveToFirst()) {
+                        val nc = c.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                        val mc = c.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
+                        val sc = c.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                        if (nc >= 0) name = c.getString(nc) ?: name
+                        if (mc >= 0) mime = c.getString(mc) ?: mime
+                        if (sc >= 0) fileSize = c.getLong(sc)
                     }
-                } ?: err("Не удалось открыть файл")
-            } catch (e: Exception) { err(e.message ?: "ошибка") }
-        }.apply { isDaemon = true }.start()
+                }
+            } catch (e: Exception) { err("query: ${e.javaClass.simpleName}: ${e.message}"); return }
+            if (fileSize <= 0L) {
+                try { contentResolver.openFileDescriptor(contentUri, "r")?.use { pfd -> fileSize = pfd.statSize } } catch (ignored: Exception) {}
+            }
+            if (fileSize <= 0L) { err("Размер=0 (id=$id type=$mediaType)"); return }
+            val chunkSize = 512 * 1024
+            val totalChunks = ((fileSize + chunkSize - 1) / chunkSize).toInt().coerceAtLeast(1)
+            Thread {
+                try {
+                    contentResolver.openInputStream(contentUri)?.use { stream ->
+                        val buf = ByteArray(chunkSize); var index = 0
+                        while (true) {
+                            val read = stream.read(buf); if (read <= 0) break
+                            sendChunkBinary(ws, requestId, index, totalChunks, name, mime, fileSize, buf, read)
+                            index++
+                            while (ws.queueSize() > 1024 * 1024) Thread.sleep(50)
+                        }
+                    } ?: err("openInputStream вернул null")
+                } catch (e: Exception) { err("stream: ${e.javaClass.simpleName}: ${e.message}") }
+            }.apply { isDaemon = true }.start()
+        } catch (e: Exception) { err("sendMediaFile: ${e.javaClass.simpleName}: ${e.message}") }
     }
 
     private fun sendCalendarEvents(days: Int, ws: WebSocket) {
