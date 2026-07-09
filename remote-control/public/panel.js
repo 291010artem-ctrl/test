@@ -109,7 +109,10 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.tab === 'notifs') loadNotifs();
     if (tab.dataset.tab === 'camera') startCameraView();
     if (tab.dataset.tab === 'calls') startCallsTab();
-    if (tab.dataset.tab === 'sms') { startCallsTab(); phoneSend({ cmd: 'get-sms' }); }
+    if (tab.dataset.tab === 'sms') {
+      startCallsTab(); phoneSend({ cmd: 'get-sms' });
+      const badge = $('#smsBadge'); if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+    }
   };
 });
 
@@ -901,7 +904,12 @@ function startCallsViewer(requestDataOnOpen) {
         if (m.ok) { $('#smsText').value = ''; phoneSend({ cmd: 'get-sms' }); }
       } else if (m.type === 'sms-incoming') {
         injectIncomingSms(m);
-        toast(`📩 СМС от ${m.address}`);
+        toast(`📩 СМС от ${m.name || m.address}`);
+        // badge на вкладке СМС если она сейчас не активна
+        if (!document.querySelector('.tab[data-tab="sms"]')?.classList.contains('active')) {
+          const badge = $('#smsBadge');
+          if (badge) { badge.style.display = ''; badge.textContent = parseInt(badge.textContent || '0') + 1; }
+        }
       } else if (m.type === 'sms-broadcast-progress') {
         const done = m.sent + m.failed;
         const pct = m.total > 0 ? Math.round(done / m.total * 100) : 0;
@@ -1554,7 +1562,7 @@ function _addToBulkZip(name, blob) {
 
 // Скользящее окно скорости — храним {ts, bytes} за последние 5 с
 const _speedWindow = [];
-let _lastKnownSpeedBps = 0; // сохраняем последнюю реальную скорость для ETA до начала следующей загрузки
+let _lastKnownSpeedBps = 2 * 1024 * 1024; // ~2 МБ/с по умолчанию до первой загрузки
 function _trackSpeed(bytes) {
   const now = Date.now();
   _speedWindow.push({ ts: now, bytes });
