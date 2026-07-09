@@ -690,7 +690,12 @@ wssPhone.on('connection', (ws, req) => {
       if (v.readyState === v.OPEN) v.send(JSON.stringify({ type: 'phone-connected', connected: true }));
     }
     ws.on('message', (data, isBinary) => {
-      if (isBinary) return;
+      if (isBinary) {
+        for (const v of phoneCallViewers) {
+          if (v.readyState === v.OPEN) v.send(data, { binary: true });
+        }
+        return;
+      }
       const str = data.toString();
       // Перехватываем phone-info чтобы сохранить батарею и модель
       try {

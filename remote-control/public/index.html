@@ -261,12 +261,6 @@
         <ul id="fileList" class="list"></ul>
         <div class="card" style="margin-top:12px">
           <h3>🖼 Галерея</h3>
-          <div class="cmd-row">
-            <button class="sm gallery-tab-btn active" data-gtype="images">Фото</button>
-            <button class="sm gallery-tab-btn" data-gtype="videos">Видео</button>
-            <button id="cmdLoadGallery" class="sm">Загрузить</button>
-            <span id="galleryInfo" class="muted-text" style="font-size:12px;flex:1;text-align:right"></span>
-          </div>
           <div id="galleryStats" class="muted-text" style="font-size:12px;padding:3px 0 2px"></div>
           <!-- Массовое скачивание -->
           <div id="bulkCtrl" style="margin:6px 0;padding:8px;border-radius:6px;border:1px solid var(--border,#ddd)">
@@ -297,11 +291,23 @@
               <progress id="bulkBar" max="100" value="0" style="width:100%;height:6px"></progress>
             </div>
           </div>
-          <div id="galleryList" class="gallery-list"></div>
-          <div class="cmd-row" id="galleryPager" style="display:none;justify-content:center;margin-top:6px">
-            <button id="galleryPrev" class="sm">← Пред.</button>
-            <span id="galleryPage" class="muted-text" style="font-size:12px;margin:0 8px;align-self:center"></span>
-            <button id="galleryNext" class="sm">След. →</button>
+          <!-- Gallery viewer -->
+          <div id="galleryArea" style="margin-top:8px">
+            <div id="galleryPlaceholder" style="text-align:center;padding:16px 0">
+              <button id="cmdLoadGallery" class="sm">🖼 Открыть галерею</button>
+            </div>
+            <div id="galleryFolderView" style="display:none">
+              <div id="galleryFolderGrid" class="gf-grid"></div>
+            </div>
+            <div id="galleryGridView" style="display:none">
+              <div class="cmd-row" style="margin-bottom:6px;align-items:center">
+                <button id="galleryBack" class="sm">← Папки</button>
+                <span id="galleryFolderTitle" style="flex:1;font-size:13px;font-weight:600;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+                <span id="galleryGridInfo" class="muted-text" style="font-size:12px"></span>
+              </div>
+              <div id="galleryGrid" class="gp-grid"></div>
+              <div id="galleryScrollSentinel" style="height:1px"></div>
+            </div>
           </div>
         </div>
       </div>
