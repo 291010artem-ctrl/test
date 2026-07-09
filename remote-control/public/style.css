@@ -381,6 +381,16 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .toast.show { transform: translateX(-50%) translateY(0); }
 .toast.err { border-color: var(--danger); }
 
+/* ----- Вкладка загрузок ----- */
+.dl-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.dl-item:last-child { border-bottom: none; }
+.dl-name { font-size: 13px; font-weight: 600; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-bar-wrap { height: 6px; background: var(--border); border-radius: 3px; margin-bottom: 5px; overflow: hidden; }
+.dl-bar-fill { height: 100%; background: var(--accent2); border-radius: 3px; transition: width 0.25s linear; }
+.dl-meta { font-size: 11px; color: var(--muted); }
+.dl-done .dl-name { color: var(--accent); }
+.dl-empty { text-align: center; padding: 20px 0; color: var(--muted); font-size: 13px; }
+
 /* ----- D-pad навигация ----- */
 .dpad { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .dpad-row { display: flex; gap: 3px; align-items: center; }

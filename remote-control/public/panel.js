@@ -114,6 +114,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
       startCallsTab(); phoneSend({ cmd: 'get-sms' });
       const badge = $('#smsBadge'); if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
     }
+    if (tab.dataset.tab === 'downloads') _renderDlTab();
   };
 });
 
@@ -1523,6 +1524,73 @@ const _fileDl = new Map(); // requestId → { chunks, name, mime, total, size, s
 let _bulkStats = null;  // из gallery-stats: {imageCount, imageSize, videoCount, videoSize}
 let _bulkState = null;  // активная загрузка: {total, done, totalBytes, bytesDone}
 
+// ---------- Вкладка загрузок ----------
+const _dlHistory = []; // { name, size, took, ts }
+
+function _renderDlTab() {
+  const activeList = $('#dlActiveList');
+  const histCard = $('#dlHistoryCard');
+  const histList = $('#dlHistoryList');
+  const badge = $('#dlBadge');
+
+  const active = [..._fileDl.entries()].filter(([id]) => !id.startsWith('bulk_'));
+  if (badge) {
+    if (active.length > 0) { badge.style.display = ''; badge.textContent = active.length; }
+    else badge.style.display = 'none';
+  }
+
+  if (!activeList) return; // вкладка не открыта
+
+  const spd = _currentSpeedBps();
+  if (active.length === 0) {
+    activeList.innerHTML = '<div class="dl-empty">Нет активных загрузок</div>';
+  } else {
+    activeList.innerHTML = active.map(([, dl]) => {
+      const got = dl.chunks.filter(Boolean).length;
+      const pct = dl.total > 0 ? Math.round(got / dl.total * 100) : 0;
+      const remaining = spd > 0 && dl.size > 0 ? (dl.size - dl.bytesGot) / spd : 0;
+      const gotStr = fmtGB(dl.bytesGot);
+      const totalStr = dl.size ? fmtGB(dl.size) : '?';
+      const meta = [gotStr + ' / ' + totalStr, _fmtSpeed(spd), _fmtEta(remaining)].filter(Boolean).join(' · ');
+      const name = dl.name || 'Загрузка…';
+      return `<div class="dl-item">
+        <div class="dl-name">${name}</div>
+        <div class="dl-bar-wrap"><div class="dl-bar-fill" style="width:${pct}%"></div></div>
+        <div class="dl-meta">${pct}% · ${meta}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if (histCard && histList) {
+    if (_dlHistory.length === 0) {
+      histCard.style.display = 'none';
+    } else {
+      histCard.style.display = '';
+      histList.innerHTML = _dlHistory.map((h) => {
+        const tookStr = h.took < 60 ? `${h.took} с` : `${Math.round(h.took / 60)} мин`;
+        const time = new Date(h.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return `<div class="dl-item dl-done">
+          <div class="dl-name">✓ ${h.name}</div>
+          <div class="dl-meta">${fmtGB(h.size)} · за ${tookStr} · ${time}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+setInterval(() => {
+  const badge = $('#dlBadge');
+  const active = [..._fileDl.keys()].filter((id) => !id.startsWith('bulk_')).length;
+  if (badge) { badge.style.display = active > 0 ? '' : 'none'; if (active > 0) badge.textContent = active; }
+  const tab = $('#tab-downloads');
+  if (tab && tab.classList.contains('active')) _renderDlTab();
+}, 300);
+
+function _dlRecordDone(dl) {
+  _dlHistory.unshift({ name: dl.name, size: dl.size || dl.bytesGot, took: Math.round((Date.now() - dl.startTs) / 1000), ts: Date.now() });
+  if (_dlHistory.length > 50) _dlHistory.pop();
+}
+
 function _handleBinaryChunk(buffer) {
   try {
     const view = new DataView(buffer);
@@ -1558,6 +1626,7 @@ function _handleBinaryChunk(buffer) {
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 2000);
         toast('✓ Скачан: ' + dl.name);
+        _dlRecordDone(dl);
       }
       dl.onDone?.();
     }
