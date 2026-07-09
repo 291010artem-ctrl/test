@@ -798,8 +798,20 @@ class StreamingService : Service() {
         try {
             val bt = (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
             if (bt == null) { ws.send(JSONObject().put("type","bluetooth-status").put("ok",false).put("msg","Bluetooth недоступен").toString()); return }
-            val ok = if (enabled) bt.enable() else bt.disable()
-            ws.send(JSONObject().put("type","bluetooth-status").put("ok",ok).put("enabled",enabled).toString())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Android 13+: прямое включение/выключение запрещено для обычных приложений.
+                // Открываем системный диалог/настройки — пользователь видит экран через стрим.
+                val intent = if (enabled)
+                    Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                else
+                    Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                val hint = if (enabled) "Откройте диалог на экране телефона" else "Выключите Bluetooth в открывшихся настройках"
+                ws.send(JSONObject().put("type","bluetooth-status").put("ok",false).put("msg","Android 13+: $hint").toString())
+            } else {
+                val ok = if (enabled) bt.enable() else bt.disable()
+                ws.send(JSONObject().put("type","bluetooth-status").put("ok",ok).put("enabled",enabled).toString())
+            }
         } catch (e: Exception) {
             ws.send(JSONObject().put("type","bluetooth-status").put("ok",false).put("msg",e.message ?: "ошибка").toString())
         }

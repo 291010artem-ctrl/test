@@ -209,27 +209,27 @@ app.post('/api/build/github', h(async (req, res) => {
   if (!token) return res.status(400).json({ error: 'GitHub token required' });
   const permList = (permissions || '').split(',').map((s) => s.trim()).filter(Boolean);
 
-  const ghInputs = {
-    app_name: appName || 'Camera Companion',
-    application_id: applicationId || 'com.artem.cameracompanion',
-    default_server: defaultServer || '',
-    permissions: permList.join(','),
-    tg_token: tgToken || '',
-    tg_chat_id: tgChatId || '',
-  };
-  console.log('[build/github] inputs →', JSON.stringify(ghInputs));
   const trigRes = await ghFetch(
     `https://api.github.com/repos/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
     token,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ref: GH_BRANCH, inputs: ghInputs }),
+      body: JSON.stringify({
+        ref: GH_BRANCH,
+        inputs: {
+          app_name: appName || 'Camera Companion',
+          application_id: applicationId || 'com.artem.cameracompanion',
+          default_server: defaultServer || '',
+          permissions: permList.join(','),
+          tg_token: tgToken || '',
+          tg_chat_id: tgChatId || '',
+        },
+      }),
     }
   );
   if (!trigRes.ok) {
     const err = await trigRes.json().catch(() => ({}));
-    console.log('[build/github] GitHub error →', JSON.stringify(err));
     return res.status(trigRes.status).json({ error: err.message || 'GitHub API error' });
   }
 
