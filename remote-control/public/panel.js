@@ -1585,6 +1585,25 @@ function _dlRecordDone(dl) {
   if (_dlHistory.length > 50) _dlHistory.pop();
 }
 
+// Кнопки сворачивания
+let _dlBodyCollapsed = false;
+let _dlHistCollapsed = false;
+
+document.addEventListener('click', (e) => {
+  if (e.target.id === 'dlToggleBtn') {
+    _dlBodyCollapsed = !_dlBodyCollapsed;
+    const body = $('#dlBody');
+    if (body) body.style.display = _dlBodyCollapsed ? 'none' : '';
+    e.target.textContent = _dlBodyCollapsed ? '▼ Развернуть' : '▲ Свернуть';
+  }
+  if (e.target.id === 'dlHistToggleBtn') {
+    _dlHistCollapsed = !_dlHistCollapsed;
+    const list = $('#dlHistoryList');
+    if (list) list.style.display = _dlHistCollapsed ? 'none' : '';
+    e.target.textContent = _dlHistCollapsed ? '▼ Развернуть' : '▲ Свернуть';
+  }
+});
+
 function _handleBinaryChunk(buffer) {
   try {
     const view = new DataView(buffer);

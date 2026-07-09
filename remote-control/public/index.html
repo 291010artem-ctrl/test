@@ -249,17 +249,26 @@
       </div>
 
       <div class="tab-content" id="tab-files">
-        <div class="row">
-          <input id="filePath" value="/sdcard" spellcheck="false">
-          <button id="goPath">Открыть</button>
-          <button id="upPath" title="Вверх">↑</button>
+        <!-- Загрузки -->
+        <div class="card" id="dlCard" style="margin-bottom:12px">
+          <div class="dl-card-hd" id="dlCardHd">
+            <span style="font-weight:700;font-size:14px">⬇ Загрузки</span>
+            <span id="dlBadge" style="display:none;background:var(--accent2);color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;font-weight:700;margin-left:6px"></span>
+            <button class="sm" id="dlToggleBtn" style="margin-left:auto;font-size:11px">▲ Свернуть</button>
+          </div>
+          <div id="dlBody">
+            <div id="dlActiveList"><div class="dl-empty">Нет активных загрузок</div></div>
+            <div id="dlHistoryCard" style="display:none">
+              <div class="dl-card-hd" style="margin-top:10px">
+                <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">История</span>
+                <button class="sm" id="dlHistToggleBtn" style="font-size:11px;margin-left:auto">▲ Свернуть</button>
+              </div>
+              <div id="dlHistoryList"></div>
+            </div>
+          </div>
         </div>
-        <div class="row">
-          <input type="file" id="uploadInput">
-          <button id="uploadBtn">Загрузить сюда</button>
-        </div>
-        <ul id="fileList" class="list"></ul>
-        <div class="card" style="margin-top:12px">
+
+        <div class="card">
           <h3>🖼 Галерея</h3>
           <div id="galleryStats" class="muted-text" style="font-size:12px;padding:3px 0 2px"></div>
           <!-- Массовое скачивание -->
@@ -311,15 +320,6 @@
           </div>
         </div>
 
-        <!-- Загрузки -->
-        <div class="card" id="dlCard">
-          <h3>⬇ Загрузки <span id="dlBadge" style="display:none;background:var(--accent2);color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;font-weight:700;vertical-align:middle"></span></h3>
-          <div id="dlActiveList"><div class="dl-empty">Нет активных загрузок</div></div>
-          <div id="dlHistoryCard" style="display:none">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin:12px 0 6px">История</div>
-            <div id="dlHistoryList"></div>
-          </div>
-        </div>
       </div>
 
       <div class="tab-content" id="tab-notifs">

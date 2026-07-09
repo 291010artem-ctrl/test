@@ -382,6 +382,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent2); }
 .toast.err { border-color: var(--danger); }
 
 /* ----- Вкладка загрузок ----- */
+.dl-card-hd { display: flex; align-items: center; margin-bottom: 8px; }
 .dl-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .dl-item:last-child { border-bottom: none; }
 .dl-name { font-size: 13px; font-weight: 600; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
