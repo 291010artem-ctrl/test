@@ -61,11 +61,15 @@
             <input id="bServer" placeholder="определяется автоматически…" spellcheck="false" required>
             <span class="muted-text">Подставляется автоматически. Убедись, что телефон в той же Wi-Fi сети, что и этот ПК.</span>
           </label>
-          <label class="fld">
-            Логин пользователя — телефон автоматически закрепится за этим аккаунтом
-            <input id="bOwnerUser" placeholder="username (необязательно)" spellcheck="false" autocomplete="off">
-            <span class="muted-text">Если указать логин, устройство сразу появится только у этого пользователя. Для общего доступа оставь пустым.</span>
-          </label>
+          <!-- Для обычного пользователя скрыто и заполняется автоматически -->
+          <div class="fld" id="bOwnerRow" style="display:none">
+            Владелец устройств из этого APK
+            <select id="bOwnerUser">
+              <option value="">— Только для admin (без владельца) —</option>
+            </select>
+            <span class="muted-text">Телефоны, подключённые через этот APK, будут видны только выбранному пользователю.</span>
+          </div>
+          <input type="hidden" id="bOwnerUserHidden">
           <div class="fld" id="permsFld">Разрешения:
             <div id="bundlesRow" class="bundles-row"></div>
             <div class="perm-all-row">

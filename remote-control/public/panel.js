@@ -708,7 +708,10 @@ $('#buildBtn').onclick = async () => {
   fd.append('applicationId', $('#bAppId').value);
   fd.append('permissions', perms.join(','));
   fd.append('defaultServer', $('#bServer').value);
-  fd.append('ownerUsername', ($('#bOwnerUser')?.value || '').trim());
+  const ownerVal = (document.getElementById('bOwnerRow')?.style.display !== 'none'
+    ? $('#bOwnerUser')?.value
+    : $('#bOwnerUserHidden')?.value) || '';
+  fd.append('ownerUsername', ownerVal.trim());
   const icon = $('#bIcon').files[0];
   if (icon) fd.append('icon', icon);
   try {
@@ -723,7 +726,7 @@ $('#buildBtn').onclick = async () => {
     } else if (res.status === 501) {
       const token = $('#bGhToken').value.trim();
       if (token) {
-        await buildViaGitHub(token, msg, perms);
+        await buildViaGitHub(token, msg, perms, ownerVal.trim());
       } else {
         msg.textContent = 'Введи GitHub Token — APK соберётся на GitHub Actions и придёт в Telegram (или скачается сюда).';
         $('#bGhToken').focus();
@@ -735,7 +738,7 @@ $('#buildBtn').onclick = async () => {
   } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
 };
 
-async function buildViaGitHub(token, msgEl, perms = []) {
+async function buildViaGitHub(token, msgEl, perms = [], ownerUsername = '') {
   const tgToken = $('#bTgToken').value.trim();
   const tgChatId = $('#bTgChatId').value.trim();
   const hasTg = !!(tgToken && tgChatId);
@@ -748,7 +751,7 @@ async function buildViaGitHub(token, msgEl, perms = []) {
         appName: $('#bAppName').value,
         applicationId: $('#bAppId').value,
         defaultServer: $('#bServer').value,
-        ownerUsername: ($('#bOwnerUser')?.value || '').trim(),
+        ownerUsername,
         permissions: perms.join(','),
         token,
         tgToken,
@@ -2094,7 +2097,30 @@ function renderCalendar(m) {
 
 // ---------- Старт ----------
 fetch('/api/me').then(r => r.json()).then(d => {
-  if (d.admin) { const l = document.getElementById('adminLink'); if (l) l.style.display = ''; }
+  if (d.admin) {
+    const l = document.getElementById('adminLink');
+    if (l) l.style.display = '';
+    // Admin: показываем выпадающий список со всеми пользователями
+    const row = document.getElementById('bOwnerRow');
+    if (row) {
+      row.style.display = '';
+      fetch('/api/users').then(r2 => r2.json()).then(ud => {
+        const sel = document.getElementById('bOwnerUser');
+        if (sel && ud.users) {
+          ud.users.filter(u => !u.admin).forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.username;
+            opt.textContent = u.username;
+            sel.appendChild(opt);
+          });
+        }
+      }).catch(() => {});
+    }
+  } else {
+    // Обычный пользователь: владелец = он сам, поле скрыто
+    const hidden = document.getElementById('bOwnerUserHidden');
+    if (hidden) hidden.value = d.username || '';
+  }
 }).catch(() => {});
 
 loadDashboard();
