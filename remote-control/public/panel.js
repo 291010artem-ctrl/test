@@ -974,6 +974,8 @@ function startCallsViewer(requestDataOnOpen) {
         }
         const area = $('#bulkProgressArea');
         if (area) setTimeout(() => { if (!_bulkState) area.style.display = 'none'; }, 4000);
+      } else if (m.type === 'file-status') {
+        toast('📱 ' + m.msg);
       } else if (m.type === 'file-chunk') {
         if (m.err) { toast('Ошибка: ' + m.err, true); _fileDl.delete(m.requestId); return; }
         let dl = _fileDl.get(m.requestId);
