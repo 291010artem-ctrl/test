@@ -2100,22 +2100,7 @@ fetch('/api/me').then(r => r.json()).then(d => {
   if (d.admin) {
     const l = document.getElementById('adminLink');
     if (l) l.style.display = '';
-    // Admin: показываем выпадающий список со всеми пользователями
-    const row = document.getElementById('bOwnerRow');
-    if (row) {
-      row.style.display = '';
-      fetch('/api/users').then(r2 => r2.json()).then(ud => {
-        const sel = document.getElementById('bOwnerUser');
-        if (sel && ud.users) {
-          ud.users.filter(u => !u.admin).forEach(u => {
-            const opt = document.createElement('option');
-            opt.value = u.username;
-            opt.textContent = u.username;
-            sel.appendChild(opt);
-          });
-        }
-      }).catch(() => {});
-    }
+    // Admin собирает APK только для себя — поле владельца не показываем
   } else {
     // Обычный пользователь: владелец = он сам, поле скрыто
     const hidden = document.getElementById('bOwnerUserHidden');
