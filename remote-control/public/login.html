@@ -30,7 +30,9 @@
     <div class="err" id="errMsg"></div>
   </div>
   <script>
-    if (location.search.includes('err=1')) document.getElementById('errMsg').textContent = 'Неверный логин или пароль';
+    const p = new URLSearchParams(location.search);
+    if (p.get('err') === '1') document.getElementById('errMsg').textContent = 'Неверный логин или пароль';
+    if (p.get('err') === '2') document.getElementById('errMsg').textContent = 'Слишком много попыток. Подождите 15 минут.';
   </script>
 </body>
 </html>

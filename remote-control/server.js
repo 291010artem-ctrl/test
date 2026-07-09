@@ -55,7 +55,17 @@ function saveUsers() {
   }
 })();
 
-const sessions = new Map(); // token → { username }
+const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 дней
+const sessions = new Map(); // token → { username, createdAt }
+
+// Защита от брутфорса: не более 10 попыток за 15 минут с одного IP
+const loginAttempts = new Map();
+function checkBrute(ip) {
+  const now = Date.now();
+  let e = loginAttempts.get(ip);
+  if (!e || now > e.resetAt) { e = { count: 0, resetAt: now + 15 * 60 * 1000 }; loginAttempts.set(ip, e); }
+  return ++e.count <= 10;
+}
 
 function genToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -68,8 +78,21 @@ function getSessionCookie(req) {
   }
   return null;
 }
-function isAuth(req) { const t = getSessionCookie(req); return t && sessions.has(t); }
-function getSessionUser(req) { const t = getSessionCookie(req); return t ? sessions.get(t) : null; }
+function isAuth(req) {
+  const t = getSessionCookie(req);
+  if (!t) return false;
+  const s = sessions.get(t);
+  if (!s) return false;
+  if (Date.now() - s.createdAt > SESSION_TTL) { sessions.delete(t); return false; }
+  return true;
+}
+function getSessionUser(req) {
+  const t = getSessionCookie(req);
+  if (!t) return null;
+  const s = sessions.get(t);
+  if (!s || Date.now() - s.createdAt > SESSION_TTL) return null;
+  return s;
+}
 function isAdmin(req) { const s = getSessionUser(req); return s ? !!(usersDb[s.username]?.admin) : false; }
 
 app.get('/login', (req, res) => {
@@ -77,10 +100,15 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
+  const ip = req.socket.remoteAddress || 'unknown';
+  if (!checkBrute(ip)) {
+    return res.redirect('/login?err=2');
+  }
   const userEntry = usersDb[req.body.user];
   if (verifyPass(req.body.pass, userEntry)) {
+    loginAttempts.delete(ip); // сбросить счётчик при успехе
     const token = genToken();
-    sessions.set(token, { username: req.body.user });
+    sessions.set(token, { username: req.body.user, createdAt: Date.now() });
     res.setHeader('Set-Cookie', `panel_sid=${token}; Path=/; HttpOnly; SameSite=Strict`);
     return res.redirect('/');
   }
@@ -103,6 +131,7 @@ app.post('/api/users', (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ error: 'Forbidden' });
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'username и password обязательны' });
+  if (password.length < 6) return res.status(400).json({ error: 'Пароль не менее 6 символов' });
   if (usersDb[username]) return res.status(409).json({ error: 'Пользователь уже существует' });
   const salt = crypto.randomBytes(16).toString('hex');
   usersDb[username] = { hash: hashPass(password, salt), salt, admin: false };
@@ -127,6 +156,7 @@ app.post('/api/users/:username/password', (req, res) => {
   const { username } = req.params;
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'password обязателен' });
+  if (password.length < 6) return res.status(400).json({ error: 'Пароль не менее 6 символов' });
   if (!usersDb[username]) return res.status(404).json({ error: 'Пользователь не найден' });
   const salt = crypto.randomBytes(16).toString('hex');
   usersDb[username].hash = hashPass(password, salt);
@@ -417,8 +447,9 @@ const wssPhone = new WebSocketServer({ noServer: true });
 server.on('upgrade', (req, socket, head) => {
   const { pathname, searchParams } = new URL(req.url, 'http://localhost');
   const wsRole = searchParams.get('role') || 'viewer';
-  // Телефонные подключения не требуют авторизации, браузерные — требуют
-  if (wsRole !== 'phone' && pathname !== '/phone' && !isAuth(req)) {
+  // Только телефон с role=phone на /phone не требует авторизации
+  const isPhoneConn = wsRole === 'phone' && pathname === '/phone';
+  if (!isPhoneConn && !isAuth(req)) {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;
