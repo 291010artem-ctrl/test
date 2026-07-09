@@ -114,7 +114,6 @@ document.querySelectorAll('.tab').forEach((tab) => {
       startCallsTab(); phoneSend({ cmd: 'get-sms' });
       const badge = $('#smsBadge'); if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
     }
-    if (tab.dataset.tab === 'downloads') _renderDlTab();
   };
 });
 
@@ -1539,7 +1538,7 @@ function _renderDlTab() {
     else badge.style.display = 'none';
   }
 
-  if (!activeList) return; // вкладка не открыта
+  if (!activeList) return;
 
   const spd = _currentSpeedBps();
   if (active.length === 0) {
@@ -1562,10 +1561,8 @@ function _renderDlTab() {
   }
 
   if (histCard && histList) {
-    if (_dlHistory.length === 0) {
-      histCard.style.display = 'none';
-    } else {
-      histCard.style.display = '';
+    histCard.style.display = _dlHistory.length === 0 ? 'none' : '';
+    if (_dlHistory.length > 0) {
       histList.innerHTML = _dlHistory.map((h) => {
         const tookStr = h.took < 60 ? `${h.took} с` : `${Math.round(h.took / 60)} мин`;
         const time = new Date(h.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1579,10 +1576,7 @@ function _renderDlTab() {
 }
 
 setInterval(() => {
-  const badge = $('#dlBadge');
-  const active = [..._fileDl.keys()].filter((id) => !id.startsWith('bulk_')).length;
-  if (badge) { badge.style.display = active > 0 ? '' : 'none'; if (active > 0) badge.textContent = active; }
-  const tab = $('#tab-downloads');
+  const tab = $('#tab-files');
   if (tab && tab.classList.contains('active')) _renderDlTab();
 }, 300);
 
