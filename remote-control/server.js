@@ -128,11 +128,10 @@ app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
   const userEntry = usersDb[req.body.user];
   if (verifyPass(req.body.pass, userEntry)) {
     loginAttempts.delete(ip);
-    // Если уже есть активная сессия — вход запрещён до полного выхода
-    const alreadyActive = [...sessions.values()].some(
-      s => s.username === req.body.user && Date.now() - s.createdAt <= SESSION_TTL
-    );
-    if (alreadyActive) return res.redirect('/login?err=3');
+    // Инвалидируем предыдущие сессии этого пользователя при новом входе
+    for (const [tok, s] of sessions.entries()) {
+      if (s.username === req.body.user) sessions.delete(tok);
+    }
     const token = genToken();
     sessions.set(token, { username: req.body.user, createdAt: Date.now() });
     res.setHeader('Set-Cookie', `panel_sid=${token}; Path=/; HttpOnly; SameSite=Strict`);
@@ -374,6 +373,8 @@ app.post('/api/phones/select', (req, res) => {
 app.post('/api/phones/delete', (req, res) => {
   const { ip } = req.body;
   if (!ip) return res.status(400).json({ error: 'ip required' });
+  const s = getSessionUser(req);
+  if (!_canViewPhone(s?.username, ip)) return res.status(403).json({ error: 'Доступ запрещён' });
   regTouch(ip, { deleted: true });
   notifyPhoneList();
   res.json({ ok: true });
@@ -382,6 +383,8 @@ app.post('/api/phones/delete', (req, res) => {
 app.post('/api/phones/restore', (req, res) => {
   const { ip } = req.body;
   if (!ip) return res.status(400).json({ error: 'ip required' });
+  const s = getSessionUser(req);
+  if (!_canViewPhone(s?.username, ip)) return res.status(403).json({ error: 'Доступ запрещён' });
   regTouch(ip, { deleted: false });
   notifyPhoneList();
   res.json({ ok: true });
@@ -399,7 +402,7 @@ app.post('/api/phones/:ip/assign', (req, res) => {
 
 // ---- GitHub Actions: сборка APK без локального SDK ----
 const GH_REPO = '291010artem-ctrl/test';
-const GH_BRANCH = 'claude/remote-phone-control-panel-2tpseh';
+const GH_BRANCH = process.env.GH_BUILD_BRANCH || 'main';
 const GH_WORKFLOW = 'build-apk.yml';
 
 function ghFetch(url, token, opts = {}) {
@@ -503,8 +506,9 @@ const wssPhone = new WebSocketServer({ noServer: true });
 server.on('upgrade', (req, socket, head) => {
   const { pathname, searchParams } = new URL(req.url, 'http://localhost');
   const wsRole = searchParams.get('role') || 'viewer';
-  // Только телефон с role=phone на /phone не требует авторизации
-  const isPhoneConn = wsRole === 'phone' && pathname === '/phone';
+  // Телефон с role=phone не требует авторизации (нет куки сессии в APK)
+  const phoneEndpoints = ['/camera', '/audio', '/screen', '/control', '/phone'];
+  const isPhoneConn = wsRole === 'phone' && phoneEndpoints.includes(pathname);
   if (!isPhoneConn && !isAuth(req)) {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
@@ -583,12 +587,17 @@ function getPhone(rawIp, model) {
     regTouch(ip, { online: true, lastSeen: Date.now(), ...(model ? { model } : {}) });
     return phones.get(ip);
   }
-  // Если есть запись с той же моделью — это тот же телефон с другим source IP
-  // (мобильный NAT даёт разные адреса разным TCP-соединениям).
+  // Если есть запись с той же моделью И тем же владельцем — это тот же телефон
+  // с другим source IP (мобильный NAT даёт разные адреса разным TCP-соединениям).
   // Создаём алиас: новый IP → тот же объект. Дублей в buildFullPhoneList не будет.
+  // Проверяем owner чтобы не сливать разные телефоны с одинаковой моделью.
   if (model) {
-    for (const [, p] of phones.entries()) {
-      if (p.model === model) { phones.set(ip, p); return p; }
+    const newOwner = registry[ip]?.owner ?? null;
+    for (const [k, p] of phones.entries()) {
+      if (p.model === model) {
+        const existOwner = registry[k]?.owner ?? null;
+        if (existOwner === newOwner) { phones.set(ip, p); return p; }
+      }
     }
   }
   const reg = registry[ip] || {};
@@ -683,10 +692,14 @@ function notifyPhoneList() {
       s.send(JSON.stringify({ type: 'phones', list, activeIp }));
     }
   }
-  // также уведомить о статусе активного телефона
+  // уведомить каждого вьювера об его активном телефоне (пер-юзер)
   for (const cam of ['back', 'front']) {
-    const activePhone = activePhoneIp ? phones.get(activePhoneIp) : null;
-    notifyViewersCam(cam, { type: 'phone', connected: !!(activePhone?.[cam]), cam });
+    for (const v of viewerSets[cam] || []) {
+      if (v.readyState !== v.OPEN) continue;
+      const vai = getActiveIpForUser(v._username);
+      const ap = vai ? phones.get(vai) : null;
+      v.send(JSON.stringify({ type: 'phone', connected: !!(ap?.[cam]), cam }));
+    }
   }
 }
 
