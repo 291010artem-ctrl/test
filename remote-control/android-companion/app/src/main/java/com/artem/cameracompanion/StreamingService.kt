@@ -932,6 +932,7 @@ class StreamingService : Service() {
                         file.inputStream().use { stream ->
                             val buf = ByteArray(chunkSize); var chunkIdx = 0
                             while (true) {
+                                if (bulkCancelled || ws !== wsPhone) break
                                 val read = stream.read(buf); if (read <= 0) break
                                 ws.send(JSONObject()
                                     .put("type","file-chunk").put("requestId",requestId)
