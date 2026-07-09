@@ -23,6 +23,50 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 const app = express();
 app.use(express.json());
+
+// ---- Авторизация ----
+const AUTH_USER = process.env.PANEL_USER || 'admin';
+const AUTH_PASS = process.env.PANEL_PASS || 'admin';
+const sessions = new Set();
+
+function genToken() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+function getSessionCookie(req) {
+  for (const part of (req.headers.cookie || '').split(';')) {
+    const [k, v] = part.trim().split('=');
+    if (k === 'panel_sid') return v;
+  }
+  return null;
+}
+function isAuth(req) { const t = getSessionCookie(req); return t && sessions.has(t); }
+
+app.get('/login', (req, res) => {
+  if (isAuth(req)) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
+  if (req.body.user === AUTH_USER && req.body.pass === AUTH_PASS) {
+    const token = genToken();
+    sessions.add(token);
+    res.setHeader('Set-Cookie', `panel_sid=${token}; Path=/; HttpOnly; SameSite=Strict`);
+    return res.redirect('/');
+  }
+  res.redirect('/login?err=1');
+});
+app.get('/logout', (req, res) => {
+  const token = getSessionCookie(req);
+  if (token) sessions.delete(token);
+  res.setHeader('Set-Cookie', 'panel_sid=; Path=/; Max-Age=0');
+  res.redirect('/login');
+});
+app.use((req, res, next) => {
+  if (req.path === '/login') return next();
+  if (isAuth(req)) return next();
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
+  res.redirect('/login');
+});
+
 app.use((req, res, next) => {
   if (req.path === '/panel.js' || req.path === '/index.html' || req.path === '/') {
     res.setHeader('Cache-Control', 'no-store');
@@ -291,7 +335,14 @@ const wssControl = new WebSocketServer({ noServer: true });
 const wssPhone = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
-  const { pathname } = new URL(req.url, 'http://localhost');
+  const { pathname, searchParams } = new URL(req.url, 'http://localhost');
+  const wsRole = searchParams.get('role') || 'viewer';
+  // Телефонные подключения не требуют авторизации, браузерные — требуют
+  if (wsRole !== 'phone' && pathname !== '/phone' && !isAuth(req)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+    return;
+  }
   console.log(`[WS] upgrade: ${pathname} from ${req.socket.remoteAddress}`);
   if (pathname === '/ws') {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
