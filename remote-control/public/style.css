@@ -567,8 +567,7 @@ input[type="time"]:focus { outline: none; border-color: var(--accent2); }
 .gp-item { position: relative; aspect-ratio: 1; background: var(--panel2); cursor: pointer; overflow: hidden; }
 .gp-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .gp-icon { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 22px; color: var(--muted); }
-.gp-dl { position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,.65); color: #fff; border: none; border-radius: 3px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: none; line-height: 1.4; }
-.gp-item:hover .gp-dl { display: block; }
+.gp-dl { position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,.65); color: #fff; border: none; border-radius: 3px; padding: 2px 5px; font-size: 11px; cursor: pointer; line-height: 1.4; }
 
 /* ----- Календарь ----- */
 .calendar-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }

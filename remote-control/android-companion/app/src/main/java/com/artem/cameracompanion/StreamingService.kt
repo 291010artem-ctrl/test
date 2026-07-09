@@ -1156,7 +1156,7 @@ class StreamingService : Service() {
             else
                 ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
             val thumb = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentResolver.loadThumbnail(contentUri, android.util.Size(120, 120), null)
+                contentResolver.loadThumbnail(contentUri, android.util.Size(256, 256), null)
             } else {
                 if (isVideo)
                     MediaStore.Video.Thumbnails.getThumbnail(contentResolver, id, MediaStore.Video.Thumbnails.MINI_KIND, null)
@@ -1165,7 +1165,7 @@ class StreamingService : Service() {
             }
             if (thumb == null) { ws.send(JSONObject().put("type","media-thumb").put("id",id).put("err","Миниатюра недоступна").toString()); return }
             val out = ByteArrayOutputStream()
-            thumb.compress(Bitmap.CompressFormat.JPEG, 70, out)
+            thumb.compress(Bitmap.CompressFormat.JPEG, 85, out)
             thumb.recycle()
             val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
             ws.send(JSONObject().put("type","media-thumb").put("id",id).put("data",b64).toString())
