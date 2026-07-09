@@ -1532,6 +1532,8 @@ function _handleBinaryChunk(buffer) {
     if (!dl) {
       dl = { chunks: [], name: header.name, mime: header.mime, total: header.total, size: header.size || 0, startTs: Date.now(), bytesGot: 0 };
       _fileDl.set(header.requestId, dl);
+    } else if (dl.bytesGot === 0) {
+      dl.name = header.name; dl.mime = header.mime; dl.total = header.total; dl.size = header.size || 0;
     }
     dl.chunks[header.index] = data;
     dl.bytesGot += data.byteLength;
@@ -1556,7 +1558,7 @@ function _handleBinaryChunk(buffer) {
         toast('✓ Скачан: ' + dl.name);
       }
     }
-  } catch (e) { console.error('Binary chunk error', e); }
+  } catch (e) { console.error('Binary chunk error', e); toast('Ошибка данных: ' + e.message, true); }
 }
 
 // ZIP-архив для массового скачивания
@@ -1732,6 +1734,11 @@ function renderGalleryItems(m) {
       const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
       toast('Загрузка…');
       phoneSend({ cmd: 'get-media-file', id: item.id, mediaType: m.mediaType, requestId });
+      setTimeout(() => {
+        const dl = _fileDl.get(requestId);
+        if (dl && dl.bytesGot === 0) { _fileDl.delete(requestId); toast('Нет ответа от телефона', true); }
+      }, 8000);
+      _fileDl.set(requestId, { chunks: [], name: '', mime: '', total: 1, size: 0, startTs: Date.now(), bytesGot: 0 });
     };
     grid.appendChild(div);
     phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });
