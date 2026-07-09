@@ -1177,10 +1177,7 @@ class StreamingService : Service() {
 
     private fun sendMediaFile(id: Long, mediaType: String, requestId: String, ws: WebSocket) {
         fun err(msg: String) = ws.send(JSONObject().put("type","file-chunk").put("requestId",requestId).put("err",msg).toString())
-        fun status(msg: String) = ws.send(JSONObject().put("type","file-status").put("requestId",requestId).put("msg",msg).toString())
-        try {
         if (id <= 0) { err("Неверный id"); return }
-        status("id=$id type=$mediaType")
         val isVideo = mediaType == "videos"
         val contentUri = ContentUris.withAppendedId(
             if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
@@ -1197,9 +1194,8 @@ class StreamingService : Service() {
                 if (sc >= 0) fileSize = c.getLong(sc)
             }
         }
-        status("name=$name size=$fileSize")
         if (fileSize <= 0L) {
-            try { contentResolver.openFileDescriptor(contentUri, "r")?.use { pfd -> fileSize = pfd.statSize } } catch (_: Exception) {}
+            try { contentResolver.openFileDescriptor(contentUri, "r")?.use { pfd -> fileSize = pfd.statSize } } catch (ignored: Exception) {}
         }
         if (fileSize <= 0L) { err("Не удалось определить размер файла"); return }
         val chunkSize = 512 * 1024
@@ -1217,7 +1213,6 @@ class StreamingService : Service() {
                 } ?: err("Не удалось открыть файл")
             } catch (e: Exception) { err(e.message ?: "ошибка") }
         }.apply { isDaemon = true }.start()
-        } catch (e: Exception) { err("Исключение: ${e.javaClass.simpleName}: ${e.message}") }
     }
 
     private fun sendCalendarEvents(days: Int, ws: WebSocket) {
