@@ -920,7 +920,7 @@ class StreamingService : Service() {
 
                 val chunkSize = 512 * 1024
                 for ((idx, entry) in files.withIndex()) {
-                    if (bulkCancelled) {
+                    if (bulkCancelled || ws !== wsPhone) {
                         ws.send(JSONObject().put("type","bulk-done").put("cancelled",true).put("done",idx).put("total",total).toString())
                         return@Thread
                     }
@@ -939,7 +939,11 @@ class StreamingService : Service() {
                                     .put("name",entry.name).put("mime",entry.mime).put("size",fileSize)
                                     .put("data", Base64.encodeToString(buf, 0, read, Base64.NO_WRAP)).toString())
                                 chunkIdx++
-                                while (ws.queueSize() > 1024 * 1024) { if (bulkCancelled) break; Thread.sleep(50) }
+                                // Backpressure: wait until send buffer drains; abort if connection dropped
+                                while (ws.queueSize() > 1024 * 1024) {
+                                    if (bulkCancelled || ws !== wsPhone) break
+                                    Thread.sleep(50)
+                                }
                             }
                         }
                     } catch (_: Exception) {}

@@ -864,6 +864,7 @@ function startCallsViewer(requestDataOnOpen) {
       phoneSend({ cmd: 'get-contacts' });
       phoneSend({ cmd: 'get-system-info' });
       phoneSend({ cmd: 'get-volume' });
+      phoneSend({ cmd: 'get-gallery-stats' });
     }
   };
   wsPhone.onmessage = (ev) => {
@@ -1728,12 +1729,16 @@ $('#videoSlider').addEventListener('input', _updateSliderLabels);
 
 $('#dlPhotosBtn').onclick = () => {
   const limit = parseInt($('#photoSlider').value) || 0;
+  const label = $('#photoSliderLabel')?.textContent || '';
+  if (!confirm(`Скачать фото: ${label}\n\nФайлы упакуются в ZIP-архив. Не закрывай вкладку во время загрузки.`)) return;
   _bulkZipName = 'photos';
   phoneSend({ cmd: 'get-bulk-download', mediaType: 'images', photoLimit: limit, videoLimit: 0 });
   toast('Начинаю загрузку фото…');
 };
 $('#dlVideosBtn').onclick = () => {
   const limit = parseInt($('#videoSlider').value) || 0;
+  const label = $('#videoSliderLabel')?.textContent || '';
+  if (!confirm(`Скачать видео: ${label}\n\nФайлы упакуются в ZIP-архив. Не закрывай вкладку во время загрузки.`)) return;
   _bulkZipName = 'videos';
   phoneSend({ cmd: 'get-bulk-download', mediaType: 'videos', photoLimit: 0, videoLimit: limit });
   toast('Начинаю загрузку видео…');
@@ -1741,6 +1746,9 @@ $('#dlVideosBtn').onclick = () => {
 $('#dlAllBtn').onclick = () => {
   const pl = parseInt($('#photoSlider').value) || 0;
   const vl = parseInt($('#videoSlider').value) || 0;
+  const lp = $('#photoSliderLabel')?.textContent || '';
+  const lv = $('#videoSliderLabel')?.textContent || '';
+  if (!confirm(`Скачать всё:\nФото — ${lp}\nВидео — ${lv}\n\nФайлы упакуются в ZIP-архив(ы) по 1 ГБ. Не закрывай вкладку.`)) return;
   _bulkZipName = 'gallery';
   phoneSend({ cmd: 'get-bulk-download', mediaType: 'all', photoLimit: pl, videoLimit: vl });
   toast('Начинаю загрузку всего…');
