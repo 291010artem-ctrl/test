@@ -681,6 +681,27 @@ wssControl.on('connection', (ws, req) => {
 // ---- Телефон / Звонки ----
 const phoneCallPhones = new Map(); // ip → ws
 const phoneCallViewers = new Set();
+const pendingHttpDl = new Map(); // requestId → { res, headersSent, received, total }
+
+// HTTP-стриминг файла с телефона прямо в браузерный download
+app.get('/api/dl', (req, res) => {
+  const phone = activePhoneIp ? phoneCallPhones.get(activePhoneIp)
+    : [...phoneCallPhones.values()].find(w => w.readyState === w.OPEN);
+  if (!phone || phone.readyState !== phone.OPEN)
+    return res.status(503).json({ error: 'Телефон не подключён' });
+  const { id, mediaType } = req.query;
+  if (!id || !mediaType) return res.status(400).json({ error: 'id и mediaType обязательны' });
+  const requestId = 'http_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const dl = { res, headersSent: false, received: 0, total: 0 };
+  pendingHttpDl.set(requestId, dl);
+  phone.send(JSON.stringify({ cmd: 'get-media-file', id: Number(id), mediaType, requestId }));
+  dbg(`[HTTP-DL] start id=${id} type=${mediaType} requestId=${requestId}`);
+  const timeout = setTimeout(() => {
+    if (pendingHttpDl.delete(requestId) && !res.headersSent)
+      res.status(504).json({ error: 'Нет ответа от телефона' });
+  }, 30000);
+  req.on('close', () => { clearTimeout(timeout); pendingHttpDl.delete(requestId); });
+});
 
 wssPhone.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
@@ -696,13 +717,36 @@ wssPhone.on('connection', (ws, req) => {
     }
     ws.on('message', (data, isBinary) => {
       if (isBinary) {
-        // Логируем первый бинарный чанк file-chunk от телефона
         try {
           const hLen = data.readUInt32BE(0);
           const hJson = JSON.parse(data.slice(4, 4 + hLen).toString());
           if (hJson.type === 'file-chunk') {
             if (hJson.index === 0) dbg(`[PHONE→] file-chunk binary requestId=${hJson.requestId} name=${hJson.name} size=${hJson.size} total=${hJson.total}`);
-            else if (hJson.err) dbg(`[PHONE→] file-chunk error requestId=${hJson.requestId} err=${hJson.err}`);
+            // HTTP-стриминг: перехватываем и пишем прямо в HTTP-ответ
+            const httpDl = pendingHttpDl.get(hJson.requestId);
+            if (httpDl) {
+              if (hJson.err) {
+                pendingHttpDl.delete(hJson.requestId);
+                if (!httpDl.res.headersSent) httpDl.res.status(500).end(hJson.err);
+                else httpDl.res.end();
+                return;
+              }
+              if (!httpDl.headersSent) {
+                httpDl.total = hJson.total;
+                httpDl.res.setHeader('Content-Type', hJson.mime || 'application/octet-stream');
+                httpDl.res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(hJson.name || 'file')}`);
+                if (hJson.size > 0) httpDl.res.setHeader('Content-Length', hJson.size);
+                httpDl.headersSent = true;
+              }
+              httpDl.res.write(data.subarray(4 + hLen));
+              httpDl.received++;
+              if (httpDl.received >= httpDl.total) {
+                httpDl.res.end();
+                pendingHttpDl.delete(hJson.requestId);
+                dbg(`[HTTP-DL] done requestId=${hJson.requestId}`);
+              }
+              return;
+            }
           }
         } catch {}
         for (const v of phoneCallViewers) {
@@ -716,6 +760,13 @@ wssPhone.on('connection', (ws, req) => {
         const m = JSON.parse(str);
         if (m.type === 'file-chunk') {
           dbg(`[PHONE→] file-chunk text requestId=${m.requestId} err=${m.err || '(none)'}`);
+          const httpDl = pendingHttpDl.get(m.requestId);
+          if (httpDl && m.err) {
+            pendingHttpDl.delete(m.requestId);
+            if (!httpDl.res.headersSent) httpDl.res.status(500).end(m.err);
+            else httpDl.res.end();
+            return;
+          }
         }
         if (m.type === 'phone-info') {
           const upd = { lastSeen: Date.now() };

@@ -1546,8 +1546,8 @@ function _renderDlTab() {
     activeList.innerHTML = '<div class="dl-empty">Нет активных загрузок</div>';
   } else {
     activeList.innerHTML = active.map(([, dl]) => {
-      const got = dl.chunks.filter(Boolean).length;
-      const pct = dl.total > 0 ? Math.round(got / dl.total * 100) : 0;
+      const pct = dl.size > 0 ? Math.round(dl.bytesGot / dl.size * 100)
+        : (dl.chunks && dl.total > 0 ? Math.round(dl.chunks.filter(Boolean).length / dl.total * 100) : 0);
       const remaining = spd > 0 && dl.size > 0 ? (dl.size - dl.bytesGot) / spd : 0;
       const gotStr = fmtGB(dl.bytesGot);
       const totalStr = dl.size ? fmtGB(dl.size) : '?';
@@ -1817,19 +1817,55 @@ function renderGalleryItems(m) {
     const div = document.createElement('div');
     div.className = 'gp-item';
     div.innerHTML = `<div class="gp-thumb" data-thumb-id="${item.id}" data-mtype="${m.mediaType}"><div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div></div><div class="gp-dl-overlay">⬇ Скачать</div>`;
-    div.onclick = () => {
+    div.onclick = async () => {
       if (div.dataset.downloading) return;
       div.dataset.downloading = '1';
       div.style.opacity = '0.5';
-      const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-      toast('Загрузка…', false, true);
-      phoneSend({ cmd: 'get-media-file', id: item.id, mediaType: m.mediaType, requestId });
       const unlock = () => { delete div.dataset.downloading; div.style.opacity = ''; };
-      setTimeout(() => {
-        const dl = _fileDl.get(requestId);
-        if (dl && dl.bytesGot === 0) { _fileDl.delete(requestId); toast('Нет ответа от телефона', true); unlock(); }
-      }, 15000);
-      _fileDl.set(requestId, { chunks: [], name: '', mime: '', total: 1, size: 0, startTs: Date.now(), bytesGot: 0, onDone: unlock });
+      const reqId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      toast('Подключение…', false, true);
+      try {
+        const resp = await fetch(`/api/dl?id=${item.id}&mediaType=${encodeURIComponent(m.mediaType)}`);
+        if (!resp.ok) {
+          const e = await resp.json().catch(() => ({}));
+          toast('Ошибка: ' + (e.error || resp.statusText), true);
+          unlock(); return;
+        }
+        const total = parseInt(resp.headers.get('content-length') || '0');
+        const disp = resp.headers.get('content-disposition') || '';
+        const fnMatch = disp.match(/filename\*=UTF-8''(.+)/i);
+        const filename = fnMatch ? decodeURIComponent(fnMatch[1]) : (item.displayName || 'file');
+        const mime = resp.headers.get('content-type') || 'application/octet-stream';
+        const dlEntry = { name: filename, size: total, startTs: Date.now(), bytesGot: 0, onDone: unlock };
+        _fileDl.set(reqId, dlEntry);
+        const reader = resp.body.getReader();
+        const parts = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          parts.push(value);
+          dlEntry.bytesGot += value.length;
+          _trackSpeed(value.length);
+          const pct = total ? Math.round(dlEntry.bytesGot / total * 100) : 0;
+          const spd = _currentSpeedBps();
+          const rem = spd > 0 && total > 0 ? (total - dlEntry.bytesGot) / spd : 0;
+          const info = [_fmtSpeed(spd), _fmtEta(rem)].filter(Boolean).join(' · ');
+          toast(`⬇ ${filename} — ${pct}%${info ? ' · ' + info : ''}`, false, true);
+        }
+        _fileDl.delete(reqId);
+        const blob = new Blob(parts, { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = blobUrl; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+        toast('✓ Скачан: ' + filename);
+        _dlRecordDone({ name: filename, size: total || dlEntry.bytesGot, startTs: dlEntry.startTs, bytesGot: dlEntry.bytesGot });
+        unlock();
+      } catch (e) {
+        _fileDl.delete(reqId);
+        toast('Ошибка: ' + e.message, true);
+        unlock();
+      }
     };
     grid.appendChild(div);
     phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });
