@@ -14,7 +14,8 @@ const jpost = (path, body) => api(path, {
 function toast(msg, isErr, persist) {
   const t = $('#toast');
   t.textContent = msg;
-  t.className = 'toast show' + (isErr ? ' err' : '');
+  const cls = 'toast show' + (isErr ? ' err' : '');
+  if (t.className !== cls) t.className = cls;
   clearTimeout(toast._t);
   if (!persist) toast._t = setTimeout(() => (t.className = 'toast'), 2600);
 }
