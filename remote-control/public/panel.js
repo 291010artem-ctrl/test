@@ -1692,7 +1692,8 @@ function _addToBulkZip(name, blob) {
 
 // Скользящее окно скорости — храним {ts, bytes} за последние 5 с
 const _speedWindow = [];
-let _lastKnownSpeedBps = 2 * 1024 * 1024; // ~2 МБ/с по умолчанию до первой загрузки
+let _lastKnownSpeedBps = 5 * 1024 * 1024; // ~5 МБ/с по умолчанию до первой загрузки
+let _hasRealSpeed = false; // true после первого реального замера
 function _trackSpeed(bytes) {
   const now = Date.now();
   _speedWindow.push({ ts: now, bytes });
@@ -1705,7 +1706,7 @@ function _currentSpeedBps() {
   if (span <= 0) return 0;
   const bytes = _speedWindow.slice(1).reduce((s, e) => s + e.bytes, 0);
   const bps = bytes / span;
-  if (bps > 0) _lastKnownSpeedBps = bps;
+  if (bps > 0) { _lastKnownSpeedBps = bps; _hasRealSpeed = true; }
   return bps;
 }
 function _speedForEta() {
@@ -1865,7 +1866,8 @@ function _sliderLabel(count, max, totalSize, totalCount) {
   const avgSize = totalCount > 0 ? totalSize / totalCount : 0;
   const sizeEst = count * avgSize;
   const spd = _speedForEta();
-  const eta = spd > 0 && sizeEst > 0 ? ' · ' + _fmtEta(sizeEst / spd) : '';
+  const spdStr = _fmtSpeed(spd) + (_hasRealSpeed ? '' : ' прим.');
+  const eta = spd > 0 && sizeEst > 0 ? ' · ~' + _fmtEta(sizeEst / spd) + ' · ' + spdStr : '';
   const sizeStr = sizeEst > 0 ? ' · ' + fmtGB(sizeEst) : '';
   const label = count >= max ? `все (${count})` : `${count} из ${max}`;
   return label + sizeStr + eta;
