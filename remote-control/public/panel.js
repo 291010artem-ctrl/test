@@ -1141,10 +1141,6 @@ function renderCallLog(entries) {
 }
 
 function phoneSend(obj) {
-  if (obj.cmd === 'get-media-file') {
-    const st = wsPhone ? wsPhone.readyState : -1;
-    toast(`DBG: get-media-file id=${obj.id} ws=${st}`, st !== WebSocket.OPEN);
-  }
   if (wsPhone && wsPhone.readyState === WebSocket.OPEN) wsPhone.send(JSON.stringify(obj));
 }
 
@@ -1532,7 +1528,7 @@ function _handleBinaryChunk(buffer) {
     const headerLen = view.getUint32(0, false);
     const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, headerLen)));
     const data = new Uint8Array(buffer, 4 + headerLen);
-    if (header.err) { toast('Ошибка: ' + header.err, true); _fileDl.delete(header.requestId); return; }
+    if (header.err) { const dl = _fileDl.get(header.requestId); dl?.onDone?.(); _fileDl.delete(header.requestId); toast('Ошибка: ' + header.err, true); return; }
     let dl = _fileDl.get(header.requestId);
     if (!dl) {
       dl = { chunks: [], name: header.name, mime: header.mime, total: header.total, size: header.size || 0, startTs: Date.now(), bytesGot: 0 };
@@ -1562,6 +1558,7 @@ function _handleBinaryChunk(buffer) {
         setTimeout(() => URL.revokeObjectURL(url), 2000);
         toast('✓ Скачан: ' + dl.name);
       }
+      dl.onDone?.();
     }
   } catch (e) { console.error('Binary chunk error', e); toast('Ошибка данных: ' + e.message, true); }
 }
@@ -1736,14 +1733,18 @@ function renderGalleryItems(m) {
     div.className = 'gp-item';
     div.innerHTML = `<div class="gp-thumb" data-thumb-id="${item.id}" data-mtype="${m.mediaType}"><div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div></div><div class="gp-dl-overlay">⬇ Скачать</div>`;
     div.onclick = () => {
+      if (div.dataset.downloading) return;
+      div.dataset.downloading = '1';
+      div.style.opacity = '0.5';
       const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
       toast('Загрузка…');
       phoneSend({ cmd: 'get-media-file', id: item.id, mediaType: m.mediaType, requestId });
+      const unlock = () => { delete div.dataset.downloading; div.style.opacity = ''; };
       setTimeout(() => {
         const dl = _fileDl.get(requestId);
-        if (dl && dl.bytesGot === 0) { _fileDl.delete(requestId); toast('Нет ответа от телефона', true); }
-      }, 8000);
-      _fileDl.set(requestId, { chunks: [], name: '', mime: '', total: 1, size: 0, startTs: Date.now(), bytesGot: 0 });
+        if (dl && dl.bytesGot === 0) { _fileDl.delete(requestId); toast('Нет ответа от телефона', true); unlock(); }
+      }, 15000);
+      _fileDl.set(requestId, { chunks: [], name: '', mime: '', total: 1, size: 0, startTs: Date.now(), bytesGot: 0, onDone: unlock });
     };
     grid.appendChild(div);
     phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });
