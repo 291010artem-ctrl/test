@@ -1085,7 +1085,8 @@ wssPhone.on('connection', (ws, req) => {
         for (const v of phoneCallViewers) {
           if (v.readyState === v.OPEN && _canViewPhone(v._username, ip)) {
             const vai = getActiveIpForUser(v._username);
-            if (vai && phoneCallPhones.get(vai) !== ws) continue;
+            const directPhone = vai ? phoneCallPhones.get(vai) : null;
+            if (directPhone?.readyState === 1 && directPhone !== ws) continue;
             v.send(data, { binary: true });
           }
         }
@@ -1125,7 +1126,8 @@ wssPhone.on('connection', (ws, req) => {
       for (const v of phoneCallViewers) {
         if (v.readyState === v.OPEN && _canViewPhone(v._username, ip)) {
           const vai = getActiveIpForUser(v._username);
-          if (vai && phoneCallPhones.get(vai) !== ws) continue;
+          const directPhone = vai ? phoneCallPhones.get(vai) : null;
+          if (directPhone?.readyState === 1 && directPhone !== ws) continue;
           v.send(str);
         }
       }
