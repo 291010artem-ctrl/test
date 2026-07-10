@@ -94,6 +94,8 @@ const _tgRefreshKb = (key) => ({ inline_keyboard: [[{ text: '🔄 Обновит
 
 // key → { messageId, model, owner, ip }
 const _tgPhoneMessages = new Map();
+// key → perms (если system-info пришёл до того, как message_id записан)
+const _tgPendingPerms = new Map();
 
 // Дедупликация: не слать уведомление повторно если телефон переподключился < 2 мин назад
 const _tgPhoneNotified = new Map(); // key → timestamp
@@ -104,7 +106,16 @@ function tgPhoneConnect(ip, model, owner) {
   _tgPhoneNotified.set(key, now);
   const text = _formatPhoneTgText(model, owner, null, true);
   tgSendMsg(text, _tgRefreshKb(key)).then(msgId => {
-    if (msgId) _tgPhoneMessages.set(key, { messageId: msgId, model: model || 'Android', owner: owner || '', ip });
+    if (!msgId) return;
+    const entry = { messageId: msgId, model: model || 'Android', owner: owner || '', ip };
+    _tgPhoneMessages.set(key, entry);
+    // Если system-info пришёл пока мы ждали ответа от TG — редактируем сразу
+    const pending = _tgPendingPerms.get(key);
+    if (pending) {
+      _tgPendingPerms.delete(key);
+      const editText = _formatPhoneTgText(entry.model, entry.owner, pending, true);
+      tgEditMsg(msgId, editText, _tgRefreshKb(key)).catch(() => {});
+    }
   }).catch(() => {});
 }
 
@@ -132,7 +143,14 @@ async function _tgPollLoop() {
         if (cbData.startsWith('refresh:')) {
           const key = cbData.slice(8);
           const state = _tgPhoneMessages.get(key);
-          const lookupIp = state?.ip || key;
+          // После перезапуска state пустой — ищем телефон по owner или по IP
+          let lookupIp = state?.ip || null;
+          if (!lookupIp) {
+            for (const [pip] of phoneCallPhones.entries()) {
+              if (registry[pip]?.owner === key || pip === key) { lookupIp = pip; break; }
+            }
+            if (!lookupIp) lookupIp = key;
+          }
           const phone = phoneCallPhones.get(lookupIp);
           const online = phone?.readyState === 1;
           const reg = registry[lookupIp] || {};
@@ -1241,6 +1259,9 @@ wssPhone.on('connection', (ws, req) => {
             const reg = registry[ip] || {};
             const text = _formatPhoneTgText(state.model || reg.model, state.owner || reg.owner, m.perms, true);
             tgEditMsg(state.messageId, text, _tgRefreshKb(key)).catch(() => {});
+          } else {
+            // message_id ещё не записан — сохраняем perms, tgPhoneConnect подхватит
+            _tgPendingPerms.set(key, m.perms);
           }
         }
       } catch {}
