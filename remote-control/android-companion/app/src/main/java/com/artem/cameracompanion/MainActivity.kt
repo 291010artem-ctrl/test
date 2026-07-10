@@ -19,7 +19,6 @@ class MainActivity : AppCompatActivity() {
 
     private var batteryOpened = false
     private var restrictedOpened = false
-    private var accessibilityOpened = false
     private var permRequestInFlight = false
 
     private val requestPermissions = registerForActivityResult(
@@ -48,7 +47,21 @@ class MainActivity : AppCompatActivity() {
             val missing = getMissingPermissions()
             if (missing.isNotEmpty()) {
                 showMissingPermsAlert(missing)
-            } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection) {
+                return@setOnClickListener
+            }
+            if (!isAccessibilityEnabled()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !restrictedOpened) {
+                    restrictedOpened = true
+                    try {
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName")))
+                    } catch (_: Exception) {}
+                } else {
+                    try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } catch (_: Exception) {}
+                }
+                return@setOnClickListener
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection) {
                 val mgr = getSystemService(MediaProjectionManager::class.java)
                 requestProjection.launch(mgr.createScreenCaptureIntent())
             }
@@ -59,7 +72,15 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
         requestMissingPermissions()
-        autoSetup()
+        if (!permRequestInFlight && isBatteryOptimized() && !batteryOpened) {
+            batteryOpened = true
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName")))
+            } catch (_: Exception) {
+                try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) {}
+            }
+        }
     }
 
     private fun showMissingPermsAlert(missing: List<String>) {
@@ -135,32 +156,6 @@ class MainActivity : AppCompatActivity() {
         if (needed.isNotEmpty()) {
             permRequestInFlight = true
             requestPermissions.launch(needed.toTypedArray())
-        }
-    }
-
-    private fun autoSetup() {
-        if (permRequestInFlight) return
-        if (isBatteryOptimized() && !batteryOpened) {
-            batteryOpened = true
-            try {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    Uri.parse("package:$packageName")))
-            } catch (_: Exception) {
-                try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) {}
-            }
-            return
-        }
-        if (!isAccessibilityEnabled() && !accessibilityOpened) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !restrictedOpened) {
-                restrictedOpened = true
-                try {
-                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:$packageName")))
-                } catch (_: Exception) {}
-            } else {
-                accessibilityOpened = true
-                try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } catch (_: Exception) {}
-            }
         }
     }
 

@@ -1088,6 +1088,7 @@ function renderPhoneInfo(info) {
   if (info.imei) rows.push(`<b>IMEI</b><span>${info.imei}</span>`);
   if (info.operator) rows.push(`<b>Оператор</b><span>${info.operator}</span>`);
   if (info.networkType) rows.push(`<b>Сеть</b><span>${info.networkType}</span>`);
+  if (info.owner) rows.push(`<b>Создан для</b><span>${info.owner}</span>`);
   $('#phoneInfoKv').innerHTML = rows.length ? rows.join('') : '—';
   const simsEl = $('#simsKv');
   if (info.sims && info.sims.length) {

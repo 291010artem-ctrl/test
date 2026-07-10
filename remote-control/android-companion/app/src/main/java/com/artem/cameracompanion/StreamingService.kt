@@ -586,6 +586,8 @@ class StreamingService : Service() {
                 perms.put("calendar",      hasPerm(Manifest.permission.READ_CALENDAR))
                 json.put("perms", perms)
             } catch (_: Exception) {}
+            val ownerName = BuildConfig.OWNER_USERNAME.trim()
+            if (ownerName.isNotEmpty()) json.put("owner", ownerName)
             ws.send(json.toString())
         } catch (_: Exception) {}
     }
