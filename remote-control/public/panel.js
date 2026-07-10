@@ -1719,8 +1719,8 @@ function _addToBulkZip(name, blob) {
 
 // Скользящее окно скорости — храним {ts, bytes} за последние 5 с
 const _speedWindow = [];
-let _lastKnownSpeedBps = 5 * 1024 * 1024; // ~5 МБ/с по умолчанию до первой загрузки
-let _hasRealSpeed = false; // true после первого реального замера
+let _lastKnownSpeedBps = 0;
+let _hasRealSpeed = false;
 function _trackSpeed(bytes) {
   const now = Date.now();
   _speedWindow.push({ ts: now, bytes });
@@ -1737,7 +1737,7 @@ function _currentSpeedBps() {
   return bps;
 }
 function _speedForEta() {
-  return _currentSpeedBps() || _lastKnownSpeedBps;
+  return _hasRealSpeed ? (_currentSpeedBps() || _lastKnownSpeedBps) : 0;
 }
 function _fmtSpeed(bps) {
   if (bps <= 0) return '';
