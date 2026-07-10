@@ -360,7 +360,9 @@ app.get('/api/phones', (req, res) => {
   if (!s) return res.status(401).json({ error: 'Unauthorized' });
   const username = s.username;
   const full = buildFullPhoneList();
-  const list = usersDb[username]?.admin ? full : full.filter(p => _canViewPhone(username, p.ip));
+  const isAdm = !!(usersDb[username]?.admin);
+  const list = isAdm ? full : full.filter(p => _canViewPhone(username, p.ip));
+  dbg(`[API/PHONES] user=${username} admin=${isAdm} full=${full.length} returned=${list.length} canView=${full.map(p=>_canViewPhone(username,p.ip)).join(',')}`);
   res.json({ phones: list, activeIp: getActiveIpForUser(username) });
 });
 
