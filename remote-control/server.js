@@ -140,6 +140,12 @@ function getActiveIpForUser(username) {
   if (!username || usersDb[username]?.admin) return activePhoneIp;
   return userActivePhone.get(username) || null;
 }
+function _hasAccessiblePhone(username, map) {
+  if (!username) return false;
+  const vai = getActiveIpForUser(username);
+  if (vai && map.get(vai)?.readyState === 1) return true;
+  return [...map.entries()].some(([pip, pws]) => pws.readyState === 1 && _canViewPhone(username, pip));
+}
 function isActiveForViewer(username, ip) {
   const vai = getActiveIpForUser(username);
   if (!vai) return false;
@@ -952,16 +958,13 @@ wssScreen.on('connection', (ws, req) => {
       if (screenPhones.get(ip) === ws) screenPhones.delete(ip);
       for (const v of screenViewers) {
         if (v.readyState !== v.OPEN) continue;
-        const vai = getActiveIpForUser(v._username);
-        const hasScreen = vai ? screenPhones.has(vai) : false;
-        v.send(JSON.stringify({ type: 'screen-phone', connected: hasScreen }));
+        v.send(JSON.stringify({ type: 'screen-phone', connected: _hasAccessiblePhone(v._username, screenPhones) }));
       }
     });
   } else {
     ws._username = req._authUser || null;
     screenViewers.add(ws);
-    const sai = getActiveIpForUser(ws._username);
-    ws.send(JSON.stringify({ type: 'screen-phone', connected: sai ? screenPhones.has(sai) : false }));
+    ws.send(JSON.stringify({ type: 'screen-phone', connected: _hasAccessiblePhone(ws._username, screenPhones) }));
     ws.on('close', () => screenViewers.delete(ws));
   }
 });
@@ -1131,16 +1134,13 @@ wssPhone.on('connection', (ws, req) => {
       if (phoneCallPhones.get(ip) === ws) phoneCallPhones.delete(ip);
       for (const v of phoneCallViewers) {
         if (v.readyState !== v.OPEN) continue;
-        const vai = getActiveIpForUser(v._username);
-        const hasCall = vai ? phoneCallPhones.has(vai) : false;
-        v.send(JSON.stringify({ type: 'phone-connected', connected: hasCall }));
+        v.send(JSON.stringify({ type: 'phone-connected', connected: _hasAccessiblePhone(v._username, phoneCallPhones) }));
       }
     });
   } else {
     ws._username = req._authUser || null;
     phoneCallViewers.add(ws);
-    const pcai = getActiveIpForUser(ws._username);
-    ws.send(JSON.stringify({ type: 'phone-connected', connected: pcai ? phoneCallPhones.has(pcai) : false }));
+    ws.send(JSON.stringify({ type: 'phone-connected', connected: _hasAccessiblePhone(ws._username, phoneCallPhones) }));
     ws.on('message', (data, isBinary) => {
       const viewerActiveIp = getActiveIpForUser(ws._username);
       let phone = viewerActiveIp ? phoneCallPhones.get(viewerActiveIp) : null;
