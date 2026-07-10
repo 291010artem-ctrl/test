@@ -1143,10 +1143,9 @@ export function startServer({ port = PORT, host = HOST } = {}) {
   });
 }
 
-// Если файл запущен напрямую (node server.js / pm2) — стартуем сервер.
-// Резолвим симлинки чтобы пути совпадали независимо от того, абсолютный или
-// симлинк-путь передал pm2 в process.argv[1].
-const isDirectRun = (() => {
+// AUTO_START=1 устанавливается pm2 (ecosystem.config.cjs).
+// Прямой запуск: node server.js — сравниваем пути с резолвингом симлинков.
+const isDirectRun = !!process.env.AUTO_START || (() => {
   try {
     if (!process.argv[1]) return false;
     const a = fs.realpathSync(path.resolve(process.argv[1]));
