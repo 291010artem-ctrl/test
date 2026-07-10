@@ -521,6 +521,7 @@ function startCamViewer(cam) {
     if (typeof ev.data === 'string') {
       const m = JSON.parse(ev.data);
       if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
+      else if (m.type === 'phones') { renderPickerPhones(m.list); }
       else if (m.type === 'cam-status') {
         if (m.text === 'ok') {
           specificCamStatus = null;

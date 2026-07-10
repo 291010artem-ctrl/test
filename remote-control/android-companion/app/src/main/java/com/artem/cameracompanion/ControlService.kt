@@ -62,7 +62,8 @@ class ControlService : AccessibilityService() {
         val base = serverBase
         if (base.isEmpty()) return
         val model = Uri.encode(Build.MODEL ?: "Android")
-        http.newWebSocket(Request.Builder().url("$base/control?role=phone&model=$model").build(),
+        val owner = BuildConfig.OWNER_USERNAME.trim().let { if (it.isNotEmpty()) "&owner=${Uri.encode(it)}" else "" }
+        http.newWebSocket(Request.Builder().url("$base/control?role=phone&model=$model$owner").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) { wsControl = ws }
                 override fun onMessage(ws: WebSocket, text: String) {
