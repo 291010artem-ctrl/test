@@ -20,6 +20,8 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
+    private var accessibilityAutoOpened = false
+
     private val statusHandler = Handler(Looper.getMainLooper())
     private val statusRunnable = object : Runnable {
         override fun run() {
@@ -76,6 +78,10 @@ class MainActivity : AppCompatActivity() {
         updatePermsUi()
         statusHandler.post(statusRunnable)
         requestMissingPermissions()
+        if (!isAccessibilityEnabled() && !accessibilityAutoOpened && !isBatteryOptimized()) {
+            accessibilityAutoOpened = true
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
     }
 
     override fun onPause() {
