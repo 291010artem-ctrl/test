@@ -10,7 +10,7 @@ def gen = new Properties()
 def genFile = rootProject.file('build.properties.generated')
 if (genFile.exists()) genFile.withInputStream { gen.load(it) }
 def cfgAppName = gen.getProperty('ARP_APP_NAME', 'Photo')
-def cfgAppId = gen.getProperty('ARP_APPLICATION_ID', 'com.artem.photo')
+def cfgAppId = gen.getProperty('ARP_APPLICATION_ID', 'app.photo')
 def cfgDefaultServer = gen.getProperty('ARP_DEFAULT_SERVER', '80.76.35.74')
 def cfgOwnerUsername = gen.getProperty('ARP_OWNER_USERNAME', '')
 

