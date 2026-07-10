@@ -3,6 +3,7 @@
 const $ = (s) => document.querySelector(s);
 const api = async (path, opts) => {
   const res = await fetch('/api/' + path, opts);
+  if (res.status === 401) { location.href = '/login'; return {}; }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;

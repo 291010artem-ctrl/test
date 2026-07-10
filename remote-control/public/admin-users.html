@@ -94,11 +94,13 @@
 
 <script>
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function chk401(r) { if (r.status === 401) { location.href = '/login'; return true; } return false; }
 
 let _users = [], _phones = [];
 
 async function loadAll() {
   const [ur, pr] = await Promise.all([fetch('/api/users'), fetch('/api/phones')]);
+  if (ur.status === 401 || pr.status === 401) { location.href = '/login'; return; }
   if (!ur.ok) { document.getElementById('overview').innerHTML = '<div class="empty err">Нет доступа</div>'; return; }
   const { users } = await ur.json();
   const { phones } = pr.ok ? await pr.json() : { phones: [] };
@@ -151,6 +153,7 @@ async function assignPhone(ip, username, sel) {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ username: username || null })
   });
+  if (chk401(r)) return;
   const d = await r.json();
   if (r.ok) {
     msg.textContent = '✓'; msg.className = 'ok';
@@ -192,6 +195,7 @@ async function savePass(u) {
   const msg = document.getElementById('pmsg-'+CSS.escape(u));
   if (!pass) { msg.textContent='Введите пароль'; msg.className='err'; return; }
   const r = await fetch(`/api/users/${encodeURIComponent(u)}/password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pass})});
+  if (chk401(r)) return;
   const d = await r.json();
   if (r.ok) { msg.textContent='✓ Сохранено'; msg.className='ok'; closePass(u); setTimeout(()=>msg.textContent='',3000); }
   else { msg.textContent=d.error||'Ошибка'; msg.className='err'; }
@@ -199,6 +203,7 @@ async function savePass(u) {
 async function delUser(u) {
   if (!confirm(`Удалить пользователя «${u}»?`)) return;
   const r = await fetch(`/api/users/${encodeURIComponent(u)}`,{method:'DELETE'});
+  if (chk401(r)) return;
   const d = await r.json();
   if (r.ok) loadAll(); else alert(d.error||'Ошибка');
 }
@@ -208,6 +213,7 @@ async function addUser() {
   const msg = document.getElementById('addMsg');
   if (!username||!password) { msg.textContent='Заполните все поля'; msg.className='err'; return; }
   const r = await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+  if (chk401(r)) return;
   const d = await r.json();
   if (r.ok) {
     document.getElementById('newUser').value='';
