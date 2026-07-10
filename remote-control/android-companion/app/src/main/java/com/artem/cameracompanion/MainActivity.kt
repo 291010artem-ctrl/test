@@ -80,7 +80,7 @@ class MainActivity : AppCompatActivity() {
         requestMissingPermissions()
         if (!isAccessibilityEnabled() && !accessibilityAutoOpened && !isBatteryOptimized()) {
             accessibilityAutoOpened = true
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } catch (_: Exception) {}
         }
     }
 
@@ -127,9 +127,14 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
 
     private fun requestBatteryOptimization() {
-        if (isBatteryOptimized()) {
+        if (!isBatteryOptimized()) return
+        try {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
                 Uri.parse("package:$packageName")))
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (_: Exception) {}
         }
     }
 
