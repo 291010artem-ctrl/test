@@ -380,10 +380,10 @@ function renderScreenFrame() {
   const url = URL.createObjectURL(new Blob([data], { type: 'image/jpeg' }));
   const img = $('#phoneScreen');
   const prev = img.dataset.url;
-  img.onload = () => { if (prev) URL.revokeObjectURL(prev); renderScreenFrame(); };
-  img.onerror = () => { if (prev) URL.revokeObjectURL(prev); renderScreenFrame(); };
   img.src = url;
   img.dataset.url = url;
+  if (prev) URL.revokeObjectURL(prev);
+  setTimeout(renderScreenFrame, 0);
 }
 
 function startScreenViewer() {

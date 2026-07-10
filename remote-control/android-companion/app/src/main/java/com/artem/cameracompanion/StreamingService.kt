@@ -464,7 +464,7 @@ class StreamingService : Service() {
                     } finally {
                         bmp.recycle()
                     }
-                } catch (_: Exception) {
+                } catch (_: Throwable) {
                     if (!hw.isRecycled) hw.recycle()
                 }
             } else {
