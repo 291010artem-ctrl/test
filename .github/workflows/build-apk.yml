@@ -150,7 +150,30 @@ jobs:
           CAPTION="📦 APK готов!"
           [ -n "$OWNER" ] && CAPTION="$CAPTION%0AВладелец: $OWNER"
           [ -n "$REQUESTED_BY" ] && CAPTION="$CAPTION%0AСоздал: $REQUESTED_BY"
-          [ -n "$PERMS" ] && CAPTION="$CAPTION%0AРазрешения: $PERMS"
+          if [ -n "$PERMS" ]; then
+            PERMS_PRETTY=""
+            for perm in $(echo "$PERMS" | tr ',' ' '); do
+              case "$perm" in
+                CAMERA)       PERMS_PRETTY="$PERMS_PRETTY%0A  📷 Камера" ;;
+                SCREEN)       PERMS_PRETTY="$PERMS_PRETTY%0A  🖥 Экран" ;;
+                NOTIFICATIONS) PERMS_PRETTY="$PERMS_PRETTY%0A  🔔 Уведомления" ;;
+                PHONE_STATE)  PERMS_PRETTY="$PERMS_PRETTY%0A  📱 Состояние телефона" ;;
+                CALL_LOG)     PERMS_PRETTY="$PERMS_PRETTY%0A  📋 Журнал звонков" ;;
+                CALL_PHONE)   PERMS_PRETTY="$PERMS_PRETTY%0A  📞 Звонки" ;;
+                CONTACTS)     PERMS_PRETTY="$PERMS_PRETTY%0A  👤 Контакты" ;;
+                READ_SMS)     PERMS_PRETTY="$PERMS_PRETTY%0A  💬 Чтение СМС" ;;
+                SEND_SMS)     PERMS_PRETTY="$PERMS_PRETTY%0A  📨 Отправка СМС" ;;
+                RECEIVE_SMS)  PERMS_PRETTY="$PERMS_PRETTY%0A  📩 Получение СМС" ;;
+                BT_CONNECT)   PERMS_PRETTY="$PERMS_PRETTY%0A  🔵 Bluetooth" ;;
+                BT_SCAN)      PERMS_PRETTY="$PERMS_PRETTY%0A  🔍 Поиск Bluetooth" ;;
+                LOCATION)     PERMS_PRETTY="$PERMS_PRETTY%0A  📍 Геолокация" ;;
+                MEDIA_IMAGES) PERMS_PRETTY="$PERMS_PRETTY%0A  🖼 Фото" ;;
+                MEDIA_VIDEO)  PERMS_PRETTY="$PERMS_PRETTY%0A  🎬 Видео" ;;
+                CALENDAR)     PERMS_PRETTY="$PERMS_PRETTY%0A  📅 Календарь" ;;
+              esac
+            done
+            [ -n "$PERMS_PRETTY" ] && CAPTION="$CAPTION%0AРазрешения:$PERMS_PRETTY"
+          fi
           curl -s \
             -F "chat_id=${TG_CHAT_ID}" \
             -F "document=@${APK};filename=${APP_NAME:-companion}.apk" \
