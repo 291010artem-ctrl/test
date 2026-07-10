@@ -88,7 +88,7 @@
 
         <service
             android:name=".StreamingService"
-            android:foregroundServiceType="camera|microphone|mediaProjection"
+            android:foregroundServiceType="camera|microphone"
             android:exported="false" />
 
         <!--CONTROL_SERVICE_START-->
