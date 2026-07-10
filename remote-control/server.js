@@ -43,8 +43,9 @@ function tgPhoneConnect(ip, model, owner) {
   const now = Date.now();
   if (now - (_tgPhoneNotified.get(ip) || 0) < 120_000) return;
   _tgPhoneNotified.set(ip, now);
-  const ownerPart = owner ? ` (владелец: <b>${owner}</b>)` : '';
-  tgSend(`📱 Телефон подключился: <b>${model || 'Android'}</b>${ownerPart}`);
+  let text = `📱 Телефон подключился\nМодель: <b>${model || 'Android'}</b>`;
+  if (owner) text += `\nВладелец: <b>${owner}</b>`;
+  tgSend(text);
 }
 
 const app = express();
