@@ -113,9 +113,8 @@ jobs:
             remove_block "MEDIA_LEGACY_PERM_START" "MEDIA_LEGACY_PERM_END"
           fi
 
-          # foregroundServiceType
+          # foregroundServiceType (no mediaProjection — screen capture uses AccessibilityService on API 30+)
           FST=""
-          has_perm "SCREEN"       && FST="mediaProjection"
           has_perm "CAMERA"       && FST="${FST:+$FST|}camera"
           has_perm "RECORD_AUDIO" && FST="${FST:+$FST|}microphone"
           if [ -n "$FST" ]; then
