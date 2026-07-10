@@ -1143,9 +1143,17 @@ export function startServer({ port = PORT, host = HOST } = {}) {
   });
 }
 
-// Если файл запущен напрямую (node server.js) — стартуем в «браузерном» режиме.
-const isDirectRun = process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// Если файл запущен напрямую (node server.js / pm2) — стартуем сервер.
+// Резолвим симлинки чтобы пути совпадали независимо от того, абсолютный или
+// симлинк-путь передал pm2 в process.argv[1].
+const isDirectRun = (() => {
+  try {
+    if (!process.argv[1]) return false;
+    const a = fs.realpathSync(path.resolve(process.argv[1]));
+    const b = fs.realpathSync(fileURLToPath(import.meta.url));
+    return a === b;
+  } catch { return false; }
+})();
 
 if (isDirectRun) {
   startServer().then(({ port }) => {
