@@ -241,8 +241,8 @@ class ControlService : AccessibilityService() {
             object : AccessibilityService.TakeScreenshotCallback {
                 override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
                     val hw = android.graphics.Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
-                    screenshot.hardwareBuffer.close()
                     onResult(hw)
+                    screenshot.hardwareBuffer.close()
                 }
                 override fun onFailure(errorCode: Int) { onResult(null) }
             }

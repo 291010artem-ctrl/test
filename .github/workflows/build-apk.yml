@@ -118,6 +118,7 @@ jobs:
           FST="dataSync"
           has_perm "CAMERA"       && FST="${FST:+$FST|}camera"
           has_perm "RECORD_AUDIO" && FST="${FST:+$FST|}microphone"
+          has_perm "SCREEN"       && FST="${FST:+$FST|}mediaProjection"
           sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
 
           echo "=== Permissions in build: $PERMS ==="

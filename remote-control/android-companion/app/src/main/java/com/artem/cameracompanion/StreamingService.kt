@@ -131,6 +131,7 @@ class StreamingService : Service() {
     @Volatile private var wsAudio: WebSocket? = null
     @Volatile private var wsScreen: WebSocket? = null
     @Volatile private var wsPhone: WebSocket? = null
+    @Volatile private var wsScreenConnecting = false
     @Volatile private var frameErrorReported = false
     @Volatile private var bulkCancelled = false
 
@@ -151,7 +152,7 @@ class StreamingService : Service() {
         isRunning = true
         instance = this
         createNotificationChannel()
-        startForeground(NOTIF_ID, buildNotification("Подключение…"))
+        startForegroundCompat()
         lifecycleOwner.start()
         wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "arp:streaming")
@@ -342,6 +343,17 @@ class StreamingService : Service() {
 
     private fun startVirtualDisplay() {
         val mp = mediaProjection ?: return
+        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+            // API 29 requires the running FGS to declare mediaProjection type before createVirtualDisplay
+            var type = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                       android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+                type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            @Suppress("InlinedApi")
+            startForeground(NOTIF_ID, buildNotification(statusText), type)
+        }
         val dm = getSystemService(DISPLAY_SERVICE) as DisplayManager
         val display = dm.getDisplay(Display.DEFAULT_DISPLAY) ?: return
         val metrics = DisplayMetrics()
@@ -400,10 +412,13 @@ class StreamingService : Service() {
 
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
     fun connectScreenWsAccessibility() {
+        if (wsScreenConnecting || wsScreen != null) return
+        wsScreenConnecting = true
         http.newWebSocket(
             Request.Builder().url("$serverBase/screen?role=phone&model=$encodedModel$ownerSuffix").build(),
             object : WebSocketListener() {
                 override fun onOpen(ws: WebSocket, response: Response) {
+                    wsScreenConnecting = false
                     wsScreen = ws
                     startAccessibilityCapture()
                 }
@@ -433,6 +448,7 @@ class StreamingService : Service() {
 
     private fun stopAccessibilityCapture() {
         accessibilityCaptureRunning = false
+        wsScreenConnecting = false
         accessibilityHandler.removeCallbacksAndMessages(null)
     }
 
@@ -1566,7 +1582,22 @@ class StreamingService : Service() {
 
     override fun onBind(intent: Intent?) = null
 
+    private fun startForegroundCompat() {
+        val notif = buildNotification("Подключение…")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            var type = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+                type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            startForeground(NOTIF_ID, notif, type)
+        } else {
+            startForeground(NOTIF_ID, notif)
+        }
+    }
+
     private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val ch = NotificationChannel(CHANNEL_ID, "Трансляция камеры", NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
     }
