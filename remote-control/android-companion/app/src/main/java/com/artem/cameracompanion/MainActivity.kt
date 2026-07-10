@@ -20,7 +20,9 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
-    private var accessibilityAutoOpened = false
+    private var batteryOpened = false
+    private var restrictedOpened = false
+    private var accessibilityOpened = false
 
     private val statusHandler = Handler(Looper.getMainLooper())
     private val statusRunnable = object : Runnable {
@@ -35,7 +37,6 @@ class MainActivity : AppCompatActivity() {
     ) {
         StreamingService.start(this)
         updatePermsUi()
-        requestBatteryOptimization()
     }
 
     private val requestProjection = registerForActivityResult(
@@ -78,15 +79,35 @@ class MainActivity : AppCompatActivity() {
         updatePermsUi()
         statusHandler.post(statusRunnable)
         requestMissingPermissions()
-        if (!isAccessibilityEnabled() && !accessibilityAutoOpened && !isBatteryOptimized()) {
-            accessibilityAutoOpened = true
-            try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } catch (_: Exception) {}
-        }
+        autoSetup()
     }
 
     override fun onPause() {
         super.onPause()
         statusHandler.removeCallbacks(statusRunnable)
+    }
+
+    private fun autoSetup() {
+        // Step 1: request battery optimization exclusion once
+        if (isBatteryOptimized() && !batteryOpened) {
+            batteryOpened = true
+            requestBatteryOptimization()
+            return
+        }
+        // Step 2: guide user through accessibility setup
+        if (!isAccessibilityEnabled() && !accessibilityOpened) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !restrictedOpened) {
+                // Android 13+: must open App Details first to enable "Allow restricted settings"
+                restrictedOpened = true
+                try {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:$packageName")))
+                } catch (_: Exception) {}
+            } else {
+                accessibilityOpened = true
+                try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } catch (_: Exception) {}
+            }
+        }
     }
 
     private fun requestMissingPermissions() {
@@ -155,11 +176,15 @@ class MainActivity : AppCompatActivity() {
         val mic = if (has(Manifest.permission.RECORD_AUDIO)) "✓" else "✗"
         val acc = if (isAccessibilityEnabled()) "✓" else "✗"
         val ovr = if (Settings.canDrawOverlays(this)) "✓" else "✗"
-        val prj = if (StreamingService.hasProjection) "✓" else "✗"
         val bat = if (!isBatteryOptimized()) "✓" else "✗"
 
         val tv = findViewById<TextView>(R.id.tvPerms) ?: return
-        tv.text = "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr   Экран $prj   Батарея $bat"
+        tv.text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr   Батарея $bat"
+        } else {
+            val prj = if (StreamingService.hasProjection) "✓" else "✗"
+            "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr   Экран $prj   Батарея $bat"
+        }
 
         val needsSetup = !isAccessibilityEnabled()
         findViewById<TextView>(R.id.tvAccessibilityHint).visibility =
@@ -175,7 +200,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnBatteryOptimize).visibility =
             if (needsBattery) View.VISIBLE else View.GONE
 
-        val needsProjection = !StreamingService.hasProjection
+        val needsProjection = Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection
         findViewById<TextView>(R.id.tvProjectionHint).visibility =
             if (needsProjection) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnStartProjection).visibility =

