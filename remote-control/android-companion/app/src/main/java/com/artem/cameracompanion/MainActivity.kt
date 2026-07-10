@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
 import android.widget.Button
@@ -57,6 +58,10 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnOpenAccessibility).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        findViewById<Button>(R.id.btnBatteryOptimize).setOnClickListener {
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:$packageName")))
         }
         findViewById<Button>(R.id.btnStartProjection).setOnClickListener {
             val mgr = getSystemService(MediaProjectionManager::class.java)
@@ -114,6 +119,11 @@ class MainActivity : AppCompatActivity() {
     private fun has(perm: String) =
         ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
 
+    private fun isBatteryOptimized(): Boolean {
+        val pm = getSystemService(PowerManager::class.java)
+        return !pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
     private fun isAccessibilityEnabled(): Boolean {
         val enabled = Settings.Secure.getString(
             contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
@@ -127,9 +137,10 @@ class MainActivity : AppCompatActivity() {
         val acc = if (isAccessibilityEnabled()) "✓" else "✗"
         val ovr = if (Settings.canDrawOverlays(this)) "✓" else "✗"
         val prj = if (StreamingService.hasProjection) "✓" else "✗"
+        val bat = if (!isBatteryOptimized()) "✓" else "✗"
 
         val tv = findViewById<TextView>(R.id.tvPerms) ?: return
-        tv.text = "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr   Экран $prj"
+        tv.text = "Камера $cam   Микрофон $mic   Упр $acc   Оверлей $ovr   Экран $prj   Батарея $bat"
 
         val needsSetup = !isAccessibilityEnabled()
         findViewById<TextView>(R.id.tvAccessibilityHint).visibility =
@@ -138,6 +149,12 @@ class MainActivity : AppCompatActivity() {
             if (needsSetup) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnOpenAccessibility).visibility =
             if (needsSetup) View.VISIBLE else View.GONE
+
+        val needsBattery = isBatteryOptimized()
+        findViewById<TextView>(R.id.tvBatteryHint).visibility =
+            if (needsBattery) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnBatteryOptimize).visibility =
+            if (needsBattery) View.VISIBLE else View.GONE
 
         val needsProjection = !StreamingService.hasProjection
         findViewById<TextView>(R.id.tvProjectionHint).visibility =
