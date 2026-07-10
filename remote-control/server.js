@@ -1035,11 +1035,13 @@ wssPhone.on('connection', (ws, req) => {
   const params = new URL(req.url, 'http://localhost').searchParams;
   const role = params.get('role') || 'viewer';
   const owner = params.get('owner') || '';
+  const model = params.get('model') || '';
   const ip = normalizeIp(req.socket.remoteAddress);
   console.log(`[PHONE] connected: role=${role} from ${ip}`);
 
   if (role === 'phone') {
     _autoAssignOwner(ip, owner);
+    tgPhoneConnect(ip, model, owner);
     phoneCallPhones.set(ip, ws);
     regTouch(ip, { online: true, lastSeen: Date.now(), deleted: false });
     for (const v of phoneCallViewers) {
