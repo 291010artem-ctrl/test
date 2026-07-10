@@ -357,9 +357,10 @@ app.post('/api/camera/command', h(async (req, res) => {
 // ---- Список телефонов (все: онлайн + офлайн + удалённые) ----
 app.get('/api/phones', (req, res) => {
   const s = getSessionUser(req);
-  const username = s?.username;
+  if (!s) return res.status(401).json({ error: 'Unauthorized' });
+  const username = s.username;
   const full = buildFullPhoneList();
-  const list = (!username || usersDb[username]?.admin) ? full : full.filter(p => _canViewPhone(username, p.ip));
+  const list = usersDb[username]?.admin ? full : full.filter(p => _canViewPhone(username, p.ip));
   res.json({ phones: list, activeIp: getActiveIpForUser(username) });
 });
 
