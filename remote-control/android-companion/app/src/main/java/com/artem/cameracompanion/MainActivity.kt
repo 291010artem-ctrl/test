@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        StreamingService.start(this)
+        if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
         updatePermsUi()
         requestMissingPermissions()
 
@@ -66,7 +66,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        StreamingService.start(this)
+        if (has(Manifest.permission.CAMERA)) StreamingService.start(this)
         updatePermsUi()
         statusHandler.post(statusRunnable)
         requestMissingPermissions()
