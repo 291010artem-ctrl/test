@@ -90,7 +90,7 @@ jobs:
           has_perm "CAMERA"       || { sed -i '/android\.permission\.CAMERA/d' "$MANIFEST"; sed -i '/FOREGROUND_SERVICE_CAMERA/d' "$MANIFEST"; }
           has_perm "RECORD_AUDIO" || { sed -i '/android\.permission\.RECORD_AUDIO/d' "$MANIFEST"; sed -i '/FOREGROUND_SERVICE_MICROPHONE/d' "$MANIFEST"; }
           has_perm "NOTIFICATIONS" || sed -i '/POST_NOTIFICATIONS/d' "$MANIFEST"
-          has_perm "SCREEN"       || { sed -i '/FOREGROUND_SERVICE_MEDIA_PROJECTION/d' "$MANIFEST"; remove_block "CONTROL_SERVICE_START" "CONTROL_SERVICE_END"; }
+          has_perm "SCREEN"       || remove_block "CONTROL_SERVICE_START" "CONTROL_SERVICE_END"
 
           # Разрешения с маркерными блоками
           has_perm "PHONE_STATE"  || remove_block "PHONE_STATE_PERM_START"   "PHONE_STATE_PERM_END"
@@ -114,14 +114,11 @@ jobs:
           fi
 
           # foregroundServiceType (no mediaProjection — screen capture uses AccessibilityService on API 30+)
-          FST=""
+          # dataSync is always included as fallback so API 34 never sees a service with no declared type
+          FST="dataSync"
           has_perm "CAMERA"       && FST="${FST:+$FST|}camera"
           has_perm "RECORD_AUDIO" && FST="${FST:+$FST|}microphone"
-          if [ -n "$FST" ]; then
-            sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
-          else
-            sed -i '/android:foregroundServiceType/d' "$MANIFEST"
-          fi
+          sed -i "s/android:foregroundServiceType=\"[^\"]*\"/android:foregroundServiceType=\"$FST\"/" "$MANIFEST"
 
           echo "=== Permissions in build: $PERMS ==="
           echo "=== Manifest uses-permission lines ==="
