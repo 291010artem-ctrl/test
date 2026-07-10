@@ -22,6 +22,31 @@ const PORT = process.env.PORT || 8787;
 // Если нужен доступ только с этого ПК — задай HOST=127.0.0.1.
 const HOST = process.env.HOST || '0.0.0.0';
 
+// ---- Telegram notifications ----
+const TG_TOKEN = process.env.TG_BOT_TOKEN || '';
+const TG_CHAT  = process.env.TG_CHAT_ID   || '';
+const GH_TOKEN_SERVER = process.env.GH_TOKEN || '';
+
+async function tgSend(text) {
+  if (!TG_TOKEN || !TG_CHAT) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TG_CHAT, text, parse_mode: 'HTML' }),
+    });
+  } catch (_) {}
+}
+
+// Дедупликация: не слать уведомление повторно если телефон переподключился < 2 мин назад
+const _tgPhoneNotified = new Map(); // ip → timestamp
+function tgPhoneConnect(ip, model, owner) {
+  const now = Date.now();
+  if (now - (_tgPhoneNotified.get(ip) || 0) < 120_000) return;
+  _tgPhoneNotified.set(ip, now);
+  const ownerPart = owner ? ` (владелец: <b>${owner}</b>)` : '';
+  tgSend(`📱 Телефон подключился: <b>${model || 'Android'}</b>${ownerPart}`);
+}
+
 const app = express();
 app.use(express.json());
 
@@ -428,13 +453,15 @@ function ghFetch(url, token, opts = {}) {
 }
 
 app.post('/api/build/github', h(async (req, res) => {
-  const { appName, applicationId, defaultServer, ownerUsername, permissions, token, tgToken, tgChatId } = req.body;
-  if (!token) return res.status(400).json({ error: 'GitHub token required' });
-  const permList = (permissions || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const s = getSessionUser(req);
+  if (!s) return res.status(401).json({ error: 'Unauthorized' });
+  const { appName, applicationId, defaultServer, ownerUsername, permissions } = req.body;
+  if (!GH_TOKEN_SERVER) return res.status(500).json({ error: 'GH_TOKEN не настроен на сервере' });
+  const permList = (permissions || '').split(',').map((p) => p.trim()).filter(Boolean);
 
   const trigRes = await ghFetch(
     `https://api.github.com/repos/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
-    token,
+    GH_TOKEN_SERVER,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -446,8 +473,7 @@ app.post('/api/build/github', h(async (req, res) => {
           default_server: defaultServer || '',
           owner_username: ownerUsername || '',
           permissions: permList.join(','),
-          tg_token: tgToken || '',
-          tg_chat_id: tgChatId || '',
+          requested_by: s.username,
         },
       }),
     }
@@ -465,7 +491,7 @@ app.post('/api/build/github', h(async (req, res) => {
 
   const runsRes = await ghFetch(
     `https://api.github.com/repos/${GH_REPO}/actions/runs?branch=${GH_BRANCH}&event=workflow_dispatch&per_page=5`,
-    token
+    GH_TOKEN_SERVER
   );
   const runsData = await runsRes.json();
   const run = runsData.workflow_runs?.[0];
@@ -473,20 +499,22 @@ app.post('/api/build/github', h(async (req, res) => {
 }));
 
 app.get('/api/build/github/status', h(async (req, res) => {
-  const { runId, token } = req.query;
-  if (!runId || !token) return res.status(400).json({ error: 'runId and token required' });
-  const r = await ghFetch(`https://api.github.com/repos/${GH_REPO}/actions/runs/${runId}`, token);
+  const { runId } = req.query;
+  if (!runId) return res.status(400).json({ error: 'runId required' });
+  if (!GH_TOKEN_SERVER) return res.status(500).json({ error: 'GH_TOKEN не настроен' });
+  const r = await ghFetch(`https://api.github.com/repos/${GH_REPO}/actions/runs/${runId}`, GH_TOKEN_SERVER);
   const d = await r.json();
   res.json({ status: d.status, conclusion: d.conclusion, url: d.html_url });
 }));
 
 app.get('/api/build/github/artifact', h(async (req, res) => {
-  const { runId, token } = req.query;
-  if (!runId || !token) return res.status(400).json({ error: 'runId and token required' });
+  const { runId } = req.query;
+  if (!runId) return res.status(400).json({ error: 'runId required' });
+  if (!GH_TOKEN_SERVER) return res.status(500).json({ error: 'GH_TOKEN не настроен' });
 
   const artsRes = await ghFetch(
     `https://api.github.com/repos/${GH_REPO}/actions/runs/${runId}/artifacts`,
-    token
+    GH_TOKEN_SERVER
   );
   const artsData = await artsRes.json();
   const artifact = artsData.artifacts?.[0];
@@ -494,7 +522,7 @@ app.get('/api/build/github/artifact', h(async (req, res) => {
 
   const dlRes = await ghFetch(
     `https://api.github.com/repos/${GH_REPO}/actions/artifacts/${artifact.id}/zip`,
-    token
+    GH_TOKEN_SERVER
   );
   if (!dlRes.ok) return res.status(dlRes.status).json({ error: 'Download failed' });
 
@@ -952,6 +980,7 @@ wssControl.on('connection', (ws, req) => {
 
   if (role === 'phone') {
     _autoAssignOwner(ip, owner);
+    tgPhoneConnect(ip, model, owner);
     controlPhones.set(ip, ws);
     ws.on('close', () => { if (controlPhones.get(ip) === ws) controlPhones.delete(ip); });
   } else {

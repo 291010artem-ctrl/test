@@ -130,20 +130,8 @@
             <label class="chk"><input type="checkbox" id="permLocation"> Геолокация</label>
             <label class="chk"><input type="checkbox" id="permCalendar"> Календарь</label>
           </div>
-          <label class="fld">GitHub Token <span class="muted-text">(APK собирается на GitHub Actions)</span>
-            <input id="bGhToken" type="password" placeholder="ghp_…" spellcheck="false" autocomplete="off">
-            <span class="muted-text">Personal Access Token с правом <b>workflow</b>. <a href="https://github.com/settings/tokens/new?scopes=workflow" target="_blank">Создать токен</a>. Хранится только в браузере.</span>
-          </label>
           <div class="fld">
-            <span>Telegram — APK придёт прямо в чат после сборки</span>
-            <div class="tg-row">
-              <input id="bTgToken" type="password" placeholder="Bot Token: 123456:ABC-DEF…" spellcheck="false" autocomplete="off" style="flex:2">
-              <input id="bTgChatId" placeholder="Chat ID: 123456789" spellcheck="false" style="flex:1">
-            </div>
-            <span class="muted-text">
-              1. Напиши <a href="https://t.me/BotFather" target="_blank">@BotFather</a> → /newbot → скопируй токен.<br>
-              2. Напиши своему боту /start, затем открой <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> — возьми <code>"id"</code> из <code>"chat"</code>.
-            </span>
+            <span class="muted-text">📦 Готовый APK будет отправлен в Telegram-группу автоматически.</span>
           </div>
           <button id="buildBtn" class="primary">Собрать APK</button>
           <div id="buildMsg" class="build-msg"></div>

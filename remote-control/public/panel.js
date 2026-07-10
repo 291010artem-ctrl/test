@@ -658,26 +658,8 @@ async function loadBuildTab() {
       $('#bServer').value = `${info.addresses[0].address}:${info.port}`;
     }
   } catch { /* ignore */ }
-  if (!$('#bGhToken').value) $('#bGhToken').value = localStorage.getItem('arp_gh_token') || '';
-  if (!$('#bTgToken').value) $('#bTgToken').value = localStorage.getItem('arp_tg_token') || '';
-  if (!$('#bTgChatId').value) $('#bTgChatId').value = localStorage.getItem('arp_tg_chat_id') || '';
 }
 
-$('#bGhToken').addEventListener('change', () => {
-  const v = $('#bGhToken').value.trim();
-  if (v) localStorage.setItem('arp_gh_token', v);
-  else localStorage.removeItem('arp_gh_token');
-});
-$('#bTgToken').addEventListener('change', () => {
-  const v = $('#bTgToken').value.trim();
-  if (v) localStorage.setItem('arp_tg_token', v);
-  else localStorage.removeItem('arp_tg_token');
-});
-$('#bTgChatId').addEventListener('change', () => {
-  const v = $('#bTgChatId').value.trim();
-  if (v) localStorage.setItem('arp_tg_chat_id', v);
-  else localStorage.removeItem('arp_tg_chat_id');
-});
 
 $('#buildBtn').onclick = async () => {
   const msg = $('#buildMsg');
@@ -726,13 +708,7 @@ $('#buildBtn').onclick = async () => {
       a.click(); URL.revokeObjectURL(url);
       msg.textContent = 'Готово — APK скачан. Установи его на телефон и выдай доступ к камере.';
     } else if (res.status === 501) {
-      const token = $('#bGhToken').value.trim();
-      if (token) {
-        await buildViaGitHub(token, msg, perms, ownerVal.trim());
-      } else {
-        msg.textContent = 'Введи GitHub Token — APK соберётся на GitHub Actions и придёт в Telegram (или скачается сюда).';
-        $('#bGhToken').focus();
-      }
+      await buildViaGitHub(msg, perms, ownerVal.trim());
     } else {
       const d = await res.json().catch(() => ({}));
       msg.textContent = 'Ошибка сборки: ' + (d.error || res.statusText);
@@ -740,10 +716,7 @@ $('#buildBtn').onclick = async () => {
   } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
 };
 
-async function buildViaGitHub(token, msgEl, perms = [], ownerUsername = '') {
-  const tgToken = $('#bTgToken').value.trim();
-  const tgChatId = $('#bTgChatId').value.trim();
-  const hasTg = !!(tgToken && tgChatId);
+async function buildViaGitHub(msgEl, perms = [], ownerUsername = '') {
   msgEl.textContent = 'Отправляем задание на GitHub Actions…';
   try {
     const trigRes = await fetch('/api/build/github', {
@@ -755,9 +728,6 @@ async function buildViaGitHub(token, msgEl, perms = [], ownerUsername = '') {
         defaultServer: $('#bServer').value,
         ownerUsername,
         permissions: perms.join(','),
-        token,
-        tgToken,
-        tgChatId,
       }),
     });
     const td = await trigRes.json();
@@ -770,30 +740,16 @@ async function buildViaGitHub(token, msgEl, perms = [], ownerUsername = '') {
       msgEl.innerHTML = `Сборка запущена, но ID запуска не получили. <a href="${runUrl}" target="_blank">Открыть Actions</a>`;
       return;
     }
-    const tgHint = hasTg ? ' Когда будет готово — APK придёт в Telegram.' : '';
-    msgEl.innerHTML = `Сборка идёт (#${runId})… ~2-3 мин.${tgHint}<br><a href="${runUrl}" target="_blank">Открыть в GitHub Actions</a>`;
+    msgEl.innerHTML = `Сборка идёт (#${runId})… ~2-3 мин. APK придёт в Telegram-группу.<br><a href="${runUrl}" target="_blank">Открыть в GitHub Actions</a>`;
 
     const poll = setInterval(async () => {
       try {
-        const sr = await fetch(`/api/build/github/status?runId=${runId}&token=${encodeURIComponent(token)}`);
+        const sr = await fetch(`/api/build/github/status?runId=${runId}`);
         const sd = await sr.json();
         if (sd.status === 'completed') {
           clearInterval(poll);
           if (sd.conclusion === 'success') {
-            if (hasTg) {
-              msgEl.innerHTML = `✅ Готово! APK отправлен в Telegram.<br><a href="${sd.url}" target="_blank">Посмотреть сборку</a>`;
-            } else {
-              msgEl.innerHTML = 'Сборка готова! Скачиваем APK…';
-              const a = document.createElement('a');
-              a.href = `/api/build/github/artifact?runId=${runId}&token=${encodeURIComponent(token)}`;
-              a.download = 'camera-companion-apk.zip';
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              setTimeout(() => {
-                msgEl.innerHTML = 'APK скачан (zip — внутри <b>app-debug.apk</b>). Установи на телефон.<br><a href="' + sd.url + '" target="_blank">Посмотреть сборку</a>';
-              }, 1500);
-            }
+            msgEl.innerHTML = `✅ Готово! APK отправлен в Telegram-группу.<br><a href="${sd.url}" target="_blank">Посмотреть сборку</a>`;
           } else {
             msgEl.innerHTML = `Ошибка сборки (${sd.conclusion}). <a href="${sd.url}" target="_blank">Смотри лог в Actions</a>`;
           }
