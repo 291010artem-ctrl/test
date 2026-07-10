@@ -549,7 +549,11 @@ const userActivePhone = new Map(); // username → ip (для обычных п�
 // Персистентный реестр устройств (все когда-либо подключавшиеся)
 const REGISTRY_FILE = path.join(__dirname, 'devices.json');
 let registry = {};
-try { registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8')); } catch {}
+try {
+  registry = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
+  // Сброс зависших online-статусов после перезапуска сервера
+  for (const r of Object.values(registry)) if (r.online) r.online = false;
+} catch {}
 let _saveTimer = null;
 function saveRegistry() {
   clearTimeout(_saveTimer);
