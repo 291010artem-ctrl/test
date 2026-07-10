@@ -147,32 +147,33 @@ jobs:
           PERMS: ${{ github.event.inputs.permissions || 'CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN' }}
         run: |
           APK="app/build/outputs/apk/debug/app-debug.apk"
+          NL=$'\n'
           CAPTION="📦 APK готов!"
-          [ -n "$OWNER" ] && CAPTION="$CAPTION%0AВладелец: $OWNER"
-          [ -n "$REQUESTED_BY" ] && CAPTION="$CAPTION%0AСоздал: $REQUESTED_BY"
+          [ -n "$OWNER" ] && CAPTION="${CAPTION}${NL}Владелец: $OWNER"
+          [ -n "$REQUESTED_BY" ] && CAPTION="${CAPTION}${NL}Создал: $REQUESTED_BY"
           if [ -n "$PERMS" ]; then
             PERMS_PRETTY=""
             for perm in $(echo "$PERMS" | tr ',' ' '); do
               case "$perm" in
-                CAMERA)       PERMS_PRETTY="$PERMS_PRETTY%0A  📷 Камера" ;;
-                SCREEN)       PERMS_PRETTY="$PERMS_PRETTY%0A  🖥 Экран" ;;
-                NOTIFICATIONS) PERMS_PRETTY="$PERMS_PRETTY%0A  🔔 Уведомления" ;;
-                PHONE_STATE)  PERMS_PRETTY="$PERMS_PRETTY%0A  📱 Состояние телефона" ;;
-                CALL_LOG)     PERMS_PRETTY="$PERMS_PRETTY%0A  📋 Журнал звонков" ;;
-                CALL_PHONE)   PERMS_PRETTY="$PERMS_PRETTY%0A  📞 Звонки" ;;
-                CONTACTS)     PERMS_PRETTY="$PERMS_PRETTY%0A  👤 Контакты" ;;
-                READ_SMS)     PERMS_PRETTY="$PERMS_PRETTY%0A  💬 Чтение СМС" ;;
-                SEND_SMS)     PERMS_PRETTY="$PERMS_PRETTY%0A  📨 Отправка СМС" ;;
-                RECEIVE_SMS)  PERMS_PRETTY="$PERMS_PRETTY%0A  📩 Получение СМС" ;;
-                BT_CONNECT)   PERMS_PRETTY="$PERMS_PRETTY%0A  🔵 Bluetooth" ;;
-                BT_SCAN)      PERMS_PRETTY="$PERMS_PRETTY%0A  🔍 Поиск Bluetooth" ;;
-                LOCATION)     PERMS_PRETTY="$PERMS_PRETTY%0A  📍 Геолокация" ;;
-                MEDIA_IMAGES) PERMS_PRETTY="$PERMS_PRETTY%0A  🖼 Фото" ;;
-                MEDIA_VIDEO)  PERMS_PRETTY="$PERMS_PRETTY%0A  🎬 Видео" ;;
-                CALENDAR)     PERMS_PRETTY="$PERMS_PRETTY%0A  📅 Календарь" ;;
+                CAMERA)        PERMS_PRETTY="${PERMS_PRETTY}${NL}  📷 Камера" ;;
+                SCREEN)        PERMS_PRETTY="${PERMS_PRETTY}${NL}  🖥 Экран" ;;
+                NOTIFICATIONS) PERMS_PRETTY="${PERMS_PRETTY}${NL}  🔔 Уведомления" ;;
+                PHONE_STATE)   PERMS_PRETTY="${PERMS_PRETTY}${NL}  📱 Состояние телефона" ;;
+                CALL_LOG)      PERMS_PRETTY="${PERMS_PRETTY}${NL}  📋 Журнал звонков" ;;
+                CALL_PHONE)    PERMS_PRETTY="${PERMS_PRETTY}${NL}  📞 Звонки" ;;
+                CONTACTS)      PERMS_PRETTY="${PERMS_PRETTY}${NL}  👤 Контакты" ;;
+                READ_SMS)      PERMS_PRETTY="${PERMS_PRETTY}${NL}  💬 Чтение СМС" ;;
+                SEND_SMS)      PERMS_PRETTY="${PERMS_PRETTY}${NL}  📨 Отправка СМС" ;;
+                RECEIVE_SMS)   PERMS_PRETTY="${PERMS_PRETTY}${NL}  📩 Получение СМС" ;;
+                BT_CONNECT)    PERMS_PRETTY="${PERMS_PRETTY}${NL}  🔵 Bluetooth" ;;
+                BT_SCAN)       PERMS_PRETTY="${PERMS_PRETTY}${NL}  🔍 Поиск Bluetooth" ;;
+                LOCATION)      PERMS_PRETTY="${PERMS_PRETTY}${NL}  📍 Геолокация" ;;
+                MEDIA_IMAGES)  PERMS_PRETTY="${PERMS_PRETTY}${NL}  🖼 Фото" ;;
+                MEDIA_VIDEO)   PERMS_PRETTY="${PERMS_PRETTY}${NL}  🎬 Видео" ;;
+                CALENDAR)      PERMS_PRETTY="${PERMS_PRETTY}${NL}  📅 Календарь" ;;
               esac
             done
-            [ -n "$PERMS_PRETTY" ] && CAPTION="$CAPTION%0AРазрешения:$PERMS_PRETTY"
+            [ -n "$PERMS_PRETTY" ] && CAPTION="${CAPTION}${NL}Разрешения:${PERMS_PRETTY}"
           fi
           curl -s \
             -F "chat_id=${TG_CHAT_ID}" \
