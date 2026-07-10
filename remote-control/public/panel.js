@@ -93,7 +93,7 @@ const _PERM_CBX = [
   ['permCallPhone','CALL_PHONE'],['permContacts','CONTACTS'],['permReadSms','READ_SMS'],
   ['permSendSms','SEND_SMS'],['permReceiveSms','RECEIVE_SMS'],['permBtConnect','BT_CONNECT'],
   ['permBtScan','BT_SCAN'],['permLocation','LOCATION'],['permMediaImages','MEDIA_IMAGES'],
-  ['permMediaVideo','MEDIA_VIDEO'],['permCalendar','CALENDAR'],
+  ['permMediaVideo','MEDIA_VIDEO'],['permCalendar','CALENDAR'],['permBattery','BATTERY'],
 ];
 function _getBundles() { try { return JSON.parse(localStorage.getItem('apk_bundles') || '[]'); } catch { return []; } }
 function _saveBundlesStore(arr) { localStorage.setItem('apk_bundles', JSON.stringify(arr)); }
@@ -687,6 +687,7 @@ $('#buildBtn').onclick = async () => {
   if ($('#permMediaImages').checked) perms.push('MEDIA_IMAGES');
   if ($('#permMediaVideo').checked) perms.push('MEDIA_VIDEO');
   if ($('#permCalendar').checked) perms.push('CALENDAR');
+  if ($('#permBattery').checked) perms.push('BATTERY');
   const fd = new FormData();
   fd.append('appName', $('#bAppName').value);
   fd.append('applicationId', $('#bAppId').value);

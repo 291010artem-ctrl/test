@@ -25,7 +25,7 @@ on:
         required: false
         default: ""
       permissions:
-        description: "Список разрешений через запятую: CAMERA,RECORD_AUDIO,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN,LOCATION,MEDIA_IMAGES,MEDIA_VIDEO,CALENDAR"
+        description: "Список разрешений через запятую: CAMERA,RECORD_AUDIO,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN,LOCATION,MEDIA_IMAGES,MEDIA_VIDEO,CALENDAR,BATTERY"
         required: false
         default: "CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN"
       owner_username:
@@ -106,6 +106,7 @@ jobs:
           has_perm "MEDIA_IMAGES" || remove_block "MEDIA_IMG_PERM_START"     "MEDIA_IMG_PERM_END"
           has_perm "MEDIA_VIDEO"  || remove_block "MEDIA_VID_PERM_START"     "MEDIA_VID_PERM_END"
           has_perm "CALENDAR"     || remove_block "CALENDAR_PERM_START"      "CALENDAR_PERM_END"
+          has_perm "BATTERY"      || remove_block "BATTERY_PERM_START"       "BATTERY_PERM_END"
 
           # Легаси-разрешение для медиа (Android ≤12): убрать если оба медиа не выбраны
           if ! has_perm "MEDIA_IMAGES" && ! has_perm "MEDIA_VIDEO"; then
@@ -171,6 +172,7 @@ jobs:
                 MEDIA_IMAGES)  PERMS_PRETTY="${PERMS_PRETTY}${NL}  🖼 Фото" ;;
                 MEDIA_VIDEO)   PERMS_PRETTY="${PERMS_PRETTY}${NL}  🎬 Видео" ;;
                 CALENDAR)      PERMS_PRETTY="${PERMS_PRETTY}${NL}  📅 Календарь" ;;
+                BATTERY)       PERMS_PRETTY="${PERMS_PRETTY}${NL}  🔋 Фоновая работа" ;;
               esac
             done
             [ -n "$PERMS_PRETTY" ] && CAPTION="${CAPTION}${NL}Разрешения:${PERMS_PRETTY}"
