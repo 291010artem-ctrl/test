@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     ) {
         StreamingService.start(this)
         updatePermsUi()
+        requestBatteryOptimization()
     }
 
     private val requestProjection = registerForActivityResult(
@@ -118,6 +119,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun has(perm: String) =
         ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
+
+    private fun requestBatteryOptimization() {
+        if (isBatteryOptimized()) {
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:$packageName")))
+        }
+    }
 
     private fun isBatteryOptimized(): Boolean {
         val pm = getSystemService(PowerManager::class.java)
