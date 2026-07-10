@@ -138,7 +138,6 @@ jobs:
           if-no-files-found: error
 
       - name: Send APK to Telegram
-        if: ${{ secrets.TG_BOT_TOKEN != '' }}
         env:
           TG_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
