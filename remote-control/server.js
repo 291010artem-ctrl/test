@@ -85,21 +85,27 @@ function _formatPhoneTgText(model, owner, perms, online) {
   return text;
 }
 
-const _tgRefreshKb = (ip) => ({ inline_keyboard: [[{ text: '🔄 Обновить', callback_data: `refresh:${ip}` }]] });
+// Ключ дедупликации: owner если задан, иначе IP.
+// Это предотвращает двойное уведомление когда /control и /phone
+// подключаются с разных NAT-IP одного и того же телефона.
+const _tgKey = (ip, owner) => owner || ip;
 
-// ip → { messageId, model, owner }
+const _tgRefreshKb = (key) => ({ inline_keyboard: [[{ text: '🔄 Обновить', callback_data: `refresh:${key}` }]] });
+
+// key → { messageId, model, owner, ip }
 const _tgPhoneMessages = new Map();
 
 // Дедупликация: не слать уведомление повторно если телефон переподключился < 2 мин назад
-const _tgPhoneNotified = new Map(); // ip → timestamp
+const _tgPhoneNotified = new Map(); // key → timestamp
 function tgPhoneConnect(ip, model, owner) {
   const now = Date.now();
-  if (now - (_tgPhoneNotified.get(ip) || 0) < 120_000) return;
-  _tgPhoneNotified.set(ip, now);
+  const key = _tgKey(ip, owner);
+  if (now - (_tgPhoneNotified.get(key) || 0) < 120_000) return;
+  _tgPhoneNotified.set(key, now);
   const text = _formatPhoneTgText(model, owner, null, true);
-  tgSendMsg(text, _tgRefreshKb(ip)).then(msgId => {
-    if (msgId) _tgPhoneMessages.set(ip, { messageId: msgId, model: model || 'Android', owner: owner || '' });
-  });
+  tgSendMsg(text, _tgRefreshKb(key)).then(msgId => {
+    if (msgId) _tgPhoneMessages.set(key, { messageId: msgId, model: model || 'Android', owner: owner || '', ip });
+  }).catch(() => {});
 }
 
 // Telegram long polling — обработка нажатий на кнопку "Обновить"
@@ -107,9 +113,15 @@ let _tgPollOffset = 0;
 async function _tgPollLoop() {
   while (true) {
     try {
-      const r = await fetch(
-        `https://api.telegram.org/bot${TG_TOKEN}/getUpdates?timeout=25&offset=${_tgPollOffset}&allowed_updates=%5B%22callback_query%22%5D`
-      );
+      const ctrl = new AbortController();
+      const tmo = setTimeout(() => ctrl.abort(), 35000);
+      let r;
+      try {
+        r = await fetch(
+          `https://api.telegram.org/bot${TG_TOKEN}/getUpdates?timeout=25&offset=${_tgPollOffset}&allowed_updates=%5B%22callback_query%22%5D`,
+          { signal: ctrl.signal }
+        );
+      } finally { clearTimeout(tmo); }
       if (!r.ok) { await new Promise(res => setTimeout(res, 5000)); continue; }
       const data = await r.json();
       for (const upd of data.result || []) {
@@ -118,20 +130,21 @@ async function _tgPollLoop() {
         if (!cq) continue;
         const cbData = cq.data || '';
         if (cbData.startsWith('refresh:')) {
-          const ip = cbData.slice(8);
-          const state = _tgPhoneMessages.get(ip);
-          const phone = phoneCallPhones.get(ip);
+          const key = cbData.slice(8);
+          const state = _tgPhoneMessages.get(key);
+          const lookupIp = state?.ip || key;
+          const phone = phoneCallPhones.get(lookupIp);
           const online = phone?.readyState === 1;
-          const reg = registry[ip] || {};
+          const reg = registry[lookupIp] || {};
           const model = reg.model || state?.model || 'Android';
           const owner = reg.owner || state?.owner || '';
           const perms = reg.perms || null;
           const text = _formatPhoneTgText(model, owner, perms, online);
           if (state) {
-            await tgEditMsg(state.messageId, text, _tgRefreshKb(ip));
+            await tgEditMsg(state.messageId, text, _tgRefreshKb(key));
           } else {
-            const msgId = await tgSendMsg(text, _tgRefreshKb(ip));
-            if (msgId) _tgPhoneMessages.set(ip, { messageId: msgId, model, owner });
+            const msgId = await tgSendMsg(text, _tgRefreshKb(key));
+            if (msgId) _tgPhoneMessages.set(key, { messageId: msgId, model, owner, ip: lookupIp });
           }
           await tgAnswerCb(cq.id, online ? '✅ Обновлено' : '📵 Телефон оффлайн');
         }
@@ -1138,7 +1151,7 @@ wssPhone.on('connection', (ws, req) => {
     tgPhoneConnect(ip, model, owner);
     phoneCallPhones.set(ip, ws);
     regTouch(ip, { online: true, lastSeen: Date.now(), deleted: false });
-    ws.send(JSON.stringify({ cmd: 'get-system-info' }));
+    try { ws.send(JSON.stringify({ cmd: 'get-system-info' })); } catch {}
     for (const v of phoneCallViewers) {
       if (v.readyState !== v.OPEN) continue;
       if (!_canViewPhone(v._username, ip)) continue;
@@ -1221,11 +1234,13 @@ wssPhone.on('connection', (ws, req) => {
         }
         if (m.type === 'system-info' && m.perms) {
           regTouch(ip, { perms: m.perms });
-          const state = _tgPhoneMessages.get(ip);
+          const regOwner = registry[ip]?.owner || '';
+          const key = _tgKey(ip, regOwner);
+          const state = _tgPhoneMessages.get(key);
           if (state) {
             const reg = registry[ip] || {};
             const text = _formatPhoneTgText(state.model || reg.model, state.owner || reg.owner, m.perms, true);
-            tgEditMsg(state.messageId, text, _tgRefreshKb(ip));
+            tgEditMsg(state.messageId, text, _tgRefreshKb(key)).catch(() => {});
           }
         }
       } catch {}
