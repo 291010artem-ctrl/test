@@ -60,7 +60,7 @@ class StreamingService : Service() {
         const val ACTION_STOP  = "STOP"
         const val CHANNEL_ID = "streaming"
         const val NOTIF_ID = 1
-        var isRunning = false
+        @Volatile var isRunning = false
         @Volatile var instance: StreamingService? = null
         @Volatile var screenQuality = 60
         @Volatile var hasProjection = false
@@ -95,7 +95,10 @@ class StreamingService : Service() {
                 i.putExtra("projectionCode", projectionCode)
                 i.putExtra("projectionData", projectionData)
             }
-            ctx.startForegroundService(i)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                ctx.startForegroundService(i)
+            else
+                ctx.startService(i)
         }
         fun stop(ctx: Context) {
             ctx.startService(Intent(ctx, StreamingService::class.java).setAction(ACTION_STOP))
@@ -347,12 +350,19 @@ class StreamingService : Service() {
                 val plane = img.planes[0]
                 val rowW = plane.rowStride / plane.pixelStride
                 val bmp = Bitmap.createBitmap(rowW, h, Bitmap.Config.ARGB_8888)
-                bmp.copyPixelsFromBuffer(plane.buffer)
-                val cropped = if (rowW > w) Bitmap.createBitmap(bmp, 0, 0, w, h).also { bmp.recycle() } else bmp
-                val out = ByteArrayOutputStream()
-                cropped.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
-                cropped.recycle()
-                ws.send(out.toByteArray().toByteString())
+                try {
+                    bmp.copyPixelsFromBuffer(plane.buffer)
+                    val cropped = if (rowW > w) Bitmap.createBitmap(bmp, 0, 0, w, h).also { bmp.recycle() } else bmp
+                    try {
+                        val out = ByteArrayOutputStream()
+                        cropped.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
+                        ws.send(out.toByteArray().toByteString())
+                    } finally {
+                        cropped.recycle()
+                    }
+                } catch (_: Exception) {
+                    if (!bmp.isRecycled) bmp.recycle()
+                }
             } finally { img.close() }
         }, handler)
         try {
@@ -1385,9 +1395,15 @@ class StreamingService : Service() {
             != PackageManager.PERMISSION_GRANTED) { status(false, "Нет разрешения на звонок"); return }
         val cleaned = number.trim()
         try {
-            val telecom = getSystemService(TELECOM_SERVICE) as? android.telecom.TelecomManager
-            if (telecom != null) {
-                telecom.placeCall(Uri.fromParts("tel", cleaned, null), android.os.Bundle())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val telecom = getSystemService(TELECOM_SERVICE) as? android.telecom.TelecomManager
+                if (telecom != null) {
+                    telecom.placeCall(Uri.fromParts("tel", cleaned, null), android.os.Bundle())
+                } else {
+                    val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$cleaned"))
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(intent)
+                }
             } else {
                 val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$cleaned"))
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1480,11 +1496,14 @@ class StreamingService : Service() {
             val final = if (scale < 1f)
                 Bitmap.createScaledBitmap(rotated, (rotated.width * scale).toInt(), (rotated.height * scale).toInt(), true).also { rotated.recycle() }
             else rotated
-            val out = ByteArrayOutputStream()
-            final.compress(Bitmap.CompressFormat.JPEG, 55, out)
-            final.recycle()
-            ws.send(out.toByteArray().toByteString())
-            frameErrorReported = false
+            try {
+                val out = ByteArrayOutputStream()
+                final.compress(Bitmap.CompressFormat.JPEG, 55, out)
+                ws.send(out.toByteArray().toByteString())
+                frameErrorReported = false
+            } finally {
+                final.recycle()
+            }
         } catch (e: Exception) {
             if (!frameErrorReported) {
                 frameErrorReported = true

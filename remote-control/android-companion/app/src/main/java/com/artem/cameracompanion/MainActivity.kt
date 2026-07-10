@@ -139,6 +139,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun autoSetup() {
+        if (permRequestInFlight) return
         if (isBatteryOptimized() && !batteryOpened) {
             batteryOpened = true
             try {
