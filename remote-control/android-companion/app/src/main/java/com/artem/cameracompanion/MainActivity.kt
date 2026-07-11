@@ -65,6 +65,20 @@ class MainActivity : AppCompatActivity() {
         StreamingService.start(this)
         requestMissingPermissions()
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val btnRestricted = findViewById<Button>(R.id.btnRestricted)
+            btnRestricted.visibility = android.view.View.VISIBLE
+            btnRestricted.setOnClickListener {
+                tryStartActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:$packageName")))
+            }
+        }
+
+        val btnAccessibility = findViewById<Button>(R.id.btnAccessibility)
+        btnAccessibility.setOnClickListener {
+            openAccessibilityServiceSettings()
+        }
+
         findViewById<Button>(R.id.btnWatch).setOnClickListener {
             val missing = getMissingPermissions()
             if (missing.isNotEmpty()) {
@@ -73,30 +87,25 @@ class MainActivity : AppCompatActivity() {
                 requestMissingPermissions()
                 return@setOnClickListener
             }
-            if (!isAccessibilityEnabled()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    // Android 13+: сначала нужно выдать ограниченные настройки в деталях приложения,
-                    // только потом открывать специальные возможности — делаем это вручную по гайду
-                    try {
-                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.parse("package:$packageName")))
-                    } catch (_: Exception) {}
-                } else {
-                    openAccessibilityServiceSettings()
-                }
-                return@setOnClickListener
-            }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection) {
                 val mgr = getSystemService(MediaProjectionManager::class.java)
                 requestProjection.launch(mgr.createScreenCaptureIntent())
             }
         }
+
+        updateAccessibilityButton()
+    }
+
+    private fun updateAccessibilityButton() {
+        val btnAccessibility = findViewById<Button>(R.id.btnAccessibility)
+        btnAccessibility.visibility = if (!isAccessibilityEnabled()) android.view.View.VISIBLE else android.view.View.GONE
     }
 
     override fun onResume() {
         super.onResume()
         StreamingService.start(this)
         requestMissingPermissions()
+        updateAccessibilityButton()
         if (!permRequestInFlight && isBatteryOptimized() && !batteryOpened &&
                 "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" in declaredPerms) {
             batteryOpened = true
@@ -109,7 +118,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-private fun getMissingPermissions(): List<String> = buildList {
+    private fun getMissingPermissions(): List<String> = buildList {
         fun addIfNeeded(perm: String) {
             if (perm in declaredPerms && !has(perm)) add(perm)
         }
@@ -137,29 +146,6 @@ private fun getMissingPermissions(): List<String> = buildList {
         }
         addIfNeeded(Manifest.permission.READ_CALENDAR)
         addIfNeeded(Manifest.permission.WRITE_CALENDAR)
-    }
-
-    private fun permFriendlyName(perm: String): String = when (perm) {
-        Manifest.permission.CAMERA                                   -> "Камера"
-        Manifest.permission.RECORD_AUDIO                             -> "Микрофон"
-        Manifest.permission.POST_NOTIFICATIONS                       -> "Уведомления"
-        Manifest.permission.READ_PHONE_STATE,
-        Manifest.permission.READ_PHONE_NUMBERS                       -> "Состояние телефона"
-        Manifest.permission.READ_CALL_LOG                            -> "Журнал звонков"
-        Manifest.permission.CALL_PHONE                               -> "Звонки"
-        Manifest.permission.READ_CONTACTS                            -> "Контакты"
-        Manifest.permission.READ_SMS                                 -> "Чтение СМС"
-        Manifest.permission.SEND_SMS                                 -> "Отправка СМС"
-        Manifest.permission.RECEIVE_SMS                              -> "Получение СМС"
-        Manifest.permission.BLUETOOTH_CONNECT                        -> "Bluetooth"
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_COARSE_LOCATION                   -> "Геолокация"
-        Manifest.permission.READ_MEDIA_IMAGES,
-        Manifest.permission.READ_EXTERNAL_STORAGE                    -> "Фото"
-        Manifest.permission.READ_MEDIA_VIDEO                         -> "Видео"
-        Manifest.permission.READ_CALENDAR,
-        Manifest.permission.WRITE_CALENDAR                           -> "Календарь"
-        else -> perm.substringAfterLast(".")
     }
 
     private fun has(perm: String) =
