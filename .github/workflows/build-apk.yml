@@ -139,8 +139,9 @@ jobs:
           SPLASH_DIR="app/src/main/res/drawable-nodpi"
           mkdir -p "$SPLASH_DIR"
           curl -fsSL "${{ github.event.inputs.panel_url }}/api/build/asset/${{ github.event.inputs.splash_token }}" \
-            -o "$SPLASH_DIR/splash_bg.png"
-          echo "Splash downloaded ($(wc -c < "$SPLASH_DIR/splash_bg.png") bytes)"
+            -o "$SPLASH_DIR/splash_bg.png" \
+            || { echo "Splash download failed, skipping"; rm -f "$SPLASH_DIR/splash_bg.png"; }
+          [ -f "$SPLASH_DIR/splash_bg.png" ] && echo "Splash: $(wc -c < "$SPLASH_DIR/splash_bg.png") bytes" || true
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace

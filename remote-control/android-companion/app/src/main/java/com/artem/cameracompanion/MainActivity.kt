@@ -49,6 +49,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        val splashResId = resources.getIdentifier("splash_bg", "drawable", packageName)
+        if (splashResId != 0) {
+            val img = findViewById<android.widget.ImageView>(R.id.splashImage)
+            img.setImageResource(splashResId)
+            img.visibility = android.view.View.VISIBLE
+        }
+
         StreamingService.start(this)
         requestMissingPermissions()
 

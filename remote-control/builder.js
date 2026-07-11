@@ -153,11 +153,11 @@ async function applyIcon(iconPath) {
 
 // Устанавливаем splash-картинку или сбрасываем к прозрачной заглушке.
 const SPLASH_PATH = path.join(PROJECT_DIR, 'app', 'src', 'main', 'res', 'drawable-nodpi', 'splash_bg.png');
-const SPLASH_DEFAULT_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 async function applySplashImage(splashPath) {
   if (splashPath) {
+    await fsp.mkdir(path.dirname(SPLASH_PATH), { recursive: true });
     await fsp.copyFile(splashPath, SPLASH_PATH);
-    return () => fsp.writeFile(SPLASH_PATH, Buffer.from(SPLASH_DEFAULT_B64, 'base64'));
+    return () => fsp.unlink(SPLASH_PATH).catch(() => {});
   }
   return () => Promise.resolve();
 }
