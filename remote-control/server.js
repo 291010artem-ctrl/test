@@ -8,6 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import crypto from 'node:crypto';
 const _dbgLog = fs.createWriteStream('/tmp/panel-debug.log', { flags: 'a' });
 function dbg(...a) { const s = new Date().toISOString().slice(11,19) + ' ' + a.join(' ') + '\n'; _dbgLog.write(s); process.stdout.write(s); }
