@@ -173,7 +173,7 @@ async function _tgPollLoop() {
 if (TG_TOKEN) _tgPollLoop().catch(() => {});
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // ---- Авторизация и управление пользователями ----
 const USERS_FILE = path.join(__dirname, 'users.json');
