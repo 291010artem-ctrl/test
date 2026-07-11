@@ -362,6 +362,7 @@ app.get('/api/me', (req, res) => {
 app.use((req, res, next) => {
   if (req.path === '/login') return next();
   if (isAuth(req)) return next();
+  if (req.path.startsWith('/api/build/asset/')) return next(); // публичный endpoint для GitHub Actions CI
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
   res.redirect('/login');
 });
