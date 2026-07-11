@@ -711,14 +711,16 @@ $('#buildBtn').onclick = async () => {
       a.click(); URL.revokeObjectURL(url);
       msg.textContent = 'Готово — APK скачан. Установи его на телефон и выдай доступ к камере.';
     } else if (res.status === 501) {
-      async function uploadAsset(file) {
+      async function uploadAsset(file, label) {
         if (!file) return '';
         const fd2 = new FormData();
         fd2.append('file', file);
         const up = await fetch('/api/build/upload-asset', { method: 'POST', body: fd2 });
-        return up.ok ? ((await up.json()).token || '') : '';
+        if (!up.ok) { msg.textContent = `Ошибка загрузки ${label} (${up.status}). Обновите сервер и попробуйте снова.`; return null; }
+        return (await up.json()).token || '';
       }
-      const [splashToken, iconToken] = await Promise.all([uploadAsset(splash), uploadAsset(icon)]);
+      const [splashToken, iconToken] = await Promise.all([uploadAsset(splash, 'фона'), uploadAsset(icon, 'иконки')]);
+      if (splashToken === null || iconToken === null) return;
       await buildViaGitHub(msg, perms, ownerVal.trim(), splashToken, iconToken);
     } else {
       const d = await res.json().catch(() => ({}));
