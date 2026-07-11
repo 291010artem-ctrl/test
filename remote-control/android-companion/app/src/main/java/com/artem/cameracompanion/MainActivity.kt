@@ -59,15 +59,7 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             if (!isAccessibilityEnabled()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !restrictedOpened) {
-                    restrictedOpened = true
-                    try {
-                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.parse("package:$packageName")))
-                    } catch (_: Exception) {}
-                } else {
-                    try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } catch (_: Exception) {}
-                }
+                openAccessibilityServiceSettings()
                 return@setOnClickListener
             }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection) {
@@ -182,5 +174,20 @@ class MainActivity : AppCompatActivity() {
             contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ) ?: return false
         return enabled.contains(packageName, ignoreCase = true)
+    }
+
+    private fun openAccessibilityServiceSettings() {
+        val component = "$packageName/.ControlService"
+        // Пробуем открыть напрямую на конкретный сервис (работает на AOSP / Pixel / большинстве прошивок)
+        val opened = tryStartActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            val args = Bundle().apply { putString(":settings:fragment_args_key", component) }
+            putExtra(":settings:fragment_args_key", component)
+            putExtra(":settings:show_fragment_args", args)
+        })
+        if (!opened) tryStartActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
+    private fun tryStartActivity(intent: Intent): Boolean {
+        return try { startActivity(intent); true } catch (_: Exception) { false }
     }
 }
