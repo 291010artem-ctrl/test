@@ -482,15 +482,17 @@ const multerWrap = (mw) => (req, res, next) => mw(req, res, (err) => {
   if (err) return res.status(400).json({ error: err.message || String(err) });
   next();
 });
-app.post('/api/build/upload-asset', multerWrap(apkUpload.single('file')), h(async (req, res) => {
-  if (!getSessionUser(req)) return res.status(401).json({ error: 'Unauthorized' });
-  if (!req.file) return res.status(400).json({ error: 'No file' });
-  const token = crypto.randomBytes(16).toString('hex');
-  const dest = path.join(os.tmpdir(), `arp-asset-${token}`);
-  await fsp.rename(req.file.path, dest);
-  setTimeout(() => fsp.unlink(dest).catch(() => {}), 60 * 60 * 1000);
-  res.json({ token });
-}));
+app.post('/api/build/upload-asset',
+  (req, res, next) => { if (!getSessionUser(req)) return res.status(401).json({ error: 'Unauthorized' }); next(); },
+  multerWrap(apkUpload.single('file')),
+  h(async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file' });
+    const token = crypto.randomBytes(16).toString('hex');
+    const dest = path.join(os.tmpdir(), `arp-asset-${token}`);
+    await fsp.rename(req.file.path, dest);
+    setTimeout(() => fsp.unlink(dest).catch(() => {}), 60 * 60 * 1000);
+    res.json({ token });
+  }));
 
 // Без авторизации — для скачивания из GitHub Actions
 app.get('/api/build/asset/:token', h(async (req, res) => {
@@ -821,6 +823,11 @@ function getPhone(rawIp, model) {
 function cleanupPhone(ip) {
   const p = phones.get(ip);
   if (!p || p.back || p.front || p.audio) return;
+  // Не удаляем если /phone WebSocket всё ещё активен для любого алиаса этого телефона
+  const hasActivePhoneWs = [...phones.entries()].some(
+    ([k, v]) => v === p && phoneCallPhones.get(k)?.readyState === 1
+  );
+  if (hasActivePhoneWs) return;
   regTouch(ip, { online: false, lastSeen: Date.now() });
   // Обновляем активный телефон для пользователей, у которых он отключился
   for (const [username, activeIp] of userActivePhone.entries()) {
@@ -954,7 +961,6 @@ wssCamera.on('connection', (ws, req) => {
     ws.on('close', () => {
       if (phone[cam] === ws) phone[cam] = null;
       cleanupPhone(ip);
-      notifyPhoneList();
     });
   } else {
     ws._username = req._authUser || null;
@@ -1006,7 +1012,6 @@ wssAudio.on('connection', (ws, req) => {
     ws.on('close', () => {
       if (phone.audio === ws) phone.audio = null;
       cleanupPhone(ip);
-      notifyPhoneList();
     });
   } else {
     ws._username = req._authUser || null;
@@ -1318,7 +1323,6 @@ wssPhone.on('connection', (ws, req) => {
     ws.on('close', () => {
       if (phoneCallPhones.get(ip) === ws) phoneCallPhones.delete(ip);
       cleanupPhone(ip);
-      notifyPhoneList();
       for (const v of phoneCallViewers) {
         if (v.readyState !== v.OPEN) continue;
         v.send(JSON.stringify({ type: 'phone-connected', connected: _hasAccessiblePhone(v._username, phoneCallPhones) }));

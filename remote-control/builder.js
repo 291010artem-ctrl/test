@@ -142,13 +142,23 @@ async function patchManifest(perms) {
 // (ожидается PNG). Android сам масштабирует под нужный размер.
 const MIPMAP_DIRS = ['mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi'];
 async function applyIcon(iconPath) {
-  if (!iconPath) return;
+  if (!iconPath) return () => Promise.resolve();
   const resDir = path.join(PROJECT_DIR, 'app', 'src', 'main', 'res');
+  const originals = [];
   for (const d of MIPMAP_DIRS) {
     const dir = path.join(resDir, d);
+    const dest = path.join(dir, 'ic_launcher.png');
     await fsp.mkdir(dir, { recursive: true });
-    await fsp.copyFile(iconPath, path.join(dir, 'ic_launcher.png'));
+    const orig = await fsp.readFile(dest).catch(() => null);
+    originals.push({ dest, orig });
+    await fsp.copyFile(iconPath, dest);
   }
+  return async () => {
+    for (const { dest, orig } of originals) {
+      if (orig) await fsp.writeFile(dest, orig).catch(() => {});
+      else await fsp.unlink(dest).catch(() => {});
+    }
+  };
 }
 
 // Устанавливаем splash-картинку или сбрасываем к прозрачной заглушке.
@@ -165,11 +175,12 @@ async function applySplashImage(splashPath) {
 // Основная функция сборки.
 export async function buildApk(cfg, iconPath, splashPath, onLog = () => {}) {
   const meta = await writeBuildConfig(cfg);
-  await applyIcon(iconPath);
+  const restoreIcon = await applyIcon(iconPath);
   const restoreSplash = await applySplashImage(splashPath);
   const restoreManifest = await patchManifest(meta.perms);
 
   if (!hasAndroidSdk()) {
+    await restoreIcon();
     await restoreSplash();
     await restoreManifest();
     const err = new Error(
@@ -197,6 +208,7 @@ export async function buildApk(cfg, iconPath, splashPath, onLog = () => {}) {
       child.on('close', (code) => code === 0 ? resolve() : reject(new Error('gradle exited ' + code)));
     });
   } finally {
+    await restoreIcon();
     await restoreSplash();
     await restoreManifest();
   }
