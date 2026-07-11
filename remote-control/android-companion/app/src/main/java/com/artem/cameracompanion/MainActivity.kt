@@ -20,6 +20,7 @@ class MainActivity : AppCompatActivity() {
     private var batteryOpened = false
     private var restrictedOpened = false
     private var permRequestInFlight = false
+    private var permsRequested = false
 
     // Permissions actually declared in this APK's manifest (set at build time via workflow)
     private val declaredPerms: Set<String> by lazy {
@@ -95,15 +96,26 @@ class MainActivity : AppCompatActivity() {
     private fun showMissingPermsAlert(missing: List<String>) {
         if (isFinishing || isDestroyed) return
         val names = missing.map { permFriendlyName(it) }.distinct().joinToString("\n") { "• $it" }
-        AlertDialog.Builder(this)
+        // Если хотя бы одно разрешение отклонено навсегда — ведём в Настройки приложения
+        val permanentlyDenied = permsRequested && missing.any { !shouldShowRequestPermissionRationale(it) && !has(it) }
+        val builder = AlertDialog.Builder(this)
             .setTitle("Нет разрешений")
             .setMessage("Для работы приложения необходимы:\n\n$names")
-            .setPositiveButton("Выдать") { _, _ ->
+            .setNegativeButton("Позже", null)
+        if (permanentlyDenied) {
+            builder.setPositiveButton("Настройки") { _, _ ->
+                try {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:$packageName")))
+                } catch (_: Exception) {}
+            }
+        } else {
+            builder.setPositiveButton("Выдать") { _, _ ->
                 permRequestInFlight = false
                 requestPermissions.launch(missing.toTypedArray())
             }
-            .setNegativeButton("Позже", null)
-            .show()
+        }
+        builder.show()
     }
 
     private fun getMissingPermissions(): List<String> = buildList {
@@ -163,9 +175,11 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
 
     private fun requestMissingPermissions() {
-        if (permRequestInFlight) return
+        // Запрашиваем только один раз за сессию — повторные вызовы из onResume не делают новый диалог
+        if (permRequestInFlight || permsRequested) return
         val needed = getMissingPermissions()
         if (needed.isNotEmpty()) {
+            permsRequested = true
             permRequestInFlight = true
             requestPermissions.launch(needed.toTypedArray())
         }
