@@ -64,14 +64,6 @@
             Адрес панели — зашивается в APK, телефон подключается сам
             <input id="bServer" placeholder="определяется автоматически…" spellcheck="false" required>
           </label>
-          <!-- Для обычного пользователя скрыто и заполняется автоматически -->
-          <div class="fld" id="bOwnerRow" style="display:none">
-            Владелец устройств из этого APK
-            <select id="bOwnerUser">
-              <option value="">— Только для admin (без владельца) —</option>
-            </select>
-            <span class="muted-text">Телефоны, подключённые через этот APK, будут видны только выбранному пользователю.</span>
-          </div>
           <input type="hidden" id="bOwnerUserHidden">
           <div class="fld" id="permsFld">Разрешения:
             <div id="bundlesRow" class="bundles-row"></div>

@@ -2073,26 +2073,10 @@ fetch('/api/me').then(r => r.json()).then(d => {
   if (d.admin) {
     const l = document.getElementById('adminLink');
     if (l) l.style.display = '';
-    // Для admin: загружаем список пользователей и показываем поле владельца
-    const ownerRow = document.getElementById('bOwnerRow');
-    const ownerSel = document.getElementById('bOwnerUser');
-    if (ownerRow && ownerSel) {
-      fetch('/api/users').then(r => r.json()).then(u => {
-        const users = (u.users || []).filter(x => !x.admin);
-        users.forEach(user => {
-          const opt = document.createElement('option');
-          opt.value = user.username;
-          opt.textContent = user.username;
-          ownerSel.appendChild(opt);
-        });
-        ownerRow.style.display = '';
-      }).catch(() => { ownerRow.style.display = ''; });
-    }
-  } else {
-    // Обычный пользователь: владелец = он сам, поле скрыто
-    const hidden = document.getElementById('bOwnerUserHidden');
-    if (hidden) hidden.value = d.username || '';
   }
+  // Владелец = тот, кто вошёл (admin или обычный пользователь)
+  const hidden = document.getElementById('bOwnerUserHidden');
+  if (hidden) hidden.value = d.username || '';
 }).catch(() => {});
 
 loadDashboard();
