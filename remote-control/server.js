@@ -612,14 +612,12 @@ function ghFetch(url, token, opts = {}) {
 app.post('/api/build/github', h(async (req, res) => {
   const s = getSessionUser(req);
   if (!s) return res.status(401).json({ error: 'Unauthorized' });
-  const { appName, applicationId, defaultServer, ownerUsername, permissions, splashToken } = req.body;
+  const { appName, applicationId, defaultServer, ownerUsername, permissions, splashToken, iconToken } = req.body;
   if (!GH_TOKEN_SERVER) return res.status(500).json({ error: 'GH_TOKEN не настроен на сервере' });
   const permList = (permissions || '').split(',').map((p) => p.trim()).filter(Boolean);
 
-  // URL панели для скачивания splash-картинки из CI
-  const panelUrl = defaultServer
-    ? `http://${defaultServer.replace(/^https?:\/\//, '')}`
-    : `http://${req.headers.host}`;
+  // URL панели — берём из заголовка запроса (включает порт), не из defaultServer
+  const panelUrl = `http://${req.headers.host}`;
 
   const trigRes = await ghFetch(
     `https://api.github.com/repos/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
@@ -637,7 +635,8 @@ app.post('/api/build/github', h(async (req, res) => {
           permissions: permList.join(','),
           requested_by: s.username,
           splash_token: splashToken || '',
-          panel_url: splashToken ? panelUrl : '',
+          icon_token: iconToken || '',
+          panel_url: (splashToken || iconToken) ? panelUrl : '',
         },
       }),
     }

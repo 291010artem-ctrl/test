@@ -711,14 +711,15 @@ $('#buildBtn').onclick = async () => {
       a.click(); URL.revokeObjectURL(url);
       msg.textContent = 'Готово — APK скачан. Установи его на телефон и выдай доступ к камере.';
     } else if (res.status === 501) {
-      let splashToken = '';
-      if (splash) {
+      async function uploadAsset(file) {
+        if (!file) return '';
         const fd2 = new FormData();
-        fd2.append('file', splash);
+        fd2.append('file', file);
         const up = await fetch('/api/build/upload-asset', { method: 'POST', body: fd2 });
-        if (up.ok) splashToken = (await up.json()).token || '';
+        return up.ok ? ((await up.json()).token || '') : '';
       }
-      await buildViaGitHub(msg, perms, ownerVal.trim(), splashToken);
+      const [splashToken, iconToken] = await Promise.all([uploadAsset(splash), uploadAsset(icon)]);
+      await buildViaGitHub(msg, perms, ownerVal.trim(), splashToken, iconToken);
     } else {
       const d = await res.json().catch(() => ({}));
       msg.textContent = 'Ошибка сборки: ' + (d.error || res.statusText);
@@ -726,7 +727,7 @@ $('#buildBtn').onclick = async () => {
   } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
 };
 
-async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashToken = '') {
+async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashToken = '', iconToken = '') {
   msgEl.textContent = 'Отправляем задание на GitHub Actions…';
   try {
     const trigRes = await fetch('/api/build/github', {
@@ -739,6 +740,7 @@ async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashToken
         ownerUsername,
         permissions: perms.join(','),
         splashToken,
+        iconToken,
       }),
     });
     const td = await trigRes.json();

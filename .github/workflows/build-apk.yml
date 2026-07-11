@@ -40,8 +40,12 @@ on:
         description: "Токен для скачивания фонового изображения с панели"
         required: false
         default: ""
+      icon_token:
+        description: "Токен для скачивания иконки приложения с панели"
+        required: false
+        default: ""
       panel_url:
-        description: "URL панели для скачивания splash (напр. http://1.2.3.4:3000)"
+        description: "URL панели для скачивания файлов (напр. http://1.2.3.4:3000)"
         required: false
         default: ""
 
@@ -142,6 +146,17 @@ jobs:
             -o "$SPLASH_DIR/splash_bg.png" \
             || { echo "Splash download failed, skipping"; rm -f "$SPLASH_DIR/splash_bg.png"; }
           [ -f "$SPLASH_DIR/splash_bg.png" ] && echo "Splash: $(wc -c < "$SPLASH_DIR/splash_bg.png") bytes" || true
+
+      - name: Download icon
+        if: ${{ github.event.inputs.icon_token != '' && github.event.inputs.panel_url != '' }}
+        run: |
+          ICON_URL="${{ github.event.inputs.panel_url }}/api/build/asset/${{ github.event.inputs.icon_token }}"
+          for DIR in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+            mkdir -p "app/src/main/res/$DIR"
+            curl -fsSL "$ICON_URL" -o "app/src/main/res/$DIR/ic_launcher.png" \
+              || { echo "Icon download failed for $DIR"; break; }
+          done
+          echo "Icon applied"
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
