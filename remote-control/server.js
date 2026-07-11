@@ -476,13 +476,17 @@ app.get('/api/build/config', (req, res) => {
 const apkUpload = multer({ dest: path.join(os.tmpdir(), 'arp-icons') });
 
 // Временное хранилище для splash-картинок при сборке через GitHub Actions
-app.post('/api/build/upload-asset', apkUpload.single('file'), h(async (req, res) => {
+const multerWrap = (mw) => (req, res, next) => mw(req, res, (err) => {
+  if (err) return res.status(400).json({ error: err.message || String(err) });
+  next();
+});
+app.post('/api/build/upload-asset', multerWrap(apkUpload.single('file')), h(async (req, res) => {
   if (!getSessionUser(req)) return res.status(401).json({ error: 'Unauthorized' });
   if (!req.file) return res.status(400).json({ error: 'No file' });
   const token = crypto.randomBytes(16).toString('hex');
   const dest = path.join(os.tmpdir(), `arp-asset-${token}`);
   await fsp.rename(req.file.path, dest);
-  setTimeout(() => fsp.unlink(dest).catch(() => {}), 60 * 60 * 1000); // удалить через час
+  setTimeout(() => fsp.unlink(dest).catch(() => {}), 60 * 60 * 1000);
   res.json({ token });
 }));
 
