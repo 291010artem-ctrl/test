@@ -56,6 +56,13 @@ class MainActivity : AppCompatActivity() {
             img.visibility = android.view.View.VISIBLE
         }
 
+        val tvGuide = findViewById<android.widget.TextView>(R.id.tvGuide)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            tvGuide.text = "1. Настройки приложения → ⋮ → Разрешить ограниченные настройки\n2. Включить Специальные возможности"
+        } else {
+            tvGuide.text = "1. Включить Специальные возможности"
+        }
+
         StreamingService.start(this)
         requestMissingPermissions()
 
@@ -68,7 +75,16 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             if (!isAccessibilityEnabled()) {
-                openAccessibilityServiceSettings()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !restrictedOpened) {
+                    // На Android 13+ сначала ведём в настройки приложения чтобы разрешить ограниченные настройки
+                    restrictedOpened = true
+                    try {
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName")))
+                    } catch (_: Exception) {}
+                } else {
+                    openAccessibilityServiceSettings()
+                }
                 return@setOnClickListener
             }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection) {
