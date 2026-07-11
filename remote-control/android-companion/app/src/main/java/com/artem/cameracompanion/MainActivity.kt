@@ -17,7 +17,6 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
 
     private var batteryOpened = false
-    private var restrictedOpened = false
     private var permRequestInFlight = false
     private var permsRequested = false
 
@@ -75,9 +74,9 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             if (!isAccessibilityEnabled()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !restrictedOpened) {
-                    // На Android 13+ сначала ведём в настройки приложения чтобы разрешить ограниченные настройки
-                    restrictedOpened = true
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    // Android 13+: сначала нужно выдать ограниченные настройки в деталях приложения,
+                    // только потом открывать специальные возможности — делаем это вручную по гайду
                     try {
                         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                             Uri.parse("package:$packageName")))
