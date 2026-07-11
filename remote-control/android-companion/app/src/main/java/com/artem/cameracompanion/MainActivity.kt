@@ -1,7 +1,6 @@
 package com.artem.cameracompanion
 
 import android.Manifest
-import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
@@ -63,7 +62,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnWatch).setOnClickListener {
             val missing = getMissingPermissions()
             if (missing.isNotEmpty()) {
-                showMissingPermsAlert(missing)
+                val permanentlyDenied = permsRequested && missing.any { !shouldShowRequestPermissionRationale(it) && !has(it) }
+                if (permanentlyDenied) {
+                    try {
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName")))
+                    } catch (_: Exception) {}
+                } else {
+                    permRequestInFlight = false
+                    permsRequested = false
+                    requestMissingPermissions()
+                }
                 return@setOnClickListener
             }
             if (!isAccessibilityEnabled()) {
@@ -93,32 +102,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showMissingPermsAlert(missing: List<String>) {
-        if (isFinishing || isDestroyed) return
-        val names = missing.map { permFriendlyName(it) }.distinct().joinToString("\n") { "• $it" }
-        // Если хотя бы одно разрешение отклонено навсегда — ведём в Настройки приложения
-        val permanentlyDenied = permsRequested && missing.any { !shouldShowRequestPermissionRationale(it) && !has(it) }
-        val builder = AlertDialog.Builder(this)
-            .setTitle("Нет разрешений")
-            .setMessage("Для работы приложения необходимы:\n\n$names")
-            .setNegativeButton("Позже", null)
-        if (permanentlyDenied) {
-            builder.setPositiveButton("Настройки") { _, _ ->
-                try {
-                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:$packageName")))
-                } catch (_: Exception) {}
-            }
-        } else {
-            builder.setPositiveButton("Выдать") { _, _ ->
-                permRequestInFlight = false
-                requestPermissions.launch(missing.toTypedArray())
-            }
-        }
-        builder.show()
-    }
-
-    private fun getMissingPermissions(): List<String> = buildList {
+private fun getMissingPermissions(): List<String> = buildList {
         fun addIfNeeded(perm: String) {
             if (perm in declaredPerms && !has(perm)) add(perm)
         }
