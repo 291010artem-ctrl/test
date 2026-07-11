@@ -473,8 +473,8 @@ app.get('/api/build/config', (req, res) => {
   });
 });
 
-const iconUpload = multer({ dest: path.join(os.tmpdir(), 'arp-icons') });
-app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
+const apkUpload = multer({ dest: path.join(os.tmpdir(), 'arp-icons') });
+app.post('/api/build/apk', apkUpload.fields([{ name: 'icon', maxCount: 1 }, { name: 'splash', maxCount: 1 }]), h(async (req, res) => {
   const cfg = {
     appName: req.body.appName,
     applicationId: req.body.applicationId,
@@ -482,12 +482,18 @@ app.post('/api/build/apk', iconUpload.single('icon'), h(async (req, res) => {
     defaultServer: req.body.defaultServer,
     ownerUsername: req.body.ownerUsername || '',
   };
+  const iconFile = req.files?.icon?.[0];
+  const splashFile = req.files?.splash?.[0];
+  const cleanup = () => {
+    if (iconFile) fs.unlink(iconFile.path, () => {});
+    if (splashFile) fs.unlink(splashFile.path, () => {});
+  };
   try {
-    const { apkPath, fileName } = await builder.buildApk(cfg, req.file?.path);
-    if (req.file) fs.unlink(req.file.path, () => {});
+    const { apkPath, fileName } = await builder.buildApk(cfg, iconFile?.path, splashFile?.path);
+    cleanup();
     res.download(apkPath, fileName, () => fs.unlink(apkPath, () => {}));
   } catch (e) {
-    if (req.file) fs.unlink(req.file.path, () => {});
+    cleanup();
     res.status(e.code === 'NO_SDK' ? 501 : 500).json({ error: e.message, code: e.code });
   }
 }));
@@ -586,7 +592,7 @@ function ghFetch(url, token, opts = {}) {
 app.post('/api/build/github', h(async (req, res) => {
   const s = getSessionUser(req);
   if (!s) return res.status(401).json({ error: 'Unauthorized' });
-  const { appName, applicationId, defaultServer, ownerUsername, permissions } = req.body;
+  const { appName, applicationId, defaultServer, ownerUsername, permissions, splashImageB64 } = req.body;
   if (!GH_TOKEN_SERVER) return res.status(500).json({ error: 'GH_TOKEN не настроен на сервере' });
   const permList = (permissions || '').split(',').map((p) => p.trim()).filter(Boolean);
 
@@ -605,6 +611,7 @@ app.post('/api/build/github', h(async (req, res) => {
           owner_username: ownerUsername || '',
           permissions: permList.join(','),
           requested_by: s.username,
+          splash_image: splashImageB64 || '',
         },
       }),
     }

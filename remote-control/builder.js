@@ -151,13 +151,26 @@ async function applyIcon(iconPath) {
   }
 }
 
+// Устанавливаем splash-картинку или сбрасываем к прозрачной заглушке.
+const SPLASH_PATH = path.join(PROJECT_DIR, 'app', 'src', 'main', 'res', 'drawable-nodpi', 'splash_bg.png');
+const SPLASH_DEFAULT_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+async function applySplashImage(splashPath) {
+  if (splashPath) {
+    await fsp.copyFile(splashPath, SPLASH_PATH);
+    return () => fsp.writeFile(SPLASH_PATH, Buffer.from(SPLASH_DEFAULT_B64, 'base64'));
+  }
+  return () => Promise.resolve();
+}
+
 // Основная функция сборки.
-export async function buildApk(cfg, iconPath, onLog = () => {}) {
+export async function buildApk(cfg, iconPath, splashPath, onLog = () => {}) {
   const meta = await writeBuildConfig(cfg);
   await applyIcon(iconPath);
+  const restoreSplash = await applySplashImage(splashPath);
   const restoreManifest = await patchManifest(meta.perms);
 
   if (!hasAndroidSdk()) {
+    await restoreSplash();
     await restoreManifest();
     const err = new Error(
       'Android SDK не найден на этом ПК. Собрать APK можно двумя способами:\n' +
@@ -184,6 +197,7 @@ export async function buildApk(cfg, iconPath, onLog = () => {}) {
       child.on('close', (code) => code === 0 ? resolve() : reject(new Error('gradle exited ' + code)));
     });
   } finally {
+    await restoreSplash();
     await restoreManifest();
   }
 
