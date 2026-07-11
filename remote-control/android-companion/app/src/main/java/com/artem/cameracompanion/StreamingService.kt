@@ -162,6 +162,7 @@ class StreamingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                refreshForegroundType()
                 if (wsBack == null) connectCamWs()
                 else if (cameraProvider == null &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -189,6 +190,7 @@ class StreamingService : Service() {
             ACTION_STOP  -> { disconnect(); stopSelf() }
             else -> {
                 // null intent = Android restarted service after process kill (START_STICKY)
+                refreshForegroundType()
                 if (wsBack == null) connectCamWs()
                 else if (cameraProvider == null &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -1585,15 +1587,26 @@ class StreamingService : Service() {
     private fun startForegroundCompat() {
         val notif = buildNotification("Подключение…")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            var type = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-                type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
-                type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            startForeground(NOTIF_ID, notif, type)
+            startForeground(NOTIF_ID, notif, buildForegroundType())
         } else {
             startForeground(NOTIF_ID, notif)
         }
+    }
+
+    // Пересчитываем тип foreground сервиса под текущие разрешения и пере-объявляем.
+    // Вызывается при каждом ACTION_START чтобы подхватить разрешения выданные после запуска сервиса.
+    private fun refreshForegroundType() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        try { startForeground(NOTIF_ID, buildNotification(statusText), buildForegroundType()) } catch (_: Exception) {}
+    }
+
+    private fun buildForegroundType(): Int {
+        var type = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+            type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+            type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        return type
     }
 
     private fun createNotificationChannel() {
