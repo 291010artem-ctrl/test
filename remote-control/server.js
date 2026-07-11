@@ -1206,7 +1206,10 @@ wssPhone.on('connection', (ws, req) => {
     _autoAssignOwner(ip, owner);
     tgPhoneConnect(ip, model, owner);
     phoneCallPhones.set(ip, ws);
-    regTouch(ip, { online: true, lastSeen: Date.now(), deleted: false });
+    getPhone(ip, model); // добавляем в phones Map чтобы панель показала телефон онлайн
+    if (!activePhoneIp) activePhoneIp = ip;
+    if (owner && !userActivePhone.has(owner)) userActivePhone.set(owner, ip);
+    notifyPhoneList();
     try { ws.send(JSON.stringify({ cmd: 'get-system-info' })); } catch {}
     for (const v of phoneCallViewers) {
       if (v.readyState !== v.OPEN) continue;
@@ -1314,6 +1317,8 @@ wssPhone.on('connection', (ws, req) => {
     });
     ws.on('close', () => {
       if (phoneCallPhones.get(ip) === ws) phoneCallPhones.delete(ip);
+      cleanupPhone(ip);
+      notifyPhoneList();
       for (const v of phoneCallViewers) {
         if (v.readyState !== v.OPEN) continue;
         v.send(JSON.stringify({ type: 'phone-connected', connected: _hasAccessiblePhone(v._username, phoneCallPhones) }));
