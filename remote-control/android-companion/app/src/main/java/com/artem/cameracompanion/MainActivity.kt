@@ -81,7 +81,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         StreamingService.start(this)
         requestMissingPermissions()
-        if (!permRequestInFlight && isBatteryOptimized() && !batteryOpened) {
+        if (!permRequestInFlight && isBatteryOptimized() && !batteryOpened &&
+                "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" in declaredPerms) {
             batteryOpened = true
             try {
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
