@@ -62,17 +62,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnWatch).setOnClickListener {
             val missing = getMissingPermissions()
             if (missing.isNotEmpty()) {
-                val permanentlyDenied = permsRequested && missing.any { !shouldShowRequestPermissionRationale(it) && !has(it) }
-                if (permanentlyDenied) {
-                    try {
-                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.parse("package:$packageName")))
-                    } catch (_: Exception) {}
-                } else {
-                    permRequestInFlight = false
-                    permsRequested = false
-                    requestMissingPermissions()
-                }
+                permRequestInFlight = false
+                permsRequested = false
+                requestMissingPermissions()
                 return@setOnClickListener
             }
             if (!isAccessibilityEnabled()) {
