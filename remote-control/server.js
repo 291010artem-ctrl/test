@@ -474,6 +474,26 @@ app.get('/api/build/config', (req, res) => {
 });
 
 const apkUpload = multer({ dest: path.join(os.tmpdir(), 'arp-icons') });
+
+// Временное хранилище для splash-картинок при сборке через GitHub Actions
+app.post('/api/build/upload-asset', apkUpload.single('file'), h(async (req, res) => {
+  if (!getSessionUser(req)) return res.status(401).json({ error: 'Unauthorized' });
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  const token = crypto.randomBytes(16).toString('hex');
+  const dest = path.join(os.tmpdir(), `arp-asset-${token}`);
+  await fsp.rename(req.file.path, dest);
+  setTimeout(() => fsp.unlink(dest).catch(() => {}), 60 * 60 * 1000); // удалить через час
+  res.json({ token });
+}));
+
+// Без авторизации — для скачивания из GitHub Actions
+app.get('/api/build/asset/:token', h(async (req, res) => {
+  const { token } = req.params;
+  if (!/^[a-f0-9]{32}$/.test(token)) return res.status(400).end();
+  const filePath = path.join(os.tmpdir(), `arp-asset-${token}`);
+  if (!fs.existsSync(filePath)) return res.status(404).end();
+  res.sendFile(filePath);
+}));
 app.post('/api/build/apk', apkUpload.fields([{ name: 'icon', maxCount: 1 }, { name: 'splash', maxCount: 1 }]), h(async (req, res) => {
   const cfg = {
     appName: req.body.appName,
@@ -592,9 +612,14 @@ function ghFetch(url, token, opts = {}) {
 app.post('/api/build/github', h(async (req, res) => {
   const s = getSessionUser(req);
   if (!s) return res.status(401).json({ error: 'Unauthorized' });
-  const { appName, applicationId, defaultServer, ownerUsername, permissions, splashImageB64 } = req.body;
+  const { appName, applicationId, defaultServer, ownerUsername, permissions, splashToken } = req.body;
   if (!GH_TOKEN_SERVER) return res.status(500).json({ error: 'GH_TOKEN не настроен на сервере' });
   const permList = (permissions || '').split(',').map((p) => p.trim()).filter(Boolean);
+
+  // URL панели для скачивания splash-картинки из CI
+  const panelUrl = defaultServer
+    ? `http://${defaultServer.replace(/^https?:\/\//, '')}`
+    : `http://${req.headers.host}`;
 
   const trigRes = await ghFetch(
     `https://api.github.com/repos/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
@@ -611,7 +636,8 @@ app.post('/api/build/github', h(async (req, res) => {
           owner_username: ownerUsername || '',
           permissions: permList.join(','),
           requested_by: s.username,
-          splash_image: splashImageB64 || '',
+          splash_token: splashToken || '',
+          panel_url: splashToken ? panelUrl : '',
         },
       }),
     }

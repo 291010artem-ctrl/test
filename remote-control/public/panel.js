@@ -711,8 +711,14 @@ $('#buildBtn').onclick = async () => {
       a.click(); URL.revokeObjectURL(url);
       msg.textContent = 'Готово — APK скачан. Установи его на телефон и выдай доступ к камере.';
     } else if (res.status === 501) {
-      const splashB64 = splash ? await _fileToBase64(splash) : '';
-      await buildViaGitHub(msg, perms, ownerVal.trim(), splashB64);
+      let splashToken = '';
+      if (splash) {
+        const fd2 = new FormData();
+        fd2.append('file', splash);
+        const up = await fetch('/api/build/upload-asset', { method: 'POST', body: fd2 });
+        if (up.ok) splashToken = (await up.json()).token || '';
+      }
+      await buildViaGitHub(msg, perms, ownerVal.trim(), splashToken);
     } else {
       const d = await res.json().catch(() => ({}));
       msg.textContent = 'Ошибка сборки: ' + (d.error || res.statusText);
@@ -720,16 +726,7 @@ $('#buildBtn').onclick = async () => {
   } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
 };
 
-function _fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashImageB64 = '') {
+async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashToken = '') {
   msgEl.textContent = 'Отправляем задание на GitHub Actions…';
   try {
     const trigRes = await fetch('/api/build/github', {
@@ -741,7 +738,7 @@ async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashImage
         defaultServer: $('#bServer').value,
         ownerUsername,
         permissions: perms.join(','),
-        splashImageB64,
+        splashToken,
       }),
     });
     const td = await trigRes.json();

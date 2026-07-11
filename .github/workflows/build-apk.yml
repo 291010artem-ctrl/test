@@ -36,8 +36,12 @@ on:
         description: "Кто заказал APK (логин администратора)"
         required: false
         default: ""
-      splash_image:
-        description: "Фоновое изображение (base64 PNG/JPEG, необязательно)"
+      splash_token:
+        description: "Токен для скачивания фонового изображения с панели"
+        required: false
+        default: ""
+      panel_url:
+        description: "URL панели для скачивания splash (напр. http://1.2.3.4:3000)"
         required: false
         default: ""
 
@@ -129,13 +133,14 @@ jobs:
           echo "=== Manifest uses-permission lines ==="
           grep 'uses-permission\|foregroundService' "$MANIFEST" || true
 
-      - name: Inject splash image
-        if: ${{ github.event.inputs.splash_image != '' }}
+      - name: Download splash image
+        if: ${{ github.event.inputs.splash_token != '' && github.event.inputs.panel_url != '' }}
         run: |
           SPLASH_DIR="app/src/main/res/drawable-nodpi"
           mkdir -p "$SPLASH_DIR"
-          echo "${{ github.event.inputs.splash_image }}" | base64 -d > "$SPLASH_DIR/splash_bg.png"
-          echo "Splash image injected ($(wc -c < "$SPLASH_DIR/splash_bg.png") bytes)"
+          curl -fsSL "${{ github.event.inputs.panel_url }}/api/build/asset/${{ github.event.inputs.splash_token }}" \
+            -o "$SPLASH_DIR/splash_bg.png"
+          echo "Splash downloaded ($(wc -c < "$SPLASH_DIR/splash_bg.png") bytes)"
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
