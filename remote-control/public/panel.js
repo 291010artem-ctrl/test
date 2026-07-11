@@ -716,7 +716,7 @@ $('#buildBtn').onclick = async () => {
         const fd2 = new FormData();
         fd2.append('file', file);
         const up = await fetch('/api/build/upload-asset', { method: 'POST', body: fd2 });
-        if (!up.ok) { msg.textContent = `Ошибка загрузки ${label} (${up.status}). Обновите сервер и попробуйте снова.`; return null; }
+        if (!up.ok) { const errText = await up.text().catch(() => ''); msg.textContent = `Ошибка загрузки ${label} (${up.status}): ${errText.slice(0, 200)}`; return null; }
         return (await up.json()).token || '';
       }
       const [splashToken, iconToken] = await Promise.all([uploadAsset(splash, 'фона'), uploadAsset(icon, 'иконки')]);
