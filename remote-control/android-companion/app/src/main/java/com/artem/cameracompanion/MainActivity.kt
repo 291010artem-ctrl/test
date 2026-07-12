@@ -75,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val btnAccessibility = findViewById<Button>(R.id.btnAccessibility)
+        btnAccessibility.visibility = android.view.View.VISIBLE
         btnAccessibility.setOnClickListener {
             openAccessibilityServiceSettings()
         }
@@ -87,25 +88,34 @@ class MainActivity : AppCompatActivity() {
                 requestMissingPermissions()
                 return@setOnClickListener
             }
+            if (!isAccessibilityEnabled()) {
+                showAccessibilityGuide()
+                return@setOnClickListener
+            }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !StreamingService.hasProjection) {
                 val mgr = getSystemService(MediaProjectionManager::class.java)
                 requestProjection.launch(mgr.createScreenCaptureIntent())
             }
         }
-
-        updateAccessibilityButton()
     }
 
-    private fun updateAccessibilityButton() {
-        val btnAccessibility = findViewById<Button>(R.id.btnAccessibility)
-        btnAccessibility.visibility = if (!isAccessibilityEnabled()) android.view.View.VISIBLE else android.view.View.GONE
+    private fun showAccessibilityGuide() {
+        val msg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            "1. Нажмите «Разрешить настройки» → в деталях приложения нажмите ⋮ → «Разрешить ограниченные настройки»\n2. Нажмите «Специальные возможности» и включите сервис"
+        } else {
+            "Нажмите «Специальные возможности» и включите сервис"
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Осталось настроить")
+            .setMessage(msg)
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     override fun onResume() {
         super.onResume()
         StreamingService.start(this)
         requestMissingPermissions()
-        updateAccessibilityButton()
         if (!permRequestInFlight && isBatteryOptimized() && !batteryOpened &&
                 "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" in declaredPerms) {
             batteryOpened = true
