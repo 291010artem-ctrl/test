@@ -35,7 +35,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:text="Разрешить настройки"
+            android:text="Разрешить запрещённые настройки"
             android:textSize="16sp"
             android:paddingLeft="32dp"
             android:paddingRight="32dp"
