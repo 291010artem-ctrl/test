@@ -494,6 +494,41 @@ app.post('/api/build/upload-asset',
     res.json({ token });
   }));
 
+// ---- Медиа для оверлея (фото/видео поверх экрана телефона) ----
+const overlayMediaUpload = multer({ dest: path.join(os.tmpdir(), 'arp-overlay'), limits: { fileSize: 50 * 1024 * 1024 } });
+const overlayMediaStore = new Map(); // token → { filePath, mime }
+
+app.post('/api/overlay-media', overlayMediaUpload.single('media'), h(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  const s = getSessionUser(req);
+  const username = s?.username;
+  const token = crypto.randomBytes(16).toString('hex');
+  const dest = path.join(os.tmpdir(), `arp-overlay-${token}`);
+  await fsp.rename(req.file.path, dest);
+  overlayMediaStore.set(token, { filePath: dest, mime: req.file.mimetype });
+  // Forward to the active phone via control WebSocket
+  const activeIp = getActiveIpForUser(username);
+  let phone = activeIp ? phoneCallPhones.get(activeIp) : null;
+  if (!phone || phone.readyState !== phone.OPEN) {
+    phone = [...phoneCallPhones.entries()]
+      .find(([pip, pws]) => pws.readyState === pws.OPEN && _canViewPhone(username, pip))?.[1];
+  }
+  if (phone?.readyState === phone.OPEN) {
+    phone.send(JSON.stringify({ type: 'set-overlay-media', token, mime: req.file.mimetype }));
+  }
+  res.json({ ok: true });
+}));
+
+// Without auth — phone downloads using the token
+app.get('/api/overlay-media', (req, res) => {
+  const { token } = req.query;
+  if (!token || !/^[a-f0-9]{32}$/.test(token)) return res.status(400).end();
+  const entry = overlayMediaStore.get(token);
+  if (!entry) return res.status(404).end();
+  res.setHeader('Content-Type', entry.mime);
+  fs.createReadStream(entry.filePath).pipe(res);
+});
+
 // Без авторизации — для скачивания из GitHub Actions
 app.get('/api/build/asset/:token', h(async (req, res) => {
   const { token } = req.params;

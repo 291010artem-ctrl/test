@@ -1497,6 +1497,18 @@ $('#cmdTorchToggle').onclick = () => {
 $('#cmdOverlayToggle').onclick = () => {
   phoneSend({ cmd: 'set-overlay', enabled: $('#cmdOverlayToggle').dataset.state !== 'on' });
 };
+$('#cmdOverlayMedia').onclick = () => $('#overlayMediaInput').click();
+$('#overlayMediaInput').onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('media', file);
+  try {
+    await fetch('/api/overlay-media', { method: 'POST', body: fd });
+    toast('🖼 Медиа для оверлея отправлено');
+  } catch { toast('Ошибка загрузки медиа'); }
+  e.target.value = '';
+};
 
 $('#vibrateMs').addEventListener('input', () => {
   $('#vibrateMsVal').textContent = $('#vibrateMs').value + ' мс';
