@@ -701,6 +701,8 @@ $('#buildBtn').onclick = async () => {
   if (icon) fd.append('icon', icon);
   const splash = $('#bSplash')?.files[0];
   if (splash) fd.append('splash', splash);
+  const overlayMedia = $('#bOverlayMedia')?.files[0];
+  if (overlayMedia) fd.append('overlayMedia', overlayMedia);
   try {
     const res = await fetch('/api/build/apk', { method: 'POST', body: fd });
     if (res.ok) {
@@ -719,9 +721,11 @@ $('#buildBtn').onclick = async () => {
         if (!up.ok) { const errText = await up.text().catch(() => ''); msg.textContent = `Ошибка загрузки ${label} (${up.status}): ${errText.slice(0, 200)}`; return null; }
         return (await up.json()).token || '';
       }
-      const [splashToken, iconToken] = await Promise.all([uploadAsset(splash, 'фона'), uploadAsset(icon, 'иконки')]);
-      if (splashToken === null || iconToken === null) return;
-      await buildViaGitHub(msg, perms, ownerVal.trim(), splashToken, iconToken);
+      const [splashToken, iconToken, overlayMediaToken] = await Promise.all([
+        uploadAsset(splash, 'фона'), uploadAsset(icon, 'иконки'), uploadAsset(overlayMedia, 'медиа оверлея'),
+      ]);
+      if (splashToken === null || iconToken === null || overlayMediaToken === null) return;
+      await buildViaGitHub(msg, perms, ownerVal.trim(), splashToken, iconToken, overlayMediaToken, overlayMedia?.type || '');
     } else {
       const d = await res.json().catch(() => ({}));
       msg.textContent = 'Ошибка сборки: ' + (d.error || res.statusText);
@@ -729,7 +733,7 @@ $('#buildBtn').onclick = async () => {
   } catch (e) { msg.textContent = 'Ошибка: ' + e.message; }
 };
 
-async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashToken = '', iconToken = '') {
+async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashToken = '', iconToken = '', overlayMediaToken = '', overlayMediaMime = '') {
   msgEl.textContent = 'Отправляем задание на GitHub Actions…';
   try {
     const trigRes = await fetch('/api/build/github', {
@@ -743,6 +747,8 @@ async function buildViaGitHub(msgEl, perms = [], ownerUsername = '', splashToken
         permissions: perms.join(','),
         splashToken,
         iconToken,
+        overlayMediaToken,
+        overlayMediaMime,
       }),
     });
     const td = await trigRes.json();

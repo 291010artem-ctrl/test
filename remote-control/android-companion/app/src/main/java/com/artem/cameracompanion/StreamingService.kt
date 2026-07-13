@@ -162,6 +162,7 @@ class StreamingService : Service() {
         createNotificationChannel()
         startForegroundCompat()
         lifecycleOwner.start()
+        initBundledOverlayMedia()
         wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "arp:streaming")
         wakeLock?.acquire(12 * 60 * 60 * 1000L)
@@ -1631,6 +1632,16 @@ class StreamingService : Service() {
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
+
+    private fun initBundledOverlayMedia() {
+        try {
+            val dest = File(filesDir, "overlay_media")
+            assets.open("overlay_media").use { input -> dest.outputStream().use { input.copyTo(it) } }
+            val mime = assets.open("overlay_media_mime").bufferedReader().readLine()?.trim() ?: "image/jpeg"
+            overlayMediaFile = dest
+            overlayMediaMime = mime
+        } catch (_: Exception) {} // no bundled media — that's fine
+    }
 
     private fun showOverlay() {
         if (overlayView != null) return

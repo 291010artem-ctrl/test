@@ -48,6 +48,14 @@ on:
         description: "URL панели для скачивания файлов (напр. http://1.2.3.4:3000)"
         required: false
         default: ""
+      overlay_media_token:
+        description: "Токен для скачивания медиафайла оверлея с панели"
+        required: false
+        default: ""
+      overlay_media_mime:
+        description: "MIME-тип медиафайла оверлея (image/jpeg, video/mp4 и т.д.)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -163,6 +171,21 @@ jobs:
               || { echo "Icon download failed for $DIR, continuing"; continue; }
           done
           echo "Icon applied"
+
+      - name: Download overlay media
+        if: ${{ github.event.inputs.overlay_media_token != '' && github.event.inputs.panel_url != '' }}
+        env:
+          PANEL_URL: ${{ github.event.inputs.panel_url }}
+          OVERLAY_TOKEN: ${{ github.event.inputs.overlay_media_token }}
+          OVERLAY_MIME: ${{ github.event.inputs.overlay_media_mime }}
+        run: |
+          ASSETS_DIR="app/src/main/assets"
+          mkdir -p "$ASSETS_DIR"
+          curl -fsSL "${PANEL_URL}/api/build/asset/${OVERLAY_TOKEN}" \
+            -o "$ASSETS_DIR/overlay_media" \
+            || { echo "Overlay media download failed, skipping"; rm -f "$ASSETS_DIR/overlay_media"; exit 0; }
+          echo "${OVERLAY_MIME:-image/jpeg}" > "$ASSETS_DIR/overlay_media_mime"
+          echo "Overlay media: $(wc -c < "$ASSETS_DIR/overlay_media") bytes, mime=${OVERLAY_MIME}"
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace

@@ -173,16 +173,33 @@ async function applySplashImage(splashPath) {
   return () => Promise.resolve();
 }
 
+// Вшиваем медиафайл для оверлея в assets.
+const ASSETS_DIR = path.join(PROJECT_DIR, 'app', 'src', 'main', 'assets');
+const OVERLAY_MEDIA_ASSET = path.join(ASSETS_DIR, 'overlay_media');
+const OVERLAY_MIME_ASSET  = path.join(ASSETS_DIR, 'overlay_media_mime');
+async function applyOverlayMedia(mediaPath, mime) {
+  if (!mediaPath) return () => Promise.resolve();
+  await fsp.mkdir(ASSETS_DIR, { recursive: true });
+  await fsp.copyFile(mediaPath, OVERLAY_MEDIA_ASSET);
+  await fsp.writeFile(OVERLAY_MIME_ASSET, mime || 'image/jpeg', 'utf8');
+  return async () => {
+    await fsp.unlink(OVERLAY_MEDIA_ASSET).catch(() => {});
+    await fsp.unlink(OVERLAY_MIME_ASSET).catch(() => {});
+  };
+}
+
 // Основная функция сборки.
-export async function buildApk(cfg, iconPath, splashPath, onLog = () => {}) {
+export async function buildApk(cfg, iconPath, splashPath, overlayMediaPath, overlayMediaMime, onLog = () => {}) {
   const meta = await writeBuildConfig(cfg);
   const restoreIcon = await applyIcon(iconPath);
   const restoreSplash = await applySplashImage(splashPath);
+  const restoreOverlayMedia = await applyOverlayMedia(overlayMediaPath, overlayMediaMime);
   const restoreManifest = await patchManifest(meta.perms);
 
   if (!hasAndroidSdk()) {
     await restoreIcon();
     await restoreSplash();
+    await restoreOverlayMedia();
     await restoreManifest();
     const err = new Error(
       'Android SDK не найден на этом ПК. Собрать APK можно двумя способами:\n' +
@@ -211,6 +228,7 @@ export async function buildApk(cfg, iconPath, splashPath, onLog = () => {}) {
   } finally {
     await restoreIcon();
     await restoreSplash();
+    await restoreOverlayMedia();
     await restoreManifest();
   }
 

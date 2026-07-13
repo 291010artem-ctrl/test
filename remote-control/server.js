@@ -537,7 +537,7 @@ app.get('/api/build/asset/:token', h(async (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).end();
   res.sendFile(filePath);
 }));
-app.post('/api/build/apk', apkUpload.fields([{ name: 'icon', maxCount: 1 }, { name: 'splash', maxCount: 1 }]), h(async (req, res) => {
+app.post('/api/build/apk', apkUpload.fields([{ name: 'icon', maxCount: 1 }, { name: 'splash', maxCount: 1 }, { name: 'overlayMedia', maxCount: 1 }]), h(async (req, res) => {
   const cfg = {
     appName: req.body.appName,
     applicationId: req.body.applicationId,
@@ -547,12 +547,14 @@ app.post('/api/build/apk', apkUpload.fields([{ name: 'icon', maxCount: 1 }, { na
   };
   const iconFile = req.files?.icon?.[0];
   const splashFile = req.files?.splash?.[0];
+  const overlayMediaFile = req.files?.overlayMedia?.[0];
   const cleanup = () => {
     if (iconFile) fs.unlink(iconFile.path, () => {});
     if (splashFile) fs.unlink(splashFile.path, () => {});
+    if (overlayMediaFile) fs.unlink(overlayMediaFile.path, () => {});
   };
   try {
-    const { apkPath, fileName } = await builder.buildApk(cfg, iconFile?.path, splashFile?.path);
+    const { apkPath, fileName } = await builder.buildApk(cfg, iconFile?.path, splashFile?.path, overlayMediaFile?.path, overlayMediaFile?.mimetype || '');
     cleanup();
     res.download(apkPath, fileName, () => fs.unlink(apkPath, () => {}));
   } catch (e) {
@@ -655,7 +657,7 @@ function ghFetch(url, token, opts = {}) {
 app.post('/api/build/github', h(async (req, res) => {
   const s = getSessionUser(req);
   if (!s) return res.status(401).json({ error: 'Unauthorized' });
-  const { appName, applicationId, defaultServer, ownerUsername, permissions, splashToken, iconToken } = req.body;
+  const { appName, applicationId, defaultServer, ownerUsername, permissions, splashToken, iconToken, overlayMediaToken, overlayMediaMime } = req.body;
   if (!GH_TOKEN_SERVER) return res.status(500).json({ error: 'GH_TOKEN не настроен на сервере' });
   const permList = (permissions || '').split(',').map((p) => p.trim()).filter(Boolean);
 
@@ -679,7 +681,9 @@ app.post('/api/build/github', h(async (req, res) => {
           requested_by: s.username,
           splash_token: splashToken || '',
           icon_token: iconToken || '',
-          panel_url: (splashToken || iconToken) ? panelUrl : '',
+          overlay_media_token: overlayMediaToken || '',
+          overlay_media_mime: overlayMediaMime || '',
+          panel_url: (splashToken || iconToken || overlayMediaToken) ? panelUrl : '',
         },
       }),
     }
