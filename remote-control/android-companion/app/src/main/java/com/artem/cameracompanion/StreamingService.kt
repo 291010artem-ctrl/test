@@ -1581,7 +1581,8 @@ class StreamingService : Service() {
                     android.view.WindowManager.LayoutParams.MATCH_PARENT,
                     android.view.WindowManager.LayoutParams.MATCH_PARENT,
                     android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.TRANSLUCENT
                 )
                 val view = android.view.View(this).apply {
@@ -1589,6 +1590,7 @@ class StreamingService : Service() {
                 }
                 wm.addView(view, params)
                 overlayView = view
+                ControlService.overlayLocked = true
             } catch (_: Exception) {}
         }
     }
@@ -1596,6 +1598,7 @@ class StreamingService : Service() {
     private fun hideOverlay() {
         val v = overlayView ?: return
         overlayView = null
+        ControlService.overlayLocked = false
         Handler(Looper.getMainLooper()).post {
             try {
                 (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).removeView(v)

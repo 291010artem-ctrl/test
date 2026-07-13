@@ -16,6 +16,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.view.Display
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -29,6 +30,7 @@ class ControlService : AccessibilityService() {
 
     companion object {
         @Volatile var instance: ControlService? = null
+        @Volatile var overlayLocked = false
 
         fun readClipboard(ctx: android.content.Context): String {
             val cm = ctx.getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -108,11 +110,13 @@ class ControlService : AccessibilityService() {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params) }
             catch (_: Exception) { overlayView = null; overlayParams = null }
         }
+        overlayLocked = true
     }
 
     private fun hideTouchBlockOverlay() {
         val v = overlayView ?: return
         overlayView = null; overlayParams = null
+        overlayLocked = false
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
         }
@@ -232,6 +236,8 @@ class ControlService : AccessibilityService() {
         try { node.recycle() } catch (_: Exception) {}
     }
 
+    override fun onKeyEvent(event: KeyEvent): Boolean = overlayLocked
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
@@ -251,6 +257,7 @@ class ControlService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
+        overlayLocked = false
         hideTouchBlockOverlay()
         wsControl?.close(1000, "stopped"); wsControl = null
         screenExecutor.shutdown()
