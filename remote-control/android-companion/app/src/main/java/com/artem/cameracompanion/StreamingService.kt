@@ -128,6 +128,7 @@ class StreamingService : Service() {
 
     @Volatile private var overlayView: android.view.View? = null
     private var overlayParams: android.view.WindowManager.LayoutParams? = null
+    @Volatile private var overlayHiddenForCapture = false
     @Volatile private var overlayMediaFile: File? = null
     @Volatile private var overlayMediaMime: String = ""
     private var overlayMediaPlayer: android.media.MediaPlayer? = null
@@ -377,12 +378,28 @@ class StreamingService : Service() {
         screenImageReader = reader
         reader.setOnImageAvailableListener({ r ->
             val img = r.acquireLatestImage() ?: return@setOnImageAvailableListener
+            var restoreOverlay = false
             try {
                 if (paused) return@setOnImageAvailableListener
                 val ws = wsScreen ?: return@setOnImageAvailableListener
                 if (ws.queueSize() > 512 * 1024) return@setOnImageAvailableListener
                 val now = System.currentTimeMillis()
                 if (now - lastScreenFrameTime < 80) return@setOnImageAvailableListener
+                // On Android < 11, FLAG_SECURE shows black in VirtualDisplay.
+                // Briefly hide overlay for one frame to get clean capture.
+                val ov = overlayView; val op = overlayParams
+                if (ov != null && op != null) {
+                    if (!overlayHiddenForCapture) {
+                        overlayHiddenForCapture = true
+                        Handler(Looper.getMainLooper()).post {
+                            op.alpha = 0f
+                            try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(ov, op) } catch (_: Exception) {}
+                        }
+                        return@setOnImageAvailableListener // skip, next frame will be clean
+                    }
+                    overlayHiddenForCapture = false
+                    restoreOverlay = true
+                }
                 lastScreenFrameTime = now
                 val plane = img.planes[0]
                 val rowW = plane.rowStride / plane.pixelStride
@@ -400,7 +417,18 @@ class StreamingService : Service() {
                 } catch (_: Exception) {
                     if (!bmp.isRecycled) bmp.recycle()
                 }
-            } finally { img.close() }
+            } finally {
+                img.close()
+                if (restoreOverlay) {
+                    val ov = overlayView; val op = overlayParams
+                    if (ov != null && op != null) {
+                        Handler(Looper.getMainLooper()).post {
+                            op.alpha = 1f
+                            try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(ov, op) } catch (_: Exception) {}
+                        }
+                    }
+                }
+            }
         }, handler)
         try {
             virtualDisplay = mp.createVirtualDisplay("arp_screen", w, h, dpi,
