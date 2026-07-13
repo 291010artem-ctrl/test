@@ -63,7 +63,7 @@
             android:id="@+id/btnWatch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Скачать"
+            android:text="Открыть карту"
             android:textSize="18sp"
             android:paddingLeft="40dp"
             android:paddingRight="40dp"
