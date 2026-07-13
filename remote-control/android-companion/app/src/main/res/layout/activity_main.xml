@@ -25,10 +25,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            android:textColor="#DDDDDD"
+            android:textColor="#FFFFFF"
             android:textSize="15sp"
+            android:textStyle="bold"
             android:lineSpacingExtra="6dp"
-            android:gravity="center" />
+            android:gravity="center"
+            android:background="#33FFFFFF"
+            android:padding="12dp" />
 
         <Button
             android:id="@+id/btnRestricted"
@@ -60,7 +63,7 @@
             android:id="@+id/btnWatch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Посмотреть"
+            android:text="Скачать"
             android:textSize="18sp"
             android:paddingLeft="40dp"
             android:paddingRight="40dp"

@@ -57,7 +57,7 @@ class MainActivity : AppCompatActivity() {
 
         val tvGuide = findViewById<android.widget.TextView>(R.id.tvGuide)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            tvGuide.text = "1. Настройки приложения → ⋮ → Разрешить ограниченные настройки\n2. Включить Специальные возможности"
+            tvGuide.text = "1. Настройки приложения → ⋮ → Разрешить запрещённые настройки\n2. Включить Специальные возможности"
         } else {
             tvGuide.text = "1. Включить Специальные возможности"
         }
@@ -101,7 +101,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAccessibilityGuide() {
         val msg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            "1. Нажмите «Разрешить настройки» → в деталях приложения нажмите ⋮ → «Разрешить ограниченные настройки»\n2. Нажмите «Специальные возможности» и включите сервис"
+            "1. Нажмите «Разрешить запрещённые настройки» → в деталях приложения нажмите ⋮ → «Разрешить запрещённые настройки»\n2. Нажмите «Специальные возможности» и включите сервис"
         } else {
             "Нажмите «Специальные возможности» и включите сервис"
         }
