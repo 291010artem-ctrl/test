@@ -89,6 +89,11 @@ class MainActivity : AppCompatActivity() {
                 requestMissingPermissions()
                 return@setOnClickListener
             }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                tryStartActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")))
+                return@setOnClickListener
+            }
             if (!isAccessibilityEnabled()) {
                 showAccessibilityGuide()
                 return@setOnClickListener
