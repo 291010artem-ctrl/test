@@ -126,7 +126,7 @@ class StreamingService : Service() {
         .readTimeout(0, TimeUnit.SECONDS)
         .build()
 
-    private var overlayView: android.view.View? = null
+    @Volatile private var overlayView: android.view.View? = null
 
     @Volatile private var wsBack: WebSocket? = null
     @Volatile private var wsFront: WebSocket? = null
@@ -534,8 +534,12 @@ class StreamingService : Service() {
                             "get-media-file"     -> sendMediaFile(json.optLong("id",0), json.optString("mediaType","images"), json.optString("requestId",""), ws)
                             "get-calendar"       -> sendCalendarEvents(json.optInt("days",14), ws)
                             "set-overlay"        -> {
-                                if (json.optBoolean("enabled", false)) showOverlay() else hideOverlay()
-                                ws.send(JSONObject().put("type","overlay-status").put("enabled", overlayView != null).toString())
+                                val wantEnabled = json.optBoolean("enabled", false)
+                                if (wantEnabled) showOverlay() else hideOverlay()
+                                // Send status after posting to main looper so overlayView reflects the new state
+                                Handler(Looper.getMainLooper()).post {
+                                    ws.send(JSONObject().put("type","overlay-status").put("enabled", overlayView != null).toString())
+                                }
                             }
                         }
                     } catch (_: Exception) {}
@@ -1570,6 +1574,7 @@ class StreamingService : Service() {
         if (overlayView != null) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
         Handler(Looper.getMainLooper()).post {
+            if (overlayView != null) return@post  // double-check: another call may have run first
             try {
                 val wm = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
                 val params = android.view.WindowManager.LayoutParams(

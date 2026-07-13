@@ -106,7 +106,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        updateAccessibilityButton()
         updateOverlayButton()
     }
 
