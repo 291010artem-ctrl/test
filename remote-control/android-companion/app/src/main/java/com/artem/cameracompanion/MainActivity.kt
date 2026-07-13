@@ -121,12 +121,9 @@ class MainActivity : AppCompatActivity() {
         if (!permRequestInFlight && isBatteryOptimized() && !batteryOpened &&
                 "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" in declaredPerms) {
             batteryOpened = true
-            try {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    Uri.parse("package:$packageName")))
-            } catch (_: Exception) {
-                try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) {}
-            }
+            val pkg = Uri.parse("package:$packageName")
+            val opened = tryStartActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
+            if (!opened) tryStartActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
         }
         if (!permRequestInFlight && !overlayOpened &&
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
