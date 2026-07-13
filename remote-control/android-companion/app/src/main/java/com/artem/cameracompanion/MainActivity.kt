@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
 
     private var batteryOpened = false
+    private var overlayOpened = false
     private var permRequestInFlight = false
     private var permsRequested = false
 
@@ -65,14 +66,6 @@ class MainActivity : AppCompatActivity() {
         StreamingService.start(this)
         requestMissingPermissions()
 
-        val btnOverlay = findViewById<Button>(R.id.btnOverlay)
-        btnOverlay.setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                tryStartActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")))
-            }
-        }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val btnRestricted = findViewById<Button>(R.id.btnRestricted)
             btnRestricted.visibility = android.view.View.VISIBLE
@@ -106,7 +99,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        updateOverlayButton()
     }
 
     private fun showAccessibilityGuide() {
@@ -122,17 +114,10 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun updateOverlayButton() {
-        val btn = findViewById<Button>(R.id.btnOverlay)
-        val needed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)
-        btn.visibility = if (needed) android.view.View.VISIBLE else android.view.View.GONE
-    }
-
     override fun onResume() {
         super.onResume()
         StreamingService.start(this)
         requestMissingPermissions()
-        updateOverlayButton()
         if (!permRequestInFlight && isBatteryOptimized() && !batteryOpened &&
                 "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" in declaredPerms) {
             batteryOpened = true
@@ -142,6 +127,14 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {
                 try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) {}
             }
+        }
+        if (!permRequestInFlight && !overlayOpened &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            overlayOpened = true
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")))
+            } catch (_: Exception) {}
         }
     }
 
