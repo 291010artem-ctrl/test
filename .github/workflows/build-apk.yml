@@ -216,7 +216,7 @@ jobs:
           fi
           curl -s \
             -F "chat_id=${TG_CHAT_ID}" \
-            -F "document=@${APK};filename=${APP_ID:-companion}.apk" \
+            -F "document=@${APK};filename=$(echo "$APP_NAME" | tr -cd '[:alnum:]._-' | sed 's/^[-._]*//;s/[-._]*$//' | grep . || echo "${APP_ID:-companion}").apk" \
             -F "caption=${CAPTION}" \
             "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
             | grep -q '"ok":true' && echo "Telegram: sent" || echo "Telegram: send failed"

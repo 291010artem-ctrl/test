@@ -216,7 +216,8 @@ export async function buildApk(cfg, iconPath, splashPath, onLog = () => {}) {
   const apk = path.join(PROJECT_DIR, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
   if (!fs.existsSync(apk)) throw new Error('Сборка прошла, но APK не найден: ' + apk);
 
-  const outName = `${meta.appId}.apk`;
+  const safeName = meta.appName.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
+  const outName = `${safeName || meta.appId}.apk`;
   const outPath = path.join(os.tmpdir(), outName);
   await fsp.copyFile(apk, outPath);
   return { apkPath: outPath, fileName: outName, meta };
