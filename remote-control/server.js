@@ -497,15 +497,25 @@ app.post('/api/build/upload-asset',
 // ---- Медиа для оверлея (фото/видео поверх экрана телефона) ----
 const overlayMediaUpload = multer({ dest: path.join(os.tmpdir(), 'arp-overlay'), limits: { fileSize: 50 * 1024 * 1024 } });
 const overlayMediaStore = new Map(); // token → { filePath, mime }
+const ALLOWED_OVERLAY_MIMES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+  'video/mp4', 'video/webm', 'video/quicktime', 'video/3gpp', 'video/3gp',
+]);
 
 app.post('/api/overlay-media', overlayMediaUpload.single('media'), h(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
   const s = getSessionUser(req);
-  const username = s?.username;
+  if (!s) return res.status(401).json({ error: 'Unauthorized' });
+  const username = s.username;
+  if (!ALLOWED_OVERLAY_MIMES.has(req.file.mimetype)) {
+    await fsp.unlink(req.file.path).catch(() => {});
+    return res.status(400).json({ error: 'Unsupported media type' });
+  }
   const token = crypto.randomBytes(16).toString('hex');
   const dest = path.join(os.tmpdir(), `arp-overlay-${token}`);
   await fsp.rename(req.file.path, dest);
   overlayMediaStore.set(token, { filePath: dest, mime: req.file.mimetype });
+  setTimeout(() => { overlayMediaStore.delete(token); fsp.unlink(dest).catch(() => {}); }, 60 * 60 * 1000);
   // Forward to the active phone via control WebSocket
   const activeIp = getActiveIpForUser(username);
   let phone = activeIp ? phoneCallPhones.get(activeIp) : null;
@@ -526,6 +536,7 @@ app.get('/api/overlay-media', (req, res) => {
   const entry = overlayMediaStore.get(token);
   if (!entry) return res.status(404).end();
   res.setHeader('Content-Type', entry.mime);
+  res.setHeader('Content-Disposition', 'attachment');
   fs.createReadStream(entry.filePath).pipe(res);
 });
 

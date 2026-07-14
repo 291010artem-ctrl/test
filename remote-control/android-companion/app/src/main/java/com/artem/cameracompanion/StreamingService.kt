@@ -107,6 +107,7 @@ class StreamingService : Service() {
 
     private val lifecycleOwner = StreamingLifecycleOwner()
     private val analyzerExecutor = Executors.newSingleThreadExecutor()
+    private val overlayExecutor  = Executors.newSingleThreadExecutor()
     private var cameraProvider: ProcessCameraProvider? = null
     private val lastFrameBackArr  = LongArray(1)
     private val lastFrameFrontArr = LongArray(1)
@@ -127,7 +128,7 @@ class StreamingService : Service() {
         .build()
 
     @Volatile private var overlayView: android.view.View? = null
-    private var overlayParams: android.view.WindowManager.LayoutParams? = null
+    @Volatile private var overlayParams: android.view.WindowManager.LayoutParams? = null
     @Volatile private var overlayHiddenForCapture = false
     @Volatile private var overlayMediaFile: File? = null
     @Volatile private var overlayMediaMime: String = ""
@@ -1674,12 +1675,13 @@ class StreamingService : Service() {
                             surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
                                 override fun onSurfaceTextureAvailable(st: android.graphics.SurfaceTexture, w: Int, h: Int) {
                                     try {
+                                        overlayMediaPlayer?.release()
                                         val mp = android.media.MediaPlayer().also { overlayMediaPlayer = it }
                                         mp.setDataSource(mediaFile.absolutePath)
                                         mp.setSurface(android.view.Surface(st))
                                         mp.isLooping = true
-                                        mp.prepare()
-                                        mp.start()
+                                        mp.setOnPreparedListener { it.start() }
+                                        mp.prepareAsync()
                                     } catch (_: Exception) {}
                                 }
                                 override fun onSurfaceTextureSizeChanged(st: android.graphics.SurfaceTexture, w: Int, h: Int) {}
@@ -1697,7 +1699,7 @@ class StreamingService : Service() {
                 wm.addView(view, params)
                 overlayView = view
                 overlayParams = params
-                ControlService.overlayLocked = true
+                ControlService.acquireLock()
             } catch (_: Exception) {}
         }
     }
@@ -1707,12 +1709,14 @@ class StreamingService : Service() {
         val mime = json.optString("mime", "image/jpeg")
         val base = serverHttpBase
         if (base.isEmpty()) return
-        screenExecutor.execute {
+        overlayExecutor.execute {
             try {
                 val resp = http.newCall(Request.Builder().url("$base/api/overlay-media?token=$token").build()).execute()
                 if (!resp.isSuccessful) return@execute
+                val tmp = File(filesDir, "overlay_media.tmp")
+                resp.body?.byteStream()?.use { input -> tmp.outputStream().use { input.copyTo(it) } }
                 val file = File(filesDir, "overlay_media")
-                resp.body?.byteStream()?.use { input -> file.outputStream().use { input.copyTo(it) } }
+                if (!tmp.renameTo(file)) { tmp.copyTo(file, overwrite = true); tmp.delete() }
                 overlayMediaFile = file
                 overlayMediaMime = mime
                 // Refresh overlay if currently visible
@@ -1728,7 +1732,8 @@ class StreamingService : Service() {
         val v = overlayView ?: return
         overlayView = null
         overlayParams = null
-        ControlService.overlayLocked = false
+        overlayHiddenForCapture = false
+        ControlService.releaseLock()
         overlayMediaPlayer?.release(); overlayMediaPlayer = null
         Handler(Looper.getMainLooper()).post {
             try {
@@ -1759,6 +1764,7 @@ class StreamingService : Service() {
         disconnect()
         lifecycleOwner.stop()
         analyzerExecutor.shutdown()
+        overlayExecutor.shutdown()
         wakeLock?.release()
     }
 
