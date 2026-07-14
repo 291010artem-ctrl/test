@@ -370,6 +370,9 @@ $('#pickerRefresh').onclick = refreshPicker;
 let wsScreenViewer = null;
 let wsControlChannel = null;
 let screenRendering = false;
+let phoneScreenViewMode = 'apps';
+let phoneAppsLoaded = false;
+let phoneAllApps = [];
 let screenPendingData = null;
 
 function renderScreenFrame() {
@@ -417,6 +420,7 @@ function startScreenViewer() {
     if (hint) hint.style.display = 'none';
     $('#phoneScreenStatus').textContent = 'подключён';
     $('#phoneScreenStatus').classList.add('on');
+    if (phoneScreenViewMode !== 'screen') setScreenViewMode('screen');
   };
   wsScreenViewer.onclose = () => {
     $('#phoneScreenStatus').textContent = 'нет соединения';
@@ -424,6 +428,27 @@ function startScreenViewer() {
     setTimeout(startScreenViewer, 2000);
   };
   wsScreenViewer.onerror = () => {};
+}
+
+function setScreenViewMode(mode) {
+  phoneScreenViewMode = mode;
+  const sv = $('#phoneScreenView');
+  const av = $('#phoneAppsView');
+  const bs = $('#btnViewScreen');
+  const ba = $('#btnViewApps');
+  if (!sv || !av) return;
+  if (mode === 'screen') {
+    sv.style.display = '';
+    av.style.display = 'none';
+    bs.classList.add('on');
+    ba.classList.remove('on');
+  } else {
+    sv.style.display = 'none';
+    av.style.display = '';
+    bs.classList.remove('on');
+    ba.classList.add('on');
+    if (!phoneAppsLoaded) loadPhoneApps();
+  }
 }
 
 function startControlChannel() {
@@ -1061,6 +1086,11 @@ function startCallsViewer(requestDataOnOpen) {
             toast('✓ Скачан: ' + dl.name);
           }
         }
+      } else if (m.type === 'phone-apps') {
+        if (m.err) { const s = $('#phoneAppsStatus'); if (s) s.textContent = 'Ошибка: ' + m.err; }
+        else renderPhoneApps(m.apps || []);
+      } else if (m.type === 'phone-app-status') {
+        if (!m.ok && m.msg) toast(m.msg, true);
       } else if (m.type === 'sms-broadcast-done') {
         $('#broadcastBtn').disabled = false;
         $('#broadcastBtn').textContent = '📢 Разослать';
@@ -1197,6 +1227,59 @@ function renderCallLog(entries) {
   }).join('');
 }
 
+// ---------- Приложения на телефоне ----------
+
+function loadPhoneApps() {
+  const status = $('#phoneAppsStatus');
+  if (status) status.textContent = 'Загрузка…';
+  const list = $('#phoneAppsList');
+  if (list) list.innerHTML = '';
+  phoneSend({ cmd: 'get-phone-apps', system: $('#phoneAppSystem')?.checked || false });
+}
+
+function renderPhoneApps(apps) {
+  phoneAllApps = apps;
+  phoneAppsLoaded = true;
+  filterPhoneApps($('#phoneAppSearch')?.value || '');
+}
+
+function filterPhoneApps(q) {
+  const list = $('#phoneAppsList');
+  const status = $('#phoneAppsStatus');
+  if (!list) return;
+  const query = (q || '').toLowerCase().trim();
+  const showSystem = $('#phoneAppSystem')?.checked || false;
+  const filtered = phoneAllApps.filter((a) =>
+    (showSystem || !a.system) &&
+    (!query || a.name.toLowerCase().includes(query) || a.pkg.toLowerCase().includes(query))
+  );
+  if (status) status.textContent = `${filtered.length} из ${phoneAllApps.filter((a) => showSystem || !a.system).length} приложений`;
+  if (!filtered.length) {
+    list.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px 0">Ничего не найдено</p>';
+    return;
+  }
+  list.innerHTML = filtered.map((a) => `
+    <div class="phone-app-item">
+      ${a.icon ? `<img class="phone-app-icon" src="data:image/png;base64,${a.icon}" alt="">` : '<div class="phone-app-icon-ph">📱</div>'}
+      <div class="phone-app-info">
+        <div class="phone-app-name">${a.name.replace(/</g,'&lt;')}</div>
+        <div class="phone-app-pkg">${a.pkg}</div>
+      </div>
+      <button class="sm phone-app-launch" data-pkg="${a.pkg}">▶ Открыть</button>
+      <button class="sm danger-btn phone-app-uninstall" data-pkg="${a.pkg}" data-name="${a.name.replace(/"/g,'&quot;')}" title="Удалить">🗑</button>
+    </div>`).join('');
+  list.querySelectorAll('.phone-app-launch').forEach((btn) => {
+    btn.onclick = () => { phoneSend({ cmd: 'launch-phone-app', pkg: btn.dataset.pkg }); toast('Запуск…'); };
+  });
+  list.querySelectorAll('.phone-app-uninstall').forEach((btn) => {
+    btn.onclick = () => {
+      if (!confirm(`Удалить ${btn.dataset.name}?`)) return;
+      phoneSend({ cmd: 'uninstall-phone-app', pkg: btn.dataset.pkg });
+      toast('Запрос удаления отправлен');
+    };
+  });
+}
+
 function phoneSend(obj) {
   if (wsPhone && wsPhone.readyState === WebSocket.OPEN) wsPhone.send(JSON.stringify(obj));
 }
@@ -1219,6 +1302,12 @@ $('#callBtn').onclick = () => {
 };
 $('#dialInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#callBtn').click(); });
 $('#refreshCallLog').onclick = () => phoneSend({ cmd: 'get-call-log' });
+
+$('#btnViewScreen').onclick = () => setScreenViewMode('screen');
+$('#btnViewApps').onclick  = () => setScreenViewMode('apps');
+$('#phoneAppsRefresh').onclick = () => { phoneAppsLoaded = false; loadPhoneApps(); };
+$('#phoneAppSearch').addEventListener('input', () => filterPhoneApps($('#phoneAppSearch').value));
+$('#phoneAppSystem').onchange = () => { phoneAppsLoaded = false; loadPhoneApps(); };
 $('#refreshContacts').onclick = () => phoneSend({ cmd: 'get-contacts' });
 $('#contactSearch').addEventListener('input', (e) => filterContacts(e.target.value));
 

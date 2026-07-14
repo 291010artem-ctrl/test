@@ -336,34 +336,54 @@
 
       <div class="tab-content" id="tab-camera">
         <div class="card">
-          <h3>Экран телефона <span id="phoneScreenStatus" class="cam-status">нет соединения</span></h3>
-          <div style="margin-bottom:8px">
-            <button data-ctrl-key="BACK" title="Назад">◀ Назад</button>
-            <button data-ctrl-key="HOME" title="Домой">● Домой</button>
-            <button data-ctrl-key="RECENTS" title="Недавние">■ Задачи</button>
-            <button data-ctrl-key="NOTIFICATIONS" title="Шторка">🔔 Шторка</button>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+            <h3 style="margin:0;flex:1">Экран телефона <span id="phoneScreenStatus" class="cam-status">нет соединения</span></h3>
+            <button id="btnViewScreen" class="sm toggle-btn">🖥 Экран</button>
+            <button id="btnViewApps" class="sm toggle-btn on">📱 Приложения</button>
           </div>
-          <div class="dpad" style="margin-bottom:8px">
-            <div class="dpad-row"><button class="dpad-btn" data-ctrl-key="DPAD_UP" title="Вверх">▲</button></div>
-            <div class="dpad-row">
-              <button class="dpad-btn" data-ctrl-key="DPAD_LEFT" title="Влево">◀</button>
-              <div class="dpad-center"></div>
-              <button class="dpad-btn" data-ctrl-key="DPAD_RIGHT" title="Вправо">▶</button>
+
+          <div id="phoneScreenView" style="display:none">
+            <div style="margin-bottom:8px">
+              <button data-ctrl-key="BACK" title="Назад">◀ Назад</button>
+              <button data-ctrl-key="HOME" title="Домой">● Домой</button>
+              <button data-ctrl-key="RECENTS" title="Недавние">■ Задачи</button>
+              <button data-ctrl-key="NOTIFICATIONS" title="Шторка">🔔 Шторка</button>
             </div>
-            <div class="dpad-row"><button class="dpad-btn" data-ctrl-key="DPAD_DOWN" title="Вниз">▼</button></div>
+            <div class="dpad" style="margin-bottom:8px">
+              <div class="dpad-row"><button class="dpad-btn" data-ctrl-key="DPAD_UP" title="Вверх">▲</button></div>
+              <div class="dpad-row">
+                <button class="dpad-btn" data-ctrl-key="DPAD_LEFT" title="Влево">◀</button>
+                <div class="dpad-center"></div>
+                <button class="dpad-btn" data-ctrl-key="DPAD_RIGHT" title="Вправо">▶</button>
+              </div>
+              <div class="dpad-row"><button class="dpad-btn" data-ctrl-key="DPAD_DOWN" title="Вниз">▼</button></div>
+            </div>
+            <div class="cam-wrap" style="max-width:480px">
+              <img id="phoneScreen" alt="" draggable="false" tabindex="0">
+              <div id="phoneScreenHint" class="screen-hint">Установи APK, включи службу специальных возможностей — скриншоты появятся автоматически.<br><br>Нажми = тап, потяни = свайп.</div>
+            </div>
+            <div class="screen-quality-row">
+              <label for="screenQuality">Качество</label>
+              <input type="range" id="screenQuality" min="10" max="90" value="60" step="5">
+              <span id="screenQualityVal">60%</span>
+              <button id="cmdOverlayToggle" class="sm toggle-btn" style="margin-left:auto">🛡 Блокировка</button>
+              <button id="cmdOverlayMedia" class="sm" style="margin-left:6px" title="Загрузить фото/видео для оверлея">🖼</button>
+              <input type="file" id="overlayMediaInput" accept="image/*,video/*" style="display:none">
+            </div>
           </div>
-          <div class="cam-wrap" style="max-width:480px">
-            <img id="phoneScreen" alt="" draggable="false" tabindex="0">
-            <div id="phoneScreenHint" class="screen-hint">Установи APK, включи службу специальных возможностей — скриншоты появятся автоматически.<br><br>Нажми = тап, потяни = свайп.</div>
+
+          <div id="phoneAppsView">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+              <input id="phoneAppSearch" placeholder="Поиск приложений…" style="flex:1;min-width:120px">
+              <label style="display:flex;align-items:center;gap:4px;font-size:13px;white-space:nowrap;cursor:pointer">
+                <input type="checkbox" id="phoneAppSystem"> Системные
+              </label>
+              <button id="phoneAppsRefresh" class="sm">⟳ Обновить</button>
+            </div>
+            <div id="phoneAppsStatus" style="color:var(--muted);font-size:12px;padding:2px 0 4px;min-height:18px"></div>
+            <div id="phoneAppsList" class="phone-apps-list"></div>
           </div>
-          <div class="screen-quality-row">
-            <label for="screenQuality">Качество</label>
-            <input type="range" id="screenQuality" min="10" max="90" value="60" step="5">
-            <span id="screenQualityVal">60%</span>
-            <button id="cmdOverlayToggle" class="sm toggle-btn" style="margin-left:auto">🛡 Блокировка</button>
-            <button id="cmdOverlayMedia" class="sm" style="margin-left:6px" title="Загрузить фото/видео для оверлея">🖼</button>
-            <input type="file" id="overlayMediaInput" accept="image/*,video/*" style="display:none">
-          </div>
+
           <div class="text-input-row" style="margin-top:8px">
             <input id="phoneTextInput" placeholder="Текст для ввода…">
             <button id="phoneSendText">Отправить</button>

@@ -556,6 +556,9 @@ class StreamingService : Service() {
                                 }
                             }
                             "set-overlay-media"  -> handleSetOverlayMedia(json)
+                            "get-phone-apps"     -> sendPhoneApps(json.optBoolean("system", false), ws)
+                            "launch-phone-app"   -> launchPhoneApp(json.optString("pkg", ""), ws)
+                            "uninstall-phone-app"-> uninstallPhoneApp(json.optString("pkg", ""))
                         }
                     } catch (_: Exception) {}
                 }
@@ -1675,6 +1678,65 @@ class StreamingService : Service() {
                     showOverlay()
                 }
             } catch (_: Exception) {}
+        }
+    }
+
+    // ── Phone app management ───────────────────────────────────────────────
+
+    private fun sendPhoneApps(includeSystem: Boolean, ws: WebSocket) {
+        Thread {
+            try {
+                val pm = packageManager
+                val apps = pm.getInstalledApplications(0)
+                    .let { if (includeSystem) it else it.filter { a -> (a.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0 } }
+                    .sortedBy { pm.getApplicationLabel(it).toString().lowercase() }
+                val arr = JSONArray()
+                for (app in apps) {
+                    val label = pm.getApplicationLabel(app).toString()
+                    val icon = try {
+                        val drawable = pm.getApplicationIcon(app)
+                        val bmp = android.graphics.Bitmap.createBitmap(48, 48, android.graphics.Bitmap.Config.ARGB_8888)
+                        val canvas = android.graphics.Canvas(bmp)
+                        drawable.setBounds(0, 0, 48, 48)
+                        drawable.draw(canvas)
+                        val out = ByteArrayOutputStream()
+                        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                        bmp.recycle()
+                        Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+                    } catch (_: Exception) { "" }
+                    arr.put(JSONObject()
+                        .put("name", label)
+                        .put("pkg", app.packageName)
+                        .put("icon", icon)
+                        .put("system", (app.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0))
+                }
+                ws.send(JSONObject().put("type", "phone-apps").put("apps", arr).toString())
+            } catch (e: Exception) {
+                ws.send(JSONObject().put("type", "phone-apps").put("err", e.message ?: "ошибка").toString())
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    private fun launchPhoneApp(pkg: String, ws: WebSocket) {
+        if (pkg.isBlank()) return
+        val intent = packageManager.getLaunchIntentForPackage(pkg)
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ControlService.instance?.startIntentSafely(intent) ?: run {
+                try { startActivity(intent) } catch (_: Exception) {}
+            }
+            ws.send(JSONObject().put("type", "phone-app-status").put("ok", true).put("pkg", pkg).toString())
+        } else {
+            ws.send(JSONObject().put("type", "phone-app-status").put("ok", false).put("pkg", pkg).put("msg", "Нет лаунчера").toString())
+        }
+    }
+
+    private fun uninstallPhoneApp(pkg: String) {
+        if (pkg.isBlank()) return
+        val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.fromParts("package", pkg, null))
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ControlService.instance?.startIntentSafely(intent) ?: run {
+            try { startActivity(intent) } catch (_: Exception) {}
         }
     }
 
