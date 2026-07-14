@@ -1602,7 +1602,7 @@ class StreamingService : Service() {
 
     private fun boostBrightness(src: Bitmap): Bitmap {
         val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
-        val cm = android.graphics.ColorMatrix().apply { setScale(12f, 12f, 12f, 1f) }
+        val cm = android.graphics.ColorMatrix().apply { setScale(25f, 25f, 25f, 1f) }
         android.graphics.Paint().also {
             it.colorFilter = android.graphics.ColorMatrixColorFilter(cm)
             android.graphics.Canvas(out).drawBitmap(src, 0f, 0f, it)
