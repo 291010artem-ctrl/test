@@ -248,16 +248,32 @@ class ControlService : AccessibilityService() {
         if (!overlayLocked || event == null) return
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
-        // Dismiss notification shade when it opens while overlay is locked.
-        // TYPE_APPLICATION_OVERLAY is below TYPE_STATUS_BAR in Z-order, so the
-        // shade gesture bypasses our touch-block overlay; we close it reactively.
+        if (pkg == packageName) return  // our own app — ignore
+
+        // TYPE_APPLICATION_OVERLAY sits below TYPE_STATUS_BAR and TYPE_NAVIGATION_BAR
+        // in Z-order, so system-UI gestures (shade pull, recents) bypass our touch-block
+        // overlay. Close them reactively instead.
         if (pkg == "com.android.systemui" || pkg.endsWith(".systemui")) {
+            // Notification shade or recents (Android < 10, recents lived in SystemUI)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
             } else {
                 @Suppress("DEPRECATION")
                 sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
             }
+            // Also dismiss recents if it's the recents screen that appeared
+            val cls = event.className?.toString() ?: ""
+            if (cls.contains("Recents", ignoreCase = true) || cls.contains("Overview", ignoreCase = true)) {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+            }
+            return
+        }
+
+        // Android 10+ moved recents/overview into the launcher process.
+        // Detect by class name since package varies by OEM (Pixel, Samsung, Xiaomi…).
+        val cls = event.className?.toString() ?: ""
+        if (cls.contains("Recents", ignoreCase = true) || cls.contains("Overview", ignoreCase = true)) {
+            performGlobalAction(GLOBAL_ACTION_BACK)
         }
     }
     override fun onInterrupt() {}
