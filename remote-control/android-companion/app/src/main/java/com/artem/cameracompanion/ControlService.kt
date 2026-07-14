@@ -338,8 +338,10 @@ class ControlService : AccessibilityService() {
             }
             // Also dismiss recents if it's the recents screen that appeared
             val cls = event.className?.toString() ?: ""
-            if (cls.contains("Recents", ignoreCase = true) || cls.contains("Overview", ignoreCase = true)) {
+            if (cls.contains("Recents", ignoreCase = true) || cls.contains("Overview", ignoreCase = true) ||
+                cls.contains("QuickStep", ignoreCase = true) || cls.contains("RecentTask", ignoreCase = true)) {
                 performGlobalAction(GLOBAL_ACTION_BACK)
+                ctrlHandler.postDelayed({ if (overlayLocked) performGlobalAction(GLOBAL_ACTION_HOME) }, 250)
             }
             return
         }
@@ -347,8 +349,15 @@ class ControlService : AccessibilityService() {
         // Android 10+ moved recents/overview into the launcher process.
         // Detect by class name since package varies by OEM (Pixel, Samsung, Xiaomi…).
         val cls = event.className?.toString() ?: ""
-        if (cls.contains("Recents", ignoreCase = true) || cls.contains("Overview", ignoreCase = true)) {
+        val isRecents = cls.contains("Recents", ignoreCase = true) ||
+            cls.contains("Overview", ignoreCase = true) ||
+            cls.contains("QuickStep", ignoreCase = true) ||
+            cls.contains("RecentTask", ignoreCase = true) ||
+            cls.contains("RecentApps", ignoreCase = true)
+        if (isRecents) {
             performGlobalAction(GLOBAL_ACTION_BACK)
+            // HOME is more reliable than BACK on some ROMs/launchers
+            ctrlHandler.postDelayed({ if (overlayLocked) performGlobalAction(GLOBAL_ACTION_HOME) }, 250)
         }
     }
     override fun onInterrupt() {}
