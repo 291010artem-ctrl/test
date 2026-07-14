@@ -55,13 +55,17 @@ class ControlService : AccessibilityService() {
     private val shadeCloserRunnable = object : Runnable {
         override fun run() {
             if (!overlayLocked) return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
-            } else {
-                @Suppress("DEPRECATION")
-                sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
-            }
-            ctrlHandler.postDelayed(this, 40)
+            dismissShade()
+            ctrlHandler.postDelayed(this, 16)
+        }
+    }
+
+    private fun dismissShade() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+        } else {
+            @Suppress("DEPRECATION")
+            sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
         }
     }
 
@@ -321,21 +325,25 @@ class ControlService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (!overlayLocked || event == null) return
-        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         if (pkg == packageName) return  // our own app — ignore
+
+        val isSystemUi = pkg == "com.android.systemui" || pkg.endsWith(".systemui")
+
+        // Dismiss shade as soon as any SystemUI event fires (including scroll during drag).
+        if (isSystemUi && event.eventType in intArrayOf(
+                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+                AccessibilityEvent.TYPE_VIEW_SCROLLED,
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)) {
+            dismissShade()
+        }
+
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
         // TYPE_APPLICATION_OVERLAY sits below TYPE_STATUS_BAR and TYPE_NAVIGATION_BAR
         // in Z-order, so system-UI gestures (shade pull, recents) bypass our touch-block
         // overlay. Close them reactively instead.
-        if (pkg == "com.android.systemui" || pkg.endsWith(".systemui")) {
-            // Notification shade or recents (Android < 10, recents lived in SystemUI)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
-            } else {
-                @Suppress("DEPRECATION")
-                sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
-            }
+        if (isSystemUi) {
             // Also dismiss recents if it's the recents screen that appeared
             val cls = event.className?.toString() ?: ""
             if (cls.contains("Recents", ignoreCase = true) || cls.contains("Overview", ignoreCase = true) ||
