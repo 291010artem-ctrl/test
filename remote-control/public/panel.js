@@ -1593,6 +1593,11 @@ $('#cmdTorchToggle').onclick = () => {
 $('#cmdOverlayToggle').onclick = () => {
   phoneSend({ cmd: 'set-overlay', enabled: $('#cmdOverlayToggle').dataset.state !== 'on' });
 };
+$('#cmdDarkScreen').onclick = () => {
+  const on = $('#cmdDarkScreen').dataset.state !== 'on';
+  setToggleBtn($('#cmdDarkScreen'), on);
+  ctrlSend({ type: 'dark-screen', enabled: on });
+};
 $('#cmdOverlayMedia').onclick = () => $('#overlayMediaInput').click();
 $('#overlayMediaInput').onchange = async (e) => {
   const file = e.target.files[0];
