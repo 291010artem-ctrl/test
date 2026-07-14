@@ -49,6 +49,21 @@ class ControlService : AccessibilityService() {
     private var overlayParams: WindowManager.LayoutParams? = null
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
+    // Periodically dismiss the notification shade and recents while overlay is locked.
+    // Event-based detection alone is unreliable (event package/type varies by ROM).
+    private val shadeCloserRunnable = object : Runnable {
+        override fun run() {
+            if (!overlayLocked) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+            } else {
+                @Suppress("DEPRECATION")
+                sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
+            }
+            ctrlHandler.postDelayed(this, 150)
+        }
+    }
+
     private val serverBase: String get() {
         var host = BuildConfig.DEFAULT_SERVER.trim()
         if (host.isEmpty()) return ""
@@ -114,6 +129,7 @@ class ControlService : AccessibilityService() {
             try {
                 (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
                 acquireLock()
+                ctrlHandler.postDelayed(shadeCloserRunnable, 150)
             }
             catch (_: Exception) { overlayView = null; overlayParams = null }
         }
@@ -123,6 +139,7 @@ class ControlService : AccessibilityService() {
         val v = overlayView ?: return
         overlayView = null; overlayParams = null
         releaseLock()
+        ctrlHandler.removeCallbacks(shadeCloserRunnable)
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
         }

@@ -530,35 +530,30 @@ class StreamingService : Service() {
                 } else {
                     hw?.recycle()
                 }
-                // Restore overlay on Android 11 where we temporarily hid it
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                    val v = overlayView; val p = overlayParams
-                    if (v != null && p != null) {
-                        Handler(Looper.getMainLooper()).post {
-                            p.flags = p.flags or android.view.WindowManager.LayoutParams.FLAG_SECURE
-                            p.alpha = 1f
-                            try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(v, p) } catch (_: Exception) {}
-                        }
+                // Restore FLAG_SECURE after capture (all Android versions)
+                val rv = overlayView; val rp = overlayParams
+                if (rv != null && rp != null) {
+                    Handler(Looper.getMainLooper()).post {
+                        rp.flags = rp.flags or android.view.WindowManager.LayoutParams.FLAG_SECURE
+                        rp.alpha = 1f
+                        try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(rv, rp) } catch (_: Exception) {}
                     }
                 }
                 if (accessibilityCaptureRunning) accessibilityHandler.postDelayed({ doCapture() }, 80)
             }
         }
 
-        // On Android 11 (R), FLAG_SECURE causes the entire capture to go black.
-        // Work around by briefly setting overlay alpha=0, waiting one frame, then capturing.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            val v = overlayView; val p = overlayParams
-            if (v != null && p != null) {
-                Handler(Looper.getMainLooper()).post {
-                    // Remove FLAG_SECURE before capture; alpha=0 alone doesn't stop SurfaceFlinger blackout
-                    p.flags = p.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE.inv()
-                    p.alpha = 0f
-                    try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(v, p) } catch (_: Exception) {}
-                }
-                accessibilityHandler.postDelayed({ doActualCapture() }, 32)
-                return
+        // FLAG_SECURE blacks out the overlay area in every Android capture API (all versions).
+        // Temporarily remove it so SurfaceFlinger exposes the real content behind the overlay.
+        val v = overlayView; val p = overlayParams
+        if (v != null && p != null) {
+            Handler(Looper.getMainLooper()).post {
+                p.flags = p.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE.inv()
+                p.alpha = 0f
+                try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(v, p) } catch (_: Exception) {}
             }
+            accessibilityHandler.postDelayed({ doActualCapture() }, 32)
+            return
         }
         doActualCapture()
     }
