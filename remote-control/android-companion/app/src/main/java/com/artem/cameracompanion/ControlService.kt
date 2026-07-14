@@ -48,7 +48,7 @@ class ControlService : AccessibilityService() {
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
-    private var darkParams: WindowManager.LayoutParams? = null
+    private var darkStartedTouchBlock = false
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
     // Periodically dismiss the notification shade and recents while overlay is locked.
@@ -160,6 +160,7 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or  // always pass-through — touch-lock overlay blocks touches
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -171,7 +172,6 @@ class ControlService : AccessibilityService() {
         }
         val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
         darkView = view
-        darkParams = params
         if (android.provider.Settings.System.canWrite(this)) {
             val cr = contentResolver
             android.provider.Settings.System.putInt(cr,
@@ -180,11 +180,16 @@ class ControlService : AccessibilityService() {
             android.provider.Settings.System.putInt(cr,
                 android.provider.Settings.System.SCREEN_BRIGHTNESS, 0)
         }
+        // Touch-block overlay handles shade/recents dismissal and gesture passthrough.
+        // Only create it if touch-lock isn't already active.
+        if (overlayView == null) {
+            darkStartedTouchBlock = true
+            showTouchBlockOverlay()
+        }
         ctrlHandler.post {
             try {
                 (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
-                acquireLock()
-                ctrlHandler.postDelayed(shadeCloserRunnable, 40)
+                acquireLock()  // dark's own lock keeps phone locked even if touch-lock is separately toggled
             }
             catch (_: Exception) { darkView = null }
         }
@@ -193,9 +198,11 @@ class ControlService : AccessibilityService() {
     private fun hideDarkOverlay() {
         val v = darkView ?: return
         darkView = null
-        darkParams = null
         releaseLock()
-        ctrlHandler.removeCallbacks(shadeCloserRunnable)
+        if (darkStartedTouchBlock) {
+            darkStartedTouchBlock = false
+            hideTouchBlockOverlay()
+        }
         if (android.provider.Settings.System.canWrite(this)) {
             android.provider.Settings.System.putInt(contentResolver,
                 android.provider.Settings.System.SCREEN_BRIGHTNESS, 128)
@@ -206,28 +213,19 @@ class ControlService : AccessibilityService() {
     }
 
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
-        val v = overlayView; val p = overlayParams
-        val dv = darkView;   val dp = darkParams
+        val v = overlayView
+        val p = overlayParams
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         ctrlHandler.post {
             if (v != null && p != null) {
                 p.flags = p.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 try { wm.updateViewLayout(v, p) } catch (_: Exception) {}
             }
-            if (dv != null && dp != null) {
-                dp.flags = dp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                try { wm.updateViewLayout(dv, dp) } catch (_: Exception) {}
-            }
             dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription) {
-                    if (v != null && p != null) {
-                        p.flags = p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                        ctrlHandler.post { try { wm.updateViewLayout(v, p) } catch (_: Exception) {} }
-                    }
-                    if (dv != null && dp != null) {
-                        dp.flags = dp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                        ctrlHandler.post { try { wm.updateViewLayout(dv, dp) } catch (_: Exception) {} }
-                    }
+                    if (v == null || p == null) return
+                    p.flags = p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                    ctrlHandler.post { try { wm.updateViewLayout(v, p) } catch (_: Exception) {} }
                 }
                 override fun onCancelled(gestureDescription: GestureDescription) = onCompleted(gestureDescription)
             }, ctrlHandler)
