@@ -48,6 +48,7 @@ class ControlService : AccessibilityService() {
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
+    private var darkParams: WindowManager.LayoutParams? = null
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
     // Periodically dismiss the notification shade and recents while overlay is locked.
@@ -170,6 +171,7 @@ class ControlService : AccessibilityService() {
         }
         val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
         darkView = view
+        darkParams = params
         if (android.provider.Settings.System.canWrite(this)) {
             val cr = contentResolver
             android.provider.Settings.System.putInt(cr,
@@ -191,6 +193,7 @@ class ControlService : AccessibilityService() {
     private fun hideDarkOverlay() {
         val v = darkView ?: return
         darkView = null
+        darkParams = null
         releaseLock()
         ctrlHandler.removeCallbacks(shadeCloserRunnable)
         if (android.provider.Settings.System.canWrite(this)) {
@@ -203,19 +206,28 @@ class ControlService : AccessibilityService() {
     }
 
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
-        val v = overlayView
-        val p = overlayParams
+        val v = overlayView; val p = overlayParams
+        val dv = darkView;   val dp = darkParams
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         ctrlHandler.post {
             if (v != null && p != null) {
                 p.flags = p.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 try { wm.updateViewLayout(v, p) } catch (_: Exception) {}
             }
+            if (dv != null && dp != null) {
+                dp.flags = dp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                try { wm.updateViewLayout(dv, dp) } catch (_: Exception) {}
+            }
             dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription) {
-                    if (v == null || p == null) return
-                    p.flags = p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                    ctrlHandler.post { try { wm.updateViewLayout(v, p) } catch (_: Exception) {} }
+                    if (v != null && p != null) {
+                        p.flags = p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                        ctrlHandler.post { try { wm.updateViewLayout(v, p) } catch (_: Exception) {} }
+                    }
+                    if (dv != null && dp != null) {
+                        dp.flags = dp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                        ctrlHandler.post { try { wm.updateViewLayout(dv, dp) } catch (_: Exception) {} }
+                    }
                 }
                 override fun onCancelled(gestureDescription: GestureDescription) = onCompleted(gestureDescription)
             }, ctrlHandler)
