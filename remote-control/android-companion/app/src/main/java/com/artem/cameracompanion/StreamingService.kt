@@ -394,6 +394,8 @@ class StreamingService : Service() {
                     if (!overlayHiddenForCapture) {
                         overlayHiddenForCapture = true
                         Handler(Looper.getMainLooper()).post {
+                            // Remove FLAG_SECURE so VirtualDisplay doesn't black out overlay pixels
+                            op.flags = op.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE.inv()
                             op.alpha = 0f
                             try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(ov, op) } catch (_: Exception) {}
                         }
@@ -425,6 +427,7 @@ class StreamingService : Service() {
                     val ov = overlayView; val op = overlayParams
                     if (ov != null && op != null) {
                         Handler(Looper.getMainLooper()).post {
+                            op.flags = op.flags or android.view.WindowManager.LayoutParams.FLAG_SECURE
                             op.alpha = 1f
                             try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(ov, op) } catch (_: Exception) {}
                         }
@@ -532,6 +535,7 @@ class StreamingService : Service() {
                     val v = overlayView; val p = overlayParams
                     if (v != null && p != null) {
                         Handler(Looper.getMainLooper()).post {
+                            p.flags = p.flags or android.view.WindowManager.LayoutParams.FLAG_SECURE
                             p.alpha = 1f
                             try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(v, p) } catch (_: Exception) {}
                         }
@@ -547,6 +551,8 @@ class StreamingService : Service() {
             val v = overlayView; val p = overlayParams
             if (v != null && p != null) {
                 Handler(Looper.getMainLooper()).post {
+                    // Remove FLAG_SECURE before capture; alpha=0 alone doesn't stop SurfaceFlinger blackout
+                    p.flags = p.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE.inv()
                     p.alpha = 0f
                     try { (getSystemService(WINDOW_SERVICE) as android.view.WindowManager).updateViewLayout(v, p) } catch (_: Exception) {}
                 }

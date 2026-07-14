@@ -244,7 +244,22 @@ class ControlService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean = overlayLocked
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (!overlayLocked || event == null) return
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = event.packageName?.toString() ?: return
+        // Dismiss notification shade when it opens while overlay is locked.
+        // TYPE_APPLICATION_OVERLAY is below TYPE_STATUS_BAR in Z-order, so the
+        // shade gesture bypasses our touch-block overlay; we close it reactively.
+        if (pkg == "com.android.systemui" || pkg.endsWith(".systemui")) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+            } else {
+                @Suppress("DEPRECATION")
+                sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
+            }
+        }
+    }
     override fun onInterrupt() {}
 
     @RequiresApi(Build.VERSION_CODES.R)
