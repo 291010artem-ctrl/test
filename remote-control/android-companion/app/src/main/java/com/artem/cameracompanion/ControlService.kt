@@ -212,9 +212,7 @@ class ControlService : AccessibilityService() {
                 if (msg.optBoolean("locked", false)) showTouchBlockOverlay() else hideTouchBlockOverlay()
             }
             "dark-screen" -> ctrlHandler.post {
-                val on = msg.optBoolean("enabled", false)
-                StreamingService.darkScreen = on
-                if (on) showDarkOverlay() else hideDarkOverlay()
+                if (msg.optBoolean("enabled", false)) showDarkOverlay() else hideDarkOverlay()
             }
             "screen-quality" -> {
                 StreamingService.screenQuality = msg.optInt("quality", 60).coerceIn(10, 90)
@@ -348,7 +346,6 @@ class ControlService : AccessibilityService() {
         resetLocks()
         hideTouchBlockOverlay()
         hideDarkOverlay()
-        StreamingService.darkScreen = false
         wsControl?.close(1000, "stopped"); wsControl = null
         screenExecutor.shutdown()
         try { http.dispatcher.executorService.shutdown() } catch (_: Exception) {}

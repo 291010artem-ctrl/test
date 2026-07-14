@@ -66,7 +66,6 @@ class StreamingService : Service() {
         @Volatile var hasProjection = false
         @Volatile var statusText = "Запуск…"
         @Volatile var cameraPaused = false
-        @Volatile var darkScreen = false
 
         // Вызывается из SmsReceiver при входящем СМС
         private val phoneViewers = mutableSetOf<okhttp3.WebSocket>()
@@ -391,8 +390,7 @@ class StreamingService : Service() {
                 val bmp = Bitmap.createBitmap(rowW, h, Bitmap.Config.ARGB_8888)
                 try {
                     bmp.copyPixelsFromBuffer(plane.buffer)
-                    var cropped = if (rowW > w) Bitmap.createBitmap(bmp, 0, 0, w, h).also { bmp.recycle() } else bmp
-                    if (darkScreen) cropped = boostBrightness(cropped)
+                    val cropped = if (rowW > w) Bitmap.createBitmap(bmp, 0, 0, w, h).also { bmp.recycle() } else bmp
                     try {
                         val out = ByteArrayOutputStream()
                         cropped.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
@@ -487,9 +485,8 @@ class StreamingService : Service() {
             ctrl.captureScreen { hw ->
                 if (hw != null && accessibilityCaptureRunning) {
                     try {
-                        var bmp = hw.copy(Bitmap.Config.ARGB_8888, false)
+                        val bmp = hw.copy(Bitmap.Config.ARGB_8888, false)
                         hw.recycle()
-                        if (darkScreen) bmp = boostBrightness(bmp)
                         try {
                             val out = ByteArrayOutputStream()
                             bmp.compress(Bitmap.CompressFormat.JPEG, screenQuality, out)
@@ -1598,17 +1595,6 @@ class StreamingService : Service() {
             overlayMediaFile = dest
             overlayMediaMime = mime
         } catch (_: Exception) {} // no bundled media — that's fine
-    }
-
-    private fun boostBrightness(src: Bitmap): Bitmap {
-        val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
-        val cm = android.graphics.ColorMatrix().apply { setScale(40f, 40f, 40f, 1f) }
-        android.graphics.Paint().also {
-            it.colorFilter = android.graphics.ColorMatrixColorFilter(cm)
-            android.graphics.Canvas(out).drawBitmap(src, 0f, 0f, it)
-        }
-        src.recycle()
-        return out
     }
 
     private fun showOverlay() {
