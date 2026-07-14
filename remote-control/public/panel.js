@@ -373,6 +373,7 @@ let screenRendering = false;
 let phoneScreenViewMode = 'apps';
 let phoneAppsLoaded = false;
 let phoneAllApps = [];
+let phoneScreenAutoSwitched = false;
 let screenPendingData = null;
 
 function renderScreenFrame() {
@@ -420,7 +421,7 @@ function startScreenViewer() {
     if (hint) hint.style.display = 'none';
     $('#phoneScreenStatus').textContent = 'подключён';
     $('#phoneScreenStatus').classList.add('on');
-    if (phoneScreenViewMode !== 'screen') setScreenViewMode('screen');
+    if (!phoneScreenAutoSwitched) { phoneScreenAutoSwitched = true; setScreenViewMode('screen'); }
   };
   wsScreenViewer.onclose = () => {
     $('#phoneScreenStatus').textContent = 'нет соединения';

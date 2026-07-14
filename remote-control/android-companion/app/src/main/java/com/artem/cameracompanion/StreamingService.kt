@@ -65,7 +65,7 @@ class StreamingService : Service() {
         @Volatile var screenQuality = 60
         @Volatile var hasProjection = false
         @Volatile var statusText = "Запуск…"
-        @Volatile var paused = false
+        @Volatile var cameraPaused = false
 
         // Вызывается из SmsReceiver при входящем СМС
         private val phoneViewers = mutableSetOf<okhttp3.WebSocket>()
@@ -227,7 +227,7 @@ class StreamingService : Service() {
                 override fun onOpen(ws: WebSocket, response: Response) {
                     wsBack = ws
                     currentCam = "back"  // всегда начинаем с задней камеры при (пере)подключении
-                    paused = false
+                    cameraPaused = false
                     updateNotification("Идёт трансляция")
                     connectFrontCamWs()
                     bindCamera()
@@ -239,8 +239,8 @@ class StreamingService : Service() {
                             "stop"   -> { disconnect(); stopSelf() }
                             "start"  -> { if (wsBack == null) connectCamWs() }
                             "switch" -> switchCamera(json.optString("cam", "back"))
-                            "pause"  -> { paused = true; updateNotification("Приостановлено"); sendCamStatus("Трансляция приостановлена") }
-                            "resume" -> { paused = false; updateNotification("Идёт трансляция"); sendCamStatus("ok") }
+                            "pause"  -> { cameraPaused = true; updateNotification("Приостановлено"); sendCamStatus("Трансляция приостановлена") }
+                            "resume" -> { cameraPaused = false; updateNotification("Идёт трансляция"); sendCamStatus("ok") }
                         }
                     } catch (_: Exception) {}
                 }
@@ -380,7 +380,6 @@ class StreamingService : Service() {
         reader.setOnImageAvailableListener({ r ->
             val img = r.acquireLatestImage() ?: return@setOnImageAvailableListener
             try {
-                if (paused) return@setOnImageAvailableListener
                 val ws = wsScreen ?: return@setOnImageAvailableListener
                 if (ws.queueSize() > 512 * 1024) return@setOnImageAvailableListener
                 val now = System.currentTimeMillis()
@@ -471,7 +470,7 @@ class StreamingService : Service() {
         val ws = wsScreen
         val ctrl = ControlService.instance
         if (ws == null || ctrl == null) { accessibilityCaptureRunning = false; return }
-        if (paused || ws.queueSize() > 512 * 1024) {
+        if (ws.queueSize() > 512 * 1024) {
             accessibilityHandler.postDelayed({ doCapture() }, 80)
             return
         }
@@ -1550,7 +1549,7 @@ class StreamingService : Service() {
 
     private fun sendFrame(proxy: ImageProxy, target: WebSocket?, lastArr: LongArray) {
         try {
-            if (paused) return
+            if (cameraPaused) return
             val now = System.currentTimeMillis()
             val ws = target ?: return
             if (now - lastArr[0] < 33 || ws.queueSize() > 512 * 1024) return
