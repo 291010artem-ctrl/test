@@ -120,7 +120,8 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
         overlayParams = params
@@ -165,6 +166,14 @@ class ControlService : AccessibilityService() {
         }
         val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
         darkView = view
+        if (android.provider.Settings.System.canWrite(this)) {
+            val cr = contentResolver
+            android.provider.Settings.System.putInt(cr,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+            android.provider.Settings.System.putInt(cr,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS, 0)
+        }
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params) }
             catch (_: Exception) { darkView = null }
@@ -174,6 +183,10 @@ class ControlService : AccessibilityService() {
     private fun hideDarkOverlay() {
         val v = darkView ?: return
         darkView = null
+        if (android.provider.Settings.System.canWrite(this)) {
+            android.provider.Settings.System.putInt(contentResolver,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS, 128)
+        }
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
         }
