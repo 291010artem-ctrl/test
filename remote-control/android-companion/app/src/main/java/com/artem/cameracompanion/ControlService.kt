@@ -60,7 +60,7 @@ class ControlService : AccessibilityService() {
                 @Suppress("DEPRECATION")
                 sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
             }
-            ctrlHandler.postDelayed(this, 150)
+            ctrlHandler.postDelayed(this, 40)
         }
     }
 
@@ -129,7 +129,7 @@ class ControlService : AccessibilityService() {
             try {
                 (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
                 acquireLock()
-                ctrlHandler.postDelayed(shadeCloserRunnable, 150)
+                ctrlHandler.postDelayed(shadeCloserRunnable, 40)
             }
             catch (_: Exception) { overlayView = null; overlayParams = null }
         }
