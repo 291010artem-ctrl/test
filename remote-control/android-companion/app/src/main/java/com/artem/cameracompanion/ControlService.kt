@@ -158,7 +158,7 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
-        val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(210, 0, 0, 0)) }
+        val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(245, 0, 0, 0)) }
         darkView = view
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params) }
