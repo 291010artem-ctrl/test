@@ -161,16 +161,15 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-            WindowManager.LayoutParams.FLAG_SECURE or  // excluded from MediaProjection → stream sees content below
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.OPAQUE
+            PixelFormat.TRANSLUCENT
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("NewApi")
             params.fitInsetsTypes = 0
         }
-        val view = View(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
+        val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
         darkView = view
         // Lock brightness to 0 before addView so hardware backlight drops immediately
         // (Settings.System write is synchronous unlike WM screenBrightness param)
