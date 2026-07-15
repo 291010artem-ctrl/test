@@ -49,7 +49,9 @@ class ControlService : AccessibilityService() {
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
     private var dark2View: View? = null
+    private var dark2Params: WindowManager.LayoutParams? = null
     private var dark3View: View? = null
+    private var dark3Params: WindowManager.LayoutParams? = null
     private var darkStartedTouchBlock = false
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
@@ -221,17 +223,18 @@ class ControlService : AccessibilityService() {
         }
         val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
         dark2View = view
+        dark2Params = params
         ctrlHandler.post {
             try {
                 (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
                 StreamingService.darkScreen = true
-            } catch (_: Exception) { dark2View = null }
+            } catch (_: Exception) { dark2View = null; dark2Params = null }
         }
     }
 
     private fun hideDark2Overlay() {
         val v = dark2View ?: return
-        dark2View = null
+        dark2View = null; dark2Params = null
         if (darkView == null && dark3View == null) StreamingService.darkScreen = false
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
@@ -258,6 +261,7 @@ class ControlService : AccessibilityService() {
         }
         val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
         dark3View = view
+        dark3Params = params
         ctrlHandler.post {
             try {
                 (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
@@ -268,7 +272,7 @@ class ControlService : AccessibilityService() {
 
     private fun hideDark3Overlay() {
         val v = dark3View ?: return
-        dark3View = null
+        dark3View = null; dark3Params = null
         if (darkView == null && dark2View == null) StreamingService.darkScreen = false
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
@@ -279,27 +283,31 @@ class ControlService : AccessibilityService() {
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         ctrlHandler.post {
-            val v = overlayView
-            val p = overlayParams
-            // removeViewImmediate is a synchronous binder call to WMS — InputDispatcher
-            // is updated before the call returns, so the gesture is never intercepted
-            // by the overlay. FLAG_NOT_TOUCHABLE + updateViewLayout was unreliable
-            // because the traversal is VSYNC-gated and the timing was not guaranteed.
-            var removed = false
-            if (v != null && p != null) {
-                try { wm.removeViewImmediate(v); removed = true } catch (_: Exception) {}
-            }
+            // Capture all overlay references on the main thread.
+            val touchV = overlayView;  val touchP = overlayParams
+            val d2V = dark2View;       val d2P = dark2Params
+            val d3V = dark3View;       val d3P = dark3Params
+
+            // removeViewImmediate is a synchronous binder call: WMS and InputDispatcher
+            // are updated before it returns. Remove every extra overlay so nothing in the
+            // window stack can intercept the injected gesture. darkView (dark1) keeps its
+            // FLAG_NOT_TOUCHABLE so it stays up without blocking the gesture.
+            var rTouch = false; var rD2 = false; var rD3 = false
+            if (touchV != null && touchP != null) try { wm.removeViewImmediate(touchV); rTouch = true } catch (_: Exception) {}
+            if (d2V != null && d2P != null)       try { wm.removeViewImmediate(d2V);    rD2    = true } catch (_: Exception) {}
+            if (d3V != null && d3P != null)       try { wm.removeViewImmediate(d3V);    rD3    = true } catch (_: Exception) {}
+
+            fun restore() { ctrlHandler.post {
+                if (rTouch && overlayLocked) try { wm.addView(touchV, touchP) } catch (_: Exception) {}
+                if (rD2)                     try { wm.addView(d2V,    d2P)    } catch (_: Exception) {}
+                if (rD3)                     try { wm.addView(d3V,    d3P)    } catch (_: Exception) {}
+            }}
+
             val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription) {
-                    if (removed) ctrlHandler.post {
-                        if (overlayLocked) try { wm.addView(v, p) } catch (_: Exception) {}
-                    }
-                }
-                override fun onCancelled(gestureDescription: GestureDescription) = onCompleted(gestureDescription)
+                override fun onCompleted(gestureDescription: GestureDescription) = restore()
+                override fun onCancelled(gestureDescription: GestureDescription) = restore()
             }, ctrlHandler)
-            if (!dispatched && removed) {
-                if (overlayLocked) try { wm.addView(v, p) } catch (_: Exception) {}
-            }
+            if (!dispatched) restore()
         }
     }
 
