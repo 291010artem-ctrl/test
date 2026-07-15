@@ -1659,7 +1659,7 @@ class StreamingService : Service() {
                         }
                     }
                     else -> android.view.View(this).apply {
-                        setBackgroundColor(android.graphics.Color.BLACK)
+                        setBackgroundColor(android.graphics.Color.argb(120, 0, 0, 0))
                     }
                 }
                 wm.addView(view, params)
