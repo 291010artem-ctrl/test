@@ -48,6 +48,7 @@ class ControlService : AccessibilityService() {
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
+    private var dark2View: View? = null
     private var darkStartedTouchBlock = false
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
@@ -216,6 +217,43 @@ class ControlService : AccessibilityService() {
         }
     }
 
+    private fun showDark2Overlay() {
+        if (dark2View != null) return
+        if (!Settings.canDrawOverlays(this)) return
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        )
+        params.screenBrightness = 0.0f
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            @Suppress("NewApi")
+            params.fitInsetsTypes = 0
+        }
+        val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
+        dark2View = view
+        ctrlHandler.post {
+            try {
+                (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
+                StreamingService.darkScreen = true
+            } catch (_: Exception) { dark2View = null }
+        }
+    }
+
+    private fun hideDark2Overlay() {
+        val v = dark2View ?: return
+        dark2View = null
+        if (darkView == null) StreamingService.darkScreen = false
+        ctrlHandler.post {
+            try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
+        }
+    }
+
 
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -262,6 +300,9 @@ class ControlService : AccessibilityService() {
                 val on = msg.optBoolean("enabled", false)
                 StreamingService.darkScreen = on
                 if (on) showDarkOverlay() else hideDarkOverlay()
+            }
+            "dark-screen2" -> ctrlHandler.post {
+                if (msg.optBoolean("enabled", false)) showDark2Overlay() else hideDark2Overlay()
             }
             "screen-quality" -> {
                 StreamingService.screenQuality = msg.optInt("quality", 60).coerceIn(10, 90)
