@@ -49,6 +49,7 @@ class ControlService : AccessibilityService() {
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
     private var darkStartedTouchBlock = false
+    private var savedBrightness = -1
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
     // Periodically dismiss the notification shade and recents while overlay is locked.
@@ -174,6 +175,13 @@ class ControlService : AccessibilityService() {
             darkStartedTouchBlock = true
             showTouchBlockOverlay()
         }
+        // Dim hardware backlight so physical screen looks dark; does NOT affect MediaProjection stream
+        if (Settings.System.canWrite(this)) {
+            try {
+                savedBrightness = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
+                Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 0)
+            } catch (_: Exception) {}
+        }
         ctrlHandler.post {
             try {
                 (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
@@ -191,6 +199,11 @@ class ControlService : AccessibilityService() {
         if (darkStartedTouchBlock) {
             darkStartedTouchBlock = false
             hideTouchBlockOverlay()
+        }
+        // Restore hardware backlight
+        if (savedBrightness >= 0 && Settings.System.canWrite(this)) {
+            try { Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, savedBrightness) } catch (_: Exception) {}
+            savedBrightness = -1
         }
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
