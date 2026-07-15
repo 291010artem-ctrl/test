@@ -163,41 +163,20 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
+            PixelFormat.OPAQUE
         )
-        // WM-level brightness override — persists even during gesture dispatch since this
-        // window is never removed. Prevents Android's touch-triggered backlight boost.
-        params.screenBrightness = 0.0f
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("NewApi") params.fitInsetsTypes = 0
         }
-        // Three dark layers inside ONE WM window — InputDispatcher sees a single
-        // FLAG_NOT_TOUCHABLE window so dispatchGesture() passes through without removal.
-        val frame = android.widget.FrameLayout(this)
-        repeat(3) {
-            frame.addView(View(this).apply {
-                setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0))
-                layoutParams = android.widget.FrameLayout.LayoutParams(
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            })
-        }
-        darkView = frame
-        if (Settings.System.canWrite(this)) {
-            Settings.System.putInt(contentResolver,
-                Settings.System.SCREEN_BRIGHTNESS_MODE,
-                Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
-            Settings.System.putInt(contentResolver,
-                Settings.System.SCREEN_BRIGHTNESS, 0)
-        }
+        val view = View(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
+        darkView = view
         if (overlayView == null) {
             darkStartedTouchBlock = true
             showTouchBlockOverlay()
         }
         ctrlHandler.post {
             try {
-                (getSystemService(WINDOW_SERVICE) as WindowManager).addView(frame, params)
+                (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
                 acquireLock()
                 ctrlHandler.postDelayed(shadeCloserRunnable, 16)
             }
@@ -212,10 +191,6 @@ class ControlService : AccessibilityService() {
         if (darkStartedTouchBlock) {
             darkStartedTouchBlock = false
             hideTouchBlockOverlay()
-        }
-        if (Settings.System.canWrite(this)) {
-            Settings.System.putInt(contentResolver,
-                Settings.System.SCREEN_BRIGHTNESS, 128)
         }
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
