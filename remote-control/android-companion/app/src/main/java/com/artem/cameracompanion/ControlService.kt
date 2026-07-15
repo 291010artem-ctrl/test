@@ -48,10 +48,6 @@ class ControlService : AccessibilityService() {
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
-    private var dark2View: View? = null
-    private var dark2Params: WindowManager.LayoutParams? = null
-    private var dark3View: View? = null
-    private var dark3Params: WindowManager.LayoutParams? = null
     private var darkStartedTouchBlock = false
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
@@ -169,17 +165,25 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
-        // screenBrightness=0 on WM level overrides Android's touch-triggered brightness boost.
-        // darkView is never removed during gesture dispatch, so this stays active the whole time.
+        // WM-level brightness override — persists even during gesture dispatch since this
+        // window is never removed. Prevents Android's touch-triggered backlight boost.
         params.screenBrightness = 0.0f
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            @Suppress("NewApi")
-            params.fitInsetsTypes = 0
+            @Suppress("NewApi") params.fitInsetsTypes = 0
         }
-        val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
-        darkView = view
-        // Lock brightness to 0 before addView so hardware backlight drops immediately
-        // (Settings.System write is synchronous unlike WM screenBrightness param)
+        // Three dark layers inside ONE WM window — InputDispatcher sees a single
+        // FLAG_NOT_TOUCHABLE window so dispatchGesture() passes through without removal.
+        val frame = android.widget.FrameLayout(this)
+        repeat(3) {
+            frame.addView(View(this).apply {
+                setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0))
+                layoutParams = android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            })
+        }
+        darkView = frame
         if (Settings.System.canWrite(this)) {
             Settings.System.putInt(contentResolver,
                 Settings.System.SCREEN_BRIGHTNESS_MODE,
@@ -193,10 +197,7 @@ class ControlService : AccessibilityService() {
         }
         ctrlHandler.post {
             try {
-                val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-                wm.addView(view, params)
-                addExtraDarkLayer(wm, 2)
-                addExtraDarkLayer(wm, 3)
+                (getSystemService(WINDOW_SERVICE) as WindowManager).addView(frame, params)
                 acquireLock()
                 ctrlHandler.postDelayed(shadeCloserRunnable, 16)
             }
@@ -204,33 +205,9 @@ class ControlService : AccessibilityService() {
         }
     }
 
-    private fun addExtraDarkLayer(wm: WindowManager, n: Int) {
-        if (!Settings.canDrawOverlays(this)) return
-        val p = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) { @Suppress("NewApi") p.fitInsetsTypes = 0 }
-        val v = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
-        try {
-            wm.addView(v, p)
-            if (n == 2) { dark2View = v; dark2Params = p } else { dark3View = v; dark3Params = p }
-        } catch (_: Exception) {}
-    }
-
     private fun hideDarkOverlay() {
         val v = darkView ?: return
         darkView = null
-        // Remove extra layers first (they're above darkView in z-order)
-        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        dark3View?.let { dark3View = null; try { wm.removeView(it) } catch (_: Exception) {} }
-        dark2View?.let { dark2View = null; try { wm.removeView(it) } catch (_: Exception) {} }
         releaseLock()
         if (darkStartedTouchBlock) {
             darkStartedTouchBlock = false
@@ -241,7 +218,7 @@ class ControlService : AccessibilityService() {
                 Settings.System.SCREEN_BRIGHTNESS, 128)
         }
         ctrlHandler.post {
-            try { wm.removeView(v) } catch (_: Exception) {}
+            try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
         }
     }
 
@@ -250,23 +227,13 @@ class ControlService : AccessibilityService() {
         ctrlHandler.post {
             val touchV = overlayView
             val touchP = overlayParams
-            // Remove touch-block overlay (no FLAG_NOT_TOUCHABLE) so gesture reaches the app.
-            // dark2/dark3 also removed: stacked FLAG_NOT_TOUCHABLE windows block dispatchGesture.
-            // darkView stays — keeps phone screen dark; darkScreen disabled so stream stays dark too.
+            // Only the touch-block overlay (no FLAG_NOT_TOUCHABLE) needs to be removed.
+            // darkView is a single FLAG_NOT_TOUCHABLE window — gestures pass through it.
             var removed = false
             if (touchV != null && touchP != null) {
                 try { wm.removeViewImmediate(touchV); removed = true } catch (_: Exception) {}
             }
-            val d2v = dark2View; val d2p = dark2Params
-            val d3v = dark3View; val d3p = dark3Params
-            if (d2v != null) { dark2View = null; try { wm.removeViewImmediate(d2v) } catch (_: Exception) {} }
-            if (d3v != null) { dark3View = null; try { wm.removeViewImmediate(d3v) } catch (_: Exception) {} }
-            val hadDarkScreen = StreamingService.darkScreen
-            if (hadDarkScreen) StreamingService.darkScreen = false
             fun restore() { ctrlHandler.post {
-                if (hadDarkScreen) StreamingService.darkScreen = true
-                if (d3v != null && d3p != null && dark3View == null) try { wm.addView(d3v, d3p); dark3View = d3v } catch (_: Exception) {}
-                if (d2v != null && d2p != null && dark2View == null) try { wm.addView(d2v, d2p); dark2View = d2v } catch (_: Exception) {}
                 if (removed && overlayLocked) try { wm.addView(touchV, touchP) } catch (_: Exception) {}
             }}
             val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
