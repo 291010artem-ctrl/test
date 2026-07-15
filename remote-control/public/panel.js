@@ -1593,7 +1593,11 @@ $('#cmdTorchToggle').onclick = () => {
 $('#cmdOverlayToggle').onclick = () => {
   phoneSend({ cmd: 'set-overlay', enabled: $('#cmdOverlayToggle').dataset.state !== 'on' });
 };
-$('#cmdLockScreen').onclick = () => ctrlSend({ type: 'lock-screen' });
+$('#cmdLockScreen').onclick = () => {
+  const on = $('#cmdLockScreen').dataset.state !== 'on';
+  setToggleBtn($('#cmdLockScreen'), on);
+  ctrlSend({ type: 'touch-lock', locked: on });
+};
 $('#cmdDarkScreen').onclick = () => {
   const on = $('#cmdDarkScreen').dataset.state !== 'on';
   setToggleBtn($('#cmdDarkScreen'), on);

@@ -167,7 +167,7 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
-        params.screenBrightness = 0.0f
+        // screenBrightness removed — WM param dims backlight even behind notification shade
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("NewApi")
             params.fitInsetsTypes = 0
@@ -214,7 +214,7 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
-        params.screenBrightness = 0.0f
+        // screenBrightness removed — WM param dims backlight even behind notification shade
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("NewApi")
             params.fitInsetsTypes = 0
@@ -251,7 +251,7 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
-        params.screenBrightness = 0.0f
+        // screenBrightness removed — WM param dims backlight even behind notification shade
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("NewApi")
             params.fitInsetsTypes = 0
