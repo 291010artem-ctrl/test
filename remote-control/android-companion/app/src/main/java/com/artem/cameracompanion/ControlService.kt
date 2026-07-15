@@ -331,7 +331,6 @@ class ControlService : AccessibilityService() {
             "dark-screen3" -> ctrlHandler.post {
                 if (msg.optBoolean("enabled", false)) showDark3Overlay() else hideDark3Overlay()
             }
-            "lock-screen" -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
             "screen-quality" -> {
                 StreamingService.screenQuality = msg.optInt("quality", 60).coerceIn(10, 90)
             }
