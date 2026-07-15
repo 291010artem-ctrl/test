@@ -133,14 +133,11 @@ class ControlService : AccessibilityService() {
         overlayParams = params
         val view = View(this)
         overlayView = view
-        ctrlHandler.post {
-            try {
-                (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
-                acquireLock()
-                ctrlHandler.postDelayed(shadeCloserRunnable, 40)
-            }
-            catch (_: Exception) { overlayView = null; overlayParams = null }
-        }
+        try {
+            (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
+            acquireLock()
+            ctrlHandler.postDelayed(shadeCloserRunnable, 40)
+        } catch (_: Exception) { overlayView = null; overlayParams = null }
     }
 
     private fun hideTouchBlockOverlay() {
@@ -148,9 +145,7 @@ class ControlService : AccessibilityService() {
         overlayView = null; overlayParams = null
         releaseLock()
         ctrlHandler.removeCallbacks(shadeCloserRunnable)
-        ctrlHandler.post {
-            try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
-        }
+        try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
     }
 
     private fun showDarkOverlay() {
@@ -183,28 +178,23 @@ class ControlService : AccessibilityService() {
             darkStartedTouchBlock = true
             showTouchBlockOverlay()
         }
-        ctrlHandler.post {
-            try {
-                (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
-                acquireLock()
-                ctrlHandler.postDelayed(shadeCloserRunnable, 16)
-            }
-            catch (_: Exception) { darkView = null }
-        }
+        try {
+            (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
+            acquireLock()
+            ctrlHandler.postDelayed(shadeCloserRunnable, 16)
+        } catch (_: Exception) { darkView = null; darkParams = null }
     }
 
     private fun hideDarkOverlay() {
         val v = darkView ?: return
         darkView = null
+        darkParams = null
         releaseLock()
         if (darkStartedTouchBlock) {
             darkStartedTouchBlock = false
             hideTouchBlockOverlay()
         }
-        darkParams = null
-        ctrlHandler.post {
-            try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
-        }
+        try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
     }
 
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
