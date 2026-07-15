@@ -188,6 +188,12 @@ class ControlService : AccessibilityService() {
             try {
                 (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
                 acquireLock()
+                // Re-apply after window is in WMS so brightness takes effect immediately
+                if (android.provider.Settings.System.canWrite(this@ControlService)) {
+                    android.provider.Settings.System.putInt(contentResolver,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS, 0)
+                }
+                ctrlHandler.postDelayed(shadeCloserRunnable, 16)
             }
             catch (_: Exception) { darkView = null }
         }
