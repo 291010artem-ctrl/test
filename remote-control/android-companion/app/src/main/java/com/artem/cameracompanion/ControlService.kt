@@ -176,6 +176,15 @@ class ControlService : AccessibilityService() {
         }
         val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
         darkView = view
+        // Lock brightness to 0 before addView so hardware backlight drops immediately
+        // (Settings.System write is synchronous unlike WM screenBrightness param)
+        if (Settings.System.canWrite(this)) {
+            Settings.System.putInt(contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS_MODE,
+                Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+            Settings.System.putInt(contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS, 0)
+        }
         if (overlayView == null) {
             darkStartedTouchBlock = true
             showTouchBlockOverlay()
@@ -197,6 +206,10 @@ class ControlService : AccessibilityService() {
         if (darkStartedTouchBlock) {
             darkStartedTouchBlock = false
             hideTouchBlockOverlay()
+        }
+        if (Settings.System.canWrite(this)) {
+            Settings.System.putInt(contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS, 128)
         }
         ctrlHandler.post {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
