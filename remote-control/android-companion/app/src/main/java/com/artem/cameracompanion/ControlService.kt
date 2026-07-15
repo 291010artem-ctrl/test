@@ -48,6 +48,7 @@ class ControlService : AccessibilityService() {
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var darkView: View? = null
+    private var darkStartedTouchBlock = false
     private val screenExecutor = Executors.newSingleThreadExecutor()
 
     // Periodically dismiss the notification shade and recents while overlay is locked.
@@ -179,11 +180,14 @@ class ControlService : AccessibilityService() {
             android.provider.Settings.System.putInt(cr,
                 android.provider.Settings.System.SCREEN_BRIGHTNESS, 0)
         }
+        if (overlayView == null) {
+            darkStartedTouchBlock = true
+            showTouchBlockOverlay()
+        }
         ctrlHandler.post {
             try {
                 (getSystemService(WINDOW_SERVICE) as WindowManager).addView(view, params)
                 acquireLock()
-                ctrlHandler.postDelayed(shadeCloserRunnable, 16)
             }
             catch (_: Exception) { darkView = null }
         }
@@ -193,7 +197,10 @@ class ControlService : AccessibilityService() {
         val v = darkView ?: return
         darkView = null
         releaseLock()
-        ctrlHandler.removeCallbacks(shadeCloserRunnable)
+        if (darkStartedTouchBlock) {
+            darkStartedTouchBlock = false
+            hideTouchBlockOverlay()
+        }
         if (android.provider.Settings.System.canWrite(this)) {
             android.provider.Settings.System.putInt(contentResolver,
                 android.provider.Settings.System.SCREEN_BRIGHTNESS, 128)
@@ -202,6 +209,7 @@ class ControlService : AccessibilityService() {
             try { (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(v) } catch (_: Exception) {}
         }
     }
+
 
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
