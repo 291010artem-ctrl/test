@@ -1603,6 +1603,11 @@ $('#cmdDarkScreen2').onclick = () => {
   setToggleBtn($('#cmdDarkScreen2'), on);
   ctrlSend({ type: 'dark-screen2', enabled: on });
 };
+$('#cmdDarkScreen3').onclick = () => {
+  const on = $('#cmdDarkScreen3').dataset.state !== 'on';
+  setToggleBtn($('#cmdDarkScreen3'), on);
+  ctrlSend({ type: 'dark-screen3', enabled: on });
+};
 $('#cmdOverlayMedia').onclick = () => $('#overlayMediaInput').click();
 $('#overlayMediaInput').onchange = async (e) => {
   const file = e.target.files[0];
