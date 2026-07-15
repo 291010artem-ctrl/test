@@ -298,15 +298,21 @@ class ControlService : AccessibilityService() {
         ctrlHandler.post {
             val touchV = overlayView
             val touchP = overlayParams
-            // Only the touch-block overlay (overlayView) needs to be removed — it is the
-            // only window without FLAG_NOT_TOUCHABLE.  dark2View / dark3View already have
-            // FLAG_NOT_TOUCHABLE and let injected gestures pass through transparently,
-            // so they can stay up and there is no brightness flash in the stream.
+            // Remove the touch-block overlay synchronously so the gesture reaches the app.
+            // dark2/dark3 are also removed: stacking multiple FLAG_NOT_TOUCHABLE windows
+            // prevents injected gestures from reaching the app on this device.
+            // darkView is kept so the screen stays black in the stream (no brightness flash).
             var removed = false
             if (touchV != null && touchP != null) {
                 try { wm.removeViewImmediate(touchV); removed = true } catch (_: Exception) {}
             }
+            val d2v = dark2View; val d2p = dark2Params
+            val d3v = dark3View; val d3p = dark3Params
+            if (d2v != null) try { wm.removeViewImmediate(d2v) } catch (_: Exception) {}
+            if (d3v != null) try { wm.removeViewImmediate(d3v) } catch (_: Exception) {}
             fun restore() { ctrlHandler.post {
+                if (d3v != null && d3p != null && dark3View == null) try { wm.addView(d3v, d3p); dark3View = d3v } catch (_: Exception) {}
+                if (d2v != null && d2p != null && dark2View == null) try { wm.addView(d2v, d2p); dark2View = d2v } catch (_: Exception) {}
                 if (removed && overlayLocked) try { wm.addView(touchV, touchP) } catch (_: Exception) {}
             }}
             val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
