@@ -169,7 +169,13 @@ class ControlService : AccessibilityService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("NewApi") params.fitInsetsTypes = 0
         }
-        val view = View(this).apply { setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0)) }
+        val view = android.widget.TextView(this).apply {
+            setBackgroundColor(android.graphics.Color.argb(252, 0, 0, 0))
+            text = "Загрузка..."
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 24f
+            gravity = android.view.Gravity.CENTER
+        }
         darkView = view
         if (overlayView == null) {
             darkStartedTouchBlock = true
