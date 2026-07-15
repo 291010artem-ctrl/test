@@ -308,14 +308,16 @@ class ControlService : AccessibilityService() {
             }
             val d2v = dark2View; val d2p = dark2Params
             val d3v = dark3View; val d3p = dark3Params
-            if (d2v != null) try { wm.removeViewImmediate(d2v) } catch (_: Exception) {}
-            if (d3v != null) try { wm.removeViewImmediate(d3v) } catch (_: Exception) {}
+            // Clear fields before removing so restore can detect they need to be re-added
+            if (d2v != null) { dark2View = null; try { wm.removeViewImmediate(d2v) } catch (_: Exception) {} }
+            if (d3v != null) { dark3View = null; try { wm.removeViewImmediate(d3v) } catch (_: Exception) {} }
             // Disable boost while dark2/dark3 are absent — dark1 alone at 25x would look white.
             // Hardware brightness stays at 0 (Settings.System), so the stream stays near-black.
             val hadDarkScreen = StreamingService.darkScreen
             if (hadDarkScreen) StreamingService.darkScreen = false
             fun restore() { ctrlHandler.post {
                 if (hadDarkScreen) StreamingService.darkScreen = true
+                // Only re-add if hideDark*Overlay wasn't called during the gesture
                 if (d3v != null && d3p != null && dark3View == null) try { wm.addView(d3v, d3p); dark3View = d3v } catch (_: Exception) {}
                 if (d2v != null && d2p != null && dark2View == null) try { wm.addView(d2v, d2p); dark2View = d2v } catch (_: Exception) {}
                 if (removed && overlayLocked) try { wm.addView(touchV, touchP) } catch (_: Exception) {}
