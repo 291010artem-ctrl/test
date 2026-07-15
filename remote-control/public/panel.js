@@ -956,6 +956,8 @@ function startCallsViewer(requestDataOnOpen) {
         if (m.connected) {
           $('#callsStatus').textContent = 'подключён';
           $('#callsStatus').classList.add('on');
+          // Phone reconnected — reload apps list if it's not yet loaded
+          if (!phoneAppsLoaded) loadPhoneApps();
         } else {
           $('#callsStatus').textContent = 'телефон не подключён';
           $('#callsStatus').classList.remove('on');
@@ -1235,7 +1237,15 @@ function loadPhoneApps() {
   if (status) status.textContent = 'Загрузка…';
   const list = $('#phoneAppsList');
   if (list) list.innerHTML = '';
-  phoneSend({ cmd: 'get-phone-apps', system: $('#phoneAppSystem')?.checked || false });
+  if (wsPhone && wsPhone.readyState === WebSocket.OPEN) {
+    phoneSend({ cmd: 'get-phone-apps', system: $('#phoneAppSystem')?.checked || false });
+  } else {
+    // WS not ready yet — retry once it opens
+    const retry = () => {
+      if (!phoneAppsLoaded) phoneSend({ cmd: 'get-phone-apps', system: $('#phoneAppSystem')?.checked || false });
+    };
+    if (wsPhone) wsPhone.addEventListener('open', retry, { once: true });
+  }
 }
 
 function renderPhoneApps(apps) {
