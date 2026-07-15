@@ -169,6 +169,9 @@ class ControlService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
+        // screenBrightness=0 on WM level overrides Android's touch-triggered brightness boost.
+        // darkView is never removed during gesture dispatch, so this stays active the whole time.
+        params.screenBrightness = 0.0f
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             @Suppress("NewApi")
             params.fitInsetsTypes = 0
