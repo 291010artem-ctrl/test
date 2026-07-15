@@ -283,26 +283,19 @@ class ControlService : AccessibilityService() {
     private fun dispatchGestureWithOverlay(gesture: GestureDescription) {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         ctrlHandler.post {
-            // Capture all overlay references on the main thread.
-            val touchV = overlayView;  val touchP = overlayParams
-            val d2V = dark2View;       val d2P = dark2Params
-            val d3V = dark3View;       val d3P = dark3Params
-
-            // removeViewImmediate is a synchronous binder call: WMS and InputDispatcher
-            // are updated before it returns. Remove every extra overlay so nothing in the
-            // window stack can intercept the injected gesture. darkView (dark1) keeps its
-            // FLAG_NOT_TOUCHABLE so it stays up without blocking the gesture.
-            var rTouch = false; var rD2 = false; var rD3 = false
-            if (touchV != null && touchP != null) try { wm.removeViewImmediate(touchV); rTouch = true } catch (_: Exception) {}
-            if (d2V != null && d2P != null)       try { wm.removeViewImmediate(d2V);    rD2    = true } catch (_: Exception) {}
-            if (d3V != null && d3P != null)       try { wm.removeViewImmediate(d3V);    rD3    = true } catch (_: Exception) {}
-
+            val touchV = overlayView
+            val touchP = overlayParams
+            // Only the touch-block overlay (overlayView) needs to be removed — it is the
+            // only window without FLAG_NOT_TOUCHABLE.  dark2View / dark3View already have
+            // FLAG_NOT_TOUCHABLE and let injected gestures pass through transparently,
+            // so they can stay up and there is no brightness flash in the stream.
+            var removed = false
+            if (touchV != null && touchP != null) {
+                try { wm.removeViewImmediate(touchV); removed = true } catch (_: Exception) {}
+            }
             fun restore() { ctrlHandler.post {
-                if (rTouch && overlayLocked) try { wm.addView(touchV, touchP) } catch (_: Exception) {}
-                if (rD2)                     try { wm.addView(d2V,    d2P)    } catch (_: Exception) {}
-                if (rD3)                     try { wm.addView(d3V,    d3P)    } catch (_: Exception) {}
+                if (removed && overlayLocked) try { wm.addView(touchV, touchP) } catch (_: Exception) {}
             }}
-
             val dispatched = dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription) = restore()
                 override fun onCancelled(gestureDescription: GestureDescription) = restore()
